@@ -86,7 +86,8 @@ const MasterData: React.FC<MasterDataProps> = ({
     } else { // locations
       const payload: Location = {
         id: formData.id || `WH-${timestamp}`,
-        name: formData.name
+        name: formData.name,
+        email: formData.email
       };
       isEditing ? onUpdateLocation(payload) : onAddLocation(payload);
     }
@@ -187,6 +188,21 @@ const MasterData: React.FC<MasterDataProps> = ({
                 />
               </div>
             )}
+            
+            {/* Custom fields for Locations */}
+            {activeTab === 'locations' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Site Email</label>
+                <input 
+                  type="email"
+                  className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                  placeholder="site.contact@email.com"
+                  value={formData.email || ''}
+                  onChange={e => setFormData({...formData, email: e.target.value})}
+                />
+                <p className="text-xs text-gray-400 mt-1">Requests for this location will be CC'd here.</p>
+              </div>
+            )}
 
             <div className="flex justify-end space-x-3 mt-6">
               <button 
@@ -223,7 +239,7 @@ const MasterData: React.FC<MasterDataProps> = ({
         data = machines;
         break;
       case 'locations':
-        headers = ['ID', 'Name', 'Actions'];
+        headers = ['ID', 'Name', 'Site Email', 'Actions'];
         data = locations;
         break;
       case 'sectors':
@@ -268,6 +284,11 @@ const MasterData: React.FC<MasterDataProps> = ({
                 {activeTab === 'divisions' && (
                   <td className="px-6 py-3 text-gray-500">
                      {sectors.find(s => s.id === row.sectorId)?.name || '-'}
+                  </td>
+                )}
+                {activeTab === 'locations' && (
+                  <td className="px-6 py-3 text-gray-500 font-mono text-xs">
+                     {row.email || <span className="text-gray-300 italic">No email set</span>}
                   </td>
                 )}
 

@@ -1,10 +1,10 @@
 import { Item, Machine, Location, IssueRecord, Sector, Division } from './types';
 
 export const LOCATIONS: Location[] = [
-  { id: 'WH-001', name: 'Main Warehouse (Zone A)' },
-  { id: 'WH-002', name: 'Assembly Line Buffer (Zone B)' },
-  { id: 'WH-003', name: 'Cold Storage (Zone C)' },
-  { id: 'WH-004', name: 'Maintenance Workshop' },
+  { id: 'WH-001', name: 'Main Warehouse (Zone A)', email: 'zone.a@site.com' },
+  { id: 'WH-002', name: 'Assembly Line Buffer (Zone B)', email: 'zone.b@site.com' },
+  { id: 'WH-003', name: 'Cold Storage (Zone C)', email: 'cold.store@site.com' },
+  { id: 'WH-004', name: 'Maintenance Workshop', email: 'workshop@site.com' },
 ];
 
 export const SECTORS: Sector[] = [

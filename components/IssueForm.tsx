@@ -64,6 +64,16 @@ const IssueForm: React.FC<IssueFormProps> = ({
     setMachineId('');
   }, [divisionId]);
 
+  // Auto-fill Requester (Site) Email based on Location
+  useEffect(() => {
+    const location = locations.find(l => l.id === locationId);
+    if (location && location.email) {
+      setRequesterEmail(location.email);
+    } else {
+      setRequesterEmail('');
+    }
+  }, [locationId, locations]);
+
 
   const handleAddLineItem = () => {
     if (!currentItemId || !currentQuantity || Number(currentQuantity) <= 0) return;
@@ -268,7 +278,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                    <p><span className="font-bold">Machine:</span> {lastSubmittedBatch[0].machineName}</p>
                    <p><span className="font-bold">Machine ID:</span> {lastSubmittedBatch[0].machineId}</p>
                    {lastSubmittedBatch[0].requesterEmail && (
-                       <p><span className="font-bold">Requester:</span> {lastSubmittedBatch[0].requesterEmail}</p>
+                       <p><span className="font-bold">Site Email:</span> {lastSubmittedBatch[0].requesterEmail}</p>
                    )}
                 </div>
             </div>
@@ -405,13 +415,13 @@ const IssueForm: React.FC<IssueFormProps> = ({
                  </div>
                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Site/Requester Email (CC)</label>
-                    <input 
-                        type="email" 
-                        placeholder="your.email@site.com"
-                        value={requesterEmail}
-                        onChange={(e) => setRequesterEmail(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
+                    <div className="flex items-center px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600">
+                       {requesterEmail ? (
+                          <span className="font-medium text-gray-800">{requesterEmail}</span>
+                       ) : (
+                          <span className="text-gray-400 italic">Select a Location to auto-fill</span>
+                       )}
+                    </div>
                  </div>
              </div>
           </div>

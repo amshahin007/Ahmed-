@@ -26,6 +26,7 @@ export interface Machine {
 export interface Location {
   id: string;
   name: string;
+  email?: string; // Contact email for this location/site
 }
 
 export interface IssueRecord {
