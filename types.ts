@@ -38,6 +38,8 @@ export interface IssueRecord {
   quantity: number;
   machineId: string;
   machineName: string;
+  sectorName?: string;
+  divisionName?: string;
   status: 'Pending' | 'Approved' | 'Completed' | 'Rejected';
   notes?: string; // For rejection reasons or approval comments
   warehouseEmail?: string;

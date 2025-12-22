@@ -123,6 +123,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
     setEmailStatus('Processing Request & Sending Email...');
     
     const machine = machines.find(m => m.id === machineId);
+    const sector = sectors.find(s => s.id === sectorId);
+    const division = divisions.find(d => d.id === divisionId);
+
     const timestamp = new Date().toISOString();
     const batchIdBase = Date.now().toString().slice(-6);
     
@@ -140,6 +143,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
         quantity: line.quantity,
         machineId,
         machineName: machine ? machine.name : 'Unknown Machine',
+        sectorName: sector ? sector.name : '',
+        divisionName: division ? division.name : '',
         status: 'Pending',
         warehouseEmail,
         requesterEmail
@@ -180,11 +185,13 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const handleExportExcel = () => {
     if (!lastSubmittedBatch || lastSubmittedBatch.length === 0) return;
 
-    const headers = ["Request ID", "Date", "Location", "Machine", "Item ID", "Item Name", "Quantity", "Warehouse Email", "Site Email"];
+    const headers = ["Request ID", "Date", "Location", "Sector", "Division", "Machine", "Item ID", "Item Name", "Quantity", "Warehouse Email", "Site Email"];
     const rows = lastSubmittedBatch.map(item => [
         item.id,
         new Date(item.timestamp).toLocaleString(),
         item.locationId,
+        item.sectorName || '',
+        item.divisionName || '',
         item.machineName,
         item.itemId,
         item.itemName,
@@ -273,9 +280,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
                    <p><span className="font-bold">Date:</span> {new Date(lastSubmittedBatch[0].timestamp).toLocaleString()}</p>
                    <p><span className="font-bold">Location:</span> {lastSubmittedBatch[0].locationId}</p>
                    <p><span className="font-bold">Sent To:</span> {lastSubmittedBatch[0].warehouseEmail}</p>
+                   {lastSubmittedBatch[0].sectorName && <p><span className="font-bold">Sector:</span> {lastSubmittedBatch[0].sectorName}</p>}
                 </div>
                 <div>
                    <p><span className="font-bold">Machine:</span> {lastSubmittedBatch[0].machineName}</p>
+                   {lastSubmittedBatch[0].divisionName && <p><span className="font-bold">Division:</span> {lastSubmittedBatch[0].divisionName}</p>}
                    <p><span className="font-bold">Machine ID:</span> {lastSubmittedBatch[0].machineId}</p>
                    {lastSubmittedBatch[0].requesterEmail && (
                        <p><span className="font-bold">Site Email:</span> {lastSubmittedBatch[0].requesterEmail}</p>
