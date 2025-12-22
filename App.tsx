@@ -97,6 +97,7 @@ const App: React.FC = () => {
         return (
           <StockApproval 
             history={history} 
+            locations={locations}
             onUpdateIssue={handleUpdateIssue} 
           />
         );

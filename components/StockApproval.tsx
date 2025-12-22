@@ -1,15 +1,24 @@
-import React, { useState } from 'react';
-import { IssueRecord } from '../types';
+import React, { useState, useMemo } from 'react';
+import { IssueRecord, Location } from '../types';
 
 interface StockApprovalProps {
   history: IssueRecord[];
+  locations: Location[];
   onUpdateIssue: (updatedRecord: IssueRecord) => void;
 }
 
-const StockApproval: React.FC<StockApprovalProps> = ({ history, onUpdateIssue }) => {
+const StockApproval: React.FC<StockApprovalProps> = ({ history, locations, onUpdateIssue }) => {
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
   const [editedRecords, setEditedRecords] = useState<Record<string, { quantity: number; notes: string }>>({});
 
-  const pendingIssues = history.filter(h => h.status === 'Pending');
+  // Filter pending issues based on status and selected location
+  const pendingIssues = useMemo(() => {
+    return history.filter(h => {
+      const isPending = h.status === 'Pending';
+      const matchesLocation = selectedLocationId ? h.locationId === selectedLocationId : true;
+      return isPending && matchesLocation;
+    });
+  }, [history, selectedLocationId]);
 
   const getEditedValue = (id: string, field: 'quantity' | 'notes', originalValue: any) => {
     if (editedRecords[id] && editedRecords[id][field] !== undefined) {
@@ -20,9 +29,7 @@ const StockApproval: React.FC<StockApprovalProps> = ({ history, onUpdateIssue })
 
   const handleEdit = (id: string, field: 'quantity' | 'notes', value: any) => {
     setEditedRecords(prev => {
-      const current = prev[id] || { quantity: 0, notes: '' }; // Defaults will be overwritten by component logic if not present
-      
-      // If we haven't started editing this row, grab the original quantity to start with
+      // If we haven't started editing this row, grab the original values to start with
       const baseQuantity = prev[id]?.quantity ?? pendingIssues.find(p => p.id === id)?.quantity ?? 0;
       const baseNotes = prev[id]?.notes ?? pendingIssues.find(p => p.id === id)?.notes ?? '';
 
@@ -55,28 +62,52 @@ const StockApproval: React.FC<StockApprovalProps> = ({ history, onUpdateIssue })
 
     onUpdateIssue(updated);
     
-    // Clear local state
+    // Clear local state for this item
     const newEdits = { ...editedRecords };
     delete newEdits[record.id];
     setEditedRecords(newEdits);
   };
 
+  // Get count of all pending items (ignoring filter) for the badge
+  const totalPendingCount = history.filter(h => h.status === 'Pending').length;
+
   return (
     <div className="space-y-6">
        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-         <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-800 flex items-center">
-                <span className="mr-2 text-2xl">✅</span> Pending Approvals
-            </h2>
-            <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
-                {pendingIssues.length} Pending
-            </span>
+         
+         {/* Header & Filter */}
+         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div className="flex items-center">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center mr-4">
+                    <span className="mr-2 text-2xl">✅</span> Pending Approvals
+                </h2>
+                <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
+                    {totalPendingCount} Total Pending
+                </span>
+            </div>
+
+            <div className="w-full md:w-64">
+                <select
+                    value={selectedLocationId}
+                    onChange={(e) => setSelectedLocationId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-700"
+                >
+                    <option value="">All Locations</option>
+                    {locations.map(loc => (
+                        <option key={loc.id} value={loc.id}>{loc.name} ({loc.id})</option>
+                    ))}
+                </select>
+            </div>
          </div>
 
          {pendingIssues.length === 0 ? (
             <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                <p className="text-lg">No pending requests.</p>
-                <p className="text-sm">All caught up! 🎉</p>
+                <p className="text-lg">No pending requests found.</p>
+                {selectedLocationId ? (
+                    <p className="text-sm">Try selecting "All Locations" or a different warehouse zone.</p>
+                ) : (
+                    <p className="text-sm">All caught up! 🎉</p>
+                )}
             </div>
          ) : (
             <div className="overflow-x-auto">
