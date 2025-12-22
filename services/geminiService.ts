@@ -37,20 +37,36 @@ export const generateDashboardInsights = async (history: IssueRecord[]): Promise
   }
 };
 
-export const generateIssueEmail = async (record: IssueRecord): Promise<{ subject: string; body: string }> => {
+export const generateIssueEmail = async (input: IssueRecord | IssueRecord[]): Promise<{ subject: string; body: string }> => {
   const ai = getAiClient();
-  if (!ai) return { subject: "Issue Notification", body: "Please check the system for details." };
+  
+  // Normalize input to array
+  const records = Array.isArray(input) ? input : [input];
+  if (records.length === 0) return { subject: "Error", body: "No records provided" };
+
+  const firstRecord = records[0];
+  const isMultiLine = records.length > 1;
+
+  // Fallback if AI not available
+  if (!ai) {
+    return {
+      subject: `Issue Alert: ${isMultiLine ? 'Multiple Items' : firstRecord.itemName}`,
+      body: `New issue recorded.\n\nMachine: ${firstRecord.machineName}\nLocation: ${firstRecord.locationId}\n\nItems:\n${records.map(r => `- ${r.itemName} (${r.quantity})`).join('\n')}`
+    };
+  }
 
   try {
+    const itemsDescription = records.map(r => `${r.itemName} (Qty: ${r.quantity})`).join(", ");
+
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Draft a professional email notification for a warehouse item issue.
-      Details:
-      - Location: ${record.locationId}
-      - Item: ${record.itemName} (ID: ${record.itemId})
-      - Quantity: ${record.quantity}
-      - Machine: ${record.machineName}
-      - Date: ${record.timestamp}
+      contents: `Draft a professional email notification for a warehouse material issue slip.
+      
+      Context:
+      - Location: ${firstRecord.locationId}
+      - Machine: ${firstRecord.machineName}
+      - Date: ${firstRecord.timestamp}
+      - Items Issued: ${itemsDescription}
 
       Return the response in JSON format with "subject" and "body" keys.
       The body should be plain text, ready to send.`,
@@ -63,9 +79,9 @@ export const generateIssueEmail = async (record: IssueRecord): Promise<{ subject
     return JSON.parse(jsonText);
   } catch (error) {
     console.error("Gemini Email Error:", error);
-    return { 
-      subject: `Issue Alert: ${record.itemName}`,
-      body: `An issue has been recorded for ${record.itemName} at ${record.locationId}. Machine: ${record.machineName}. Quantity: ${record.quantity}.`
+     return {
+      subject: `Issue Alert: ${isMultiLine ? 'Multiple Items' : firstRecord.itemName}`,
+      body: `New issue recorded.\n\nMachine: ${firstRecord.machineName}\nLocation: ${firstRecord.locationId}\n\nItems:\n${records.map(r => `- ${r.itemName} (${r.quantity})`).join('\n')}`
     };
   }
 };
