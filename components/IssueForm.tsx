@@ -191,44 +191,52 @@ const IssueForm: React.FC<IssueFormProps> = ({
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       
-      {/* SUCCESS MESSAGE */}
+      {/* SUCCESS MODAL POPUP */}
       {lastSubmittedBatch && (
-        <div className="bg-green-50 p-6 rounded-xl border border-green-200 animate-fade-in-up mb-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-green-800">✅ Issue Slip Recorded</h3>
-              <p className="text-green-700 mt-1">
-                Successfully recorded <strong>{lastSubmittedBatch.length}</strong> items for <strong>{lastSubmittedBatch[0].machineName}</strong>.
-              </p>
-              {emailStatus && (
-                 <p className="mt-2 text-sm font-medium text-blue-600">{emailStatus}</p>
-              )}
-            </div>
-            <div className="flex space-x-3">
-              <button onClick={() => setLastSubmittedBatch(null)} className="text-sm text-gray-500 hover:text-gray-700 underline">Close</button>
-              <button
-                onClick={handlePrint}
-                className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center shadow-sm"
-              >
-                🖨️ Print Slip
-              </button>
-              <button
-                onClick={handleExportExcel}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm flex items-center"
-              >
-                📊 Export Excel
-              </button>
-              <button
-                onClick={handleSendEmail}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm flex items-center"
-              >
-                📧 Email Slip
-              </button>
-            </div>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-fade-in-up">
+             
+             {/* Header */}
+             <div className="bg-green-600 p-6 text-white text-center">
+               <div className="mx-auto w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-4">
+                 <span className="text-3xl">✓</span>
+               </div>
+               <h2 className="text-2xl font-bold">Issue Recorded!</h2>
+               <p className="opacity-90 mt-1">{lastSubmittedBatch.length} items for {lastSubmittedBatch[0].machineName}</p>
+             </div>
+             
+             {/* Actions Body */}
+             <div className="p-8 space-y-4">
+                <p className="text-center text-gray-600 mb-4">Select an action for this slip:</p>
+                
+                <button onClick={handlePrint} className="w-full py-4 bg-gray-900 text-white rounded-xl hover:bg-black font-bold text-lg flex items-center justify-center gap-3 shadow-lg transition-transform hover:scale-[1.02]">
+                   <span className="text-2xl">🖨️</span> Print Slip
+                </button>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <button onClick={handleExportExcel} className="py-3 bg-green-100 text-green-800 rounded-xl hover:bg-green-200 font-semibold flex items-center justify-center gap-2 transition border border-green-200">
+                     <span>📊</span> Export Excel
+                  </button>
+                  <button onClick={handleSendEmail} className="py-3 bg-blue-100 text-blue-800 rounded-xl hover:bg-blue-200 font-semibold flex items-center justify-center gap-2 transition border border-blue-200">
+                     <span>📧</span> {emailStatus === 'Generating email...' ? 'Sending...' : 'Email Slip'}
+                  </button>
+                </div>
+                
+                {emailStatus && !emailStatus.startsWith('Generating') && (
+                   <div className="text-center text-sm text-blue-600 bg-blue-50 p-2 rounded border border-blue-100">{emailStatus}</div>
+                )}
+             </div>
+
+             {/* Footer */}
+             <div className="bg-gray-50 p-4 border-t border-gray-100 text-center">
+                <button onClick={() => setLastSubmittedBatch(null)} className="text-gray-500 hover:text-gray-800 font-medium px-6 py-2">
+                   Close & Start New Issue
+                </button>
+             </div>
           </div>
           
-          {/* PRINT VIEW (Hidden on screen) */}
-          <div className="hidden print:block fixed inset-0 bg-white z-50 p-10 h-screen w-screen">
+          {/* PRINT VIEW (Hidden on screen, Visible on Print) */}
+          <div className="hidden print:block fixed inset-0 bg-white z-[100] p-10 h-screen w-screen">
             <div className="text-center mb-8">
                <h1 className="text-3xl font-bold uppercase tracking-widest border-b-2 border-black pb-4 inline-block">Material Issue Slip</h1>
             </div>
@@ -364,15 +372,19 @@ const IssueForm: React.FC<IssueFormProps> = ({
             <button
               type="submit"
               disabled={isSubmitting || lineItems.length === 0 || !locationId || !machineId}
-              className={`px-8 py-3 rounded-lg text-white font-semibold shadow-md transition-all text-lg ${
+              className={`px-8 py-4 rounded-xl text-white font-bold text-lg shadow-md transition-all flex items-center gap-2 ${
                 isSubmitting 
                 ? 'bg-blue-400 cursor-wait' 
                 : (lineItems.length === 0 || !locationId || !machineId)
                    ? 'bg-gray-400 cursor-not-allowed'
-                   : 'bg-green-600 hover:bg-green-700 hover:shadow-lg transform hover:-translate-y-0.5'
+                   : 'bg-green-600 hover:bg-green-700 hover:shadow-lg transform hover:-translate-y-1'
               }`}
             >
-              {isSubmitting ? 'Recording Issue...' : `Record Issue (${lineItems.length} items)`}
+              {isSubmitting ? 'Processing...' : (
+                 <>
+                   <span>✓</span> Submit Issue Slip ({lineItems.length} items)
+                 </>
+              )}
             </button>
           </div>
         </form>
