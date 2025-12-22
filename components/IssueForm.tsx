@@ -147,6 +147,36 @@ const IssueForm: React.FC<IssueFormProps> = ({
     window.print();
   };
 
+  const handleExportExcel = () => {
+    if (!lastSubmittedBatch || lastSubmittedBatch.length === 0) return;
+
+    const headers = ["Issue ID", "Date", "Location", "Machine", "Machine ID", "Item ID", "Item Name", "Quantity"];
+    const rows = lastSubmittedBatch.map(item => [
+        item.id,
+        new Date(item.timestamp).toLocaleString(),
+        item.locationId,
+        item.machineName,
+        item.machineId,
+        item.itemId,
+        item.itemName,
+        item.quantity
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + headers.join(",") + "\n" 
+        + rows.map(e => e.join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    // Use the batch ID (derived from the first item ID parts) for the filename
+    const batchId = lastSubmittedBatch[0].id.split('-')[1]; 
+    link.setAttribute("download", `Issue_Slip_${batchId}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // --- Filtering Logic for Cascade ---
   const availableDivisions = sectorId ? divisions.filter(d => d.sectorId === sectorId) : [];
   const availableMachines = divisionId ? machines.filter(m => m.divisionId === divisionId) : [];
@@ -181,6 +211,12 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center shadow-sm"
               >
                 🖨️ Print Slip
+              </button>
+              <button
+                onClick={handleExportExcel}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm flex items-center"
+              >
+                📊 Export Excel
               </button>
               <button
                 onClick={handleSendEmail}
