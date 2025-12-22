@@ -233,8 +233,13 @@ const IssueForm: React.FC<IssueFormProps> = ({
   // Option 1: Search by ID (Label = ID, SubLabel = Name)
   const itemOptions: Option[] = items.map(i => ({ id: i.id, label: i.id, subLabel: i.name }));
   
-  // Option 2: Search by Name (Label = Name, SubLabel = ID)
-  const itemNameOptions: Option[] = items.map(i => ({ id: i.id, label: i.name, subLabel: i.id }));
+  // Option 2: Search by Name (Label = Name, SubLabel = ID + optional PartNo/OEM info)
+  const itemNameOptions: Option[] = items.map(i => {
+    let sub = i.id;
+    if (i.partNumber) sub += ` | PN: ${i.partNumber}`;
+    if (i.oem) sub += ` | OEM: ${i.oem}`;
+    return { id: i.id, label: i.name, subLabel: sub };
+  });
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">

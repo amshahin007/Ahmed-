@@ -105,7 +105,14 @@ const MasterData: React.FC<MasterDataProps> = ({
         id: formData.id || `ITM-${timestamp}`,
         name: formData.name,
         category: formData.category || 'General',
-        unit: formData.unit || 'pcs'
+        unit: formData.unit || 'pcs',
+        // New Fields
+        secondId: formData.secondId,
+        thirdId: formData.thirdId,
+        description2: formData.description2,
+        fullName: formData.fullName,
+        oem: formData.oem,
+        partNumber: formData.partNumber,
       };
       isEditing ? onUpdateItem(payload) : onAddItem(payload);
 
@@ -256,8 +263,8 @@ const MasterData: React.FC<MasterDataProps> = ({
     if (!showForm) return null;
 
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md animate-fade-in-up max-h-[90vh] overflow-y-auto">
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-lg animate-fade-in-up max-h-[90vh] overflow-y-auto">
           <h3 className="text-xl font-bold mb-4 capitalize">
             {isEditing ? 'Edit' : 'Add New'} {activeTab.slice(0, -1)}
           </h3>
@@ -278,7 +285,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                 </div>
             ) : (
                 <div>
-                    <label className="block text-sm font-medium text-gray-700">ID</label>
+                    <label className="block text-sm font-medium text-gray-700">ID (Item Number)</label>
                     <input 
                         className={`w-full border rounded p-2 ${isEditing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                         placeholder="Auto-generated if empty"
@@ -291,7 +298,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">{activeTab === 'users' ? 'Full Name' : 'Name'}</label>
+              <label className="block text-sm font-medium text-gray-700">{activeTab === 'users' ? 'Full Name' : 'Description (Name)'}</label>
               <input 
                 required
                 className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
@@ -302,7 +309,63 @@ const MasterData: React.FC<MasterDataProps> = ({
 
             {/* Custom fields for Items */}
             {activeTab === 'items' && (
-              <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">Full Name</label>
+                  <input 
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.fullName || ''}
+                    onChange={e => setFormData({...formData, fullName: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">2nd Item Number</label>
+                  <input 
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.secondId || ''}
+                    onChange={e => setFormData({...formData, secondId: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">3rd Item Number</label>
+                  <input 
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.thirdId || ''}
+                    onChange={e => setFormData({...formData, thirdId: e.target.value})}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">Description Line 2</label>
+                  <input 
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.description2 || ''}
+                    onChange={e => setFormData({...formData, description2: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Part No.</label>
+                  <input 
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.partNumber || ''}
+                    onChange={e => setFormData({...formData, partNumber: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">OEM</label>
+                  <input 
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.oem || ''}
+                    onChange={e => setFormData({...formData, oem: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Unit (UM)</label>
+                  <input 
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.unit || ''}
+                    onChange={e => setFormData({...formData, unit: e.target.value})}
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Category</label>
                   <input 
@@ -311,15 +374,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                     onChange={e => setFormData({...formData, category: e.target.value})}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Unit</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.unit || ''}
-                    onChange={e => setFormData({...formData, unit: e.target.value})}
-                  />
-                </div>
-              </>
+              </div>
             )}
 
             {/* Custom fields for Machines */}
@@ -443,7 +498,7 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     switch (activeTab) {
       case 'items':
-        headers = ['ID', 'Name', 'Category', 'Unit', 'Actions'];
+        headers = ['ID', 'Name', 'OEM', 'Part No', 'Unit', 'Actions'];
         data = items;
         break;
       case 'machines':
@@ -485,7 +540,8 @@ const MasterData: React.FC<MasterDataProps> = ({
                 {/* Specific Columns */}
                 {activeTab === 'items' && (
                   <>
-                    <td className="px-6 py-3 text-gray-500">{row.category}</td>
+                    <td className="px-6 py-3 text-gray-500">{row.oem || '-'}</td>
+                    <td className="px-6 py-3 text-gray-500 font-mono text-xs">{row.partNumber || '-'}</td>
                     <td className="px-6 py-3 text-gray-500">{row.unit}</td>
                   </>
                 )}

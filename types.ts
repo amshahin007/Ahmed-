@@ -1,9 +1,17 @@
 
 export interface Item {
-  id: string;
-  name: string;
-  category: string;
-  unit: string;
+  id: string;          // Maps to "Item Number"
+  name: string;        // Maps to "Description" or "Full Name"
+  category: string;    // Default to 'General' if not provided
+  unit: string;        // Maps to "UM"
+  
+  // New Extended Fields
+  secondId?: string;       // "2nd Item Number"
+  thirdId?: string;        // "3rd Item Number"
+  description2?: string;   // "Description Line 2"
+  fullName?: string;       // "Full Name"
+  oem?: string;            // "OEM"
+  partNumber?: string;     // "Part No"
 }
 
 export interface Sector {

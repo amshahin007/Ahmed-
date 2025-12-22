@@ -52,14 +52,22 @@ const parseItemsCSV = (csvText: string): Item[] => {
   const lines = csvText.split(/\r?\n/);
   if (lines.length < 2) return [];
 
-  // Parse headers safely
+  // Parse headers safely (normalize to lowercase for matching)
   const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/^"|"$/g, ''));
   
   // Find column indices
-  const idIdx = headers.findIndex(h => h.includes('id') || h.includes('number') || h.includes('code'));
-  const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('description') || h.includes('item'));
-  const catIdx = headers.findIndex(h => h.includes('category') || h.includes('type'));
-  const unitIdx = headers.findIndex(h => h.includes('unit') || h.includes('uom'));
+  const idIdx = headers.findIndex(h => h === 'item number' || h === 'item code' || h === 'id');
+  const nameIdx = headers.findIndex(h => h === 'description' || h === 'item name' || h === 'name');
+  
+  // Specific Fields
+  const id2Idx = headers.findIndex(h => h.includes('2nd item'));
+  const id3Idx = headers.findIndex(h => h.includes('3rd item'));
+  const desc2Idx = headers.findIndex(h => h.includes('description line 2'));
+  const fullNameIdx = headers.findIndex(h => h.includes('full name'));
+  const oemIdx = headers.findIndex(h => h === 'oem');
+  const partNoIdx = headers.findIndex(h => h === 'part no' || h === 'part number');
+  const umIdx = headers.findIndex(h => h === 'um' || h === 'unit' || h === 'uom');
+  const catIdx = headers.findIndex(h => h.includes('category') || h.includes('family'));
 
   const items: Item[] = [];
 
@@ -68,19 +76,28 @@ const parseItemsCSV = (csvText: string): Item[] => {
     if (!line) continue;
     
     // Simple CSV split (handling simple commas)
-    // Note: For complex CSVs with commas in quotes, a library is better, but this works for standard lists
+    // For production with robust CSV needs, consider a library like PapaParse
     const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
     
-    // Fallback: If no headers matched "id" or "name", assume col 0 is ID and col 1 is Name
+    // Fallback: If no explicit "Item Number" header, use col 0
+    // Fallback: If no explicit "Description" header, use col 1
     const idVal = idIdx > -1 ? values[idIdx] : values[0];
-    const nameVal = nameIdx > -1 ? values[nameIdx] : values[1];
+    const nameVal = nameIdx > -1 ? values[nameIdx] : (values[1] || 'Unknown Item');
 
-    if (idVal && nameVal) {
+    if (idVal) {
       items.push({
         id: idVal,
         name: nameVal,
         category: catIdx > -1 ? values[catIdx] : 'General',
-        unit: unitIdx > -1 ? values[unitIdx] : 'pcs'
+        unit: umIdx > -1 ? values[umIdx] : 'pcs',
+        
+        // Extended Fields
+        secondId: id2Idx > -1 ? values[id2Idx] : undefined,
+        thirdId: id3Idx > -1 ? values[id3Idx] : undefined,
+        description2: desc2Idx > -1 ? values[desc2Idx] : undefined,
+        fullName: fullNameIdx > -1 ? values[fullNameIdx] : undefined,
+        oem: oemIdx > -1 ? values[oemIdx] : undefined,
+        partNumber: partNoIdx > -1 ? values[partNoIdx] : undefined,
       });
     }
   }
