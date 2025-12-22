@@ -21,10 +21,21 @@ const App: React.FC = () => {
     setHistory(prev => [newIssue, ...prev]);
   };
 
-  // Master Data Handlers
+  // Master Data Handlers - Add
   const handleAddItem = (item: Item) => setItems(prev => [...prev, item]);
   const handleAddMachine = (machine: Machine) => setMachines(prev => [...prev, machine]);
   const handleAddLocation = (location: Location) => setLocations(prev => [...prev, location]);
+
+  // Master Data Handlers - Update
+  const handleUpdateItem = (updatedItem: Item) => {
+    setItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+  };
+  const handleUpdateMachine = (updatedMachine: Machine) => {
+    setMachines(prev => prev.map(machine => machine.id === updatedMachine.id ? updatedMachine : machine));
+  };
+  const handleUpdateLocation = (updatedLocation: Location) => {
+    setLocations(prev => prev.map(location => location.id === updatedLocation.id ? updatedLocation : location));
+  };
 
   const renderContent = () => {
     switch (currentView) {
@@ -50,6 +61,9 @@ const App: React.FC = () => {
             onAddItem={handleAddItem}
             onAddMachine={handleAddMachine}
             onAddLocation={handleAddLocation}
+            onUpdateItem={handleUpdateItem}
+            onUpdateMachine={handleUpdateMachine}
+            onUpdateLocation={handleUpdateLocation}
           />
         );
       default:
