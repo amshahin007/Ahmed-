@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { IssueRecord, Item, Location, Machine } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
+import SearchableSelect, { Option } from './SearchableSelect';
 
 interface IssueFormProps {
   onAddIssue: (issue: IssueRecord) => void;
@@ -77,6 +78,25 @@ const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue, items, locations, mac
     window.print();
   };
 
+  // Convert Master Data to Options for SearchableSelect
+  const locationOptions: Option[] = locations.map(l => ({ 
+    id: l.id, 
+    label: l.name, 
+    subLabel: l.id 
+  }));
+
+  const machineOptions: Option[] = machines.map(m => ({ 
+    id: m.id, 
+    label: m.name, 
+    subLabel: `${m.model} (${m.id})` 
+  }));
+
+  const itemOptions: Option[] = items.map(i => ({ 
+    id: i.id, 
+    label: i.id, // Primary search/display is ID as requested
+    subLabel: i.name 
+  }));
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
@@ -90,54 +110,39 @@ const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue, items, locations, mac
             
             {/* Location Select */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Select Location</label>
-              <select
+              <SearchableSelect
+                label="Select Location"
                 required
+                options={locationOptions}
                 value={locationId}
-                onChange={(e) => setLocationId(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-              >
-                <option value="">-- Select Warehouse Zone --</option>
-                {locations.map(loc => (
-                  <option key={loc.id} value={loc.id}>{loc.name} ({loc.id})</option>
-                ))}
-              </select>
+                onChange={setLocationId}
+                placeholder="Search warehouse zone..."
+              />
             </div>
 
             {/* Machine Select */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Select Machine</label>
-              <select
+              <SearchableSelect
+                label="Select Machine"
                 required
+                options={machineOptions}
                 value={machineId}
-                onChange={(e) => setMachineId(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-              >
-                <option value="">-- Select Machine --</option>
-                {machines.map(m => (
-                  <option key={m.id} value={m.id}>{m.name} - {m.model}</option>
-                ))}
-              </select>
+                onChange={setMachineId}
+                placeholder="Search machine name or model..."
+              />
             </div>
 
             {/* Item ID Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Item Number</label>
-              <input
-                type="text"
+               <SearchableSelect
+                label="Item Number"
                 required
-                list="item-list"
+                options={itemOptions}
                 value={itemId}
-                onChange={(e) => setItemId(e.target.value)}
-                placeholder="Enter Item ID (e.g. ITM-001)"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition uppercase"
+                onChange={setItemId}
+                placeholder="Search Item ID (e.g. ITM-001)"
               />
-              <datalist id="item-list">
-                {items.map(item => (
-                   <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </datalist>
-              <p className="text-xs text-gray-400 mt-1">Try: ITM-001, ITM-002...</p>
+              <p className="text-xs text-gray-400 mt-1">Select ID to auto-fill name.</p>
             </div>
 
             {/* Item Name (Read-only) */}
