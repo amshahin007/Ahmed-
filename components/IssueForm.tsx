@@ -185,7 +185,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const handleExportExcel = () => {
     if (!lastSubmittedBatch || lastSubmittedBatch.length === 0) return;
 
-    const headers = ["Request ID", "Date", "Location", "Sector", "Division", "Machine", "Item ID", "Item Name", "Quantity", "Warehouse Email", "Site Email"];
+    const headers = ["Request ID", "Date", "Location", "Sector", "Division", "Machine", "Item Number", "Item Name", "Quantity", "Warehouse Email", "Site Email"];
     const rows = lastSubmittedBatch.map(item => [
         item.id,
         new Date(item.timestamp).toLocaleString(),
@@ -296,8 +296,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 <thead>
                     <tr className="bg-gray-100">
                          <th className="border border-black p-2">Request ID</th>
-                         <th className="border border-black p-2">Item ID</th>
-                         <th className="border border-black p-2">Description</th>
+                         <th className="border border-black p-2">Item Number</th>
+                         <th className="border border-black p-2">Item Name</th>
                          <th className="border border-black p-2 text-right">Qty</th>
                     </tr>
                 </thead>
@@ -355,7 +355,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
             
             <div className="flex flex-col md:flex-row gap-4 items-end mb-4">
                <div className="flex-1 w-full">
-                 <SearchableSelect label="Find Item" options={itemOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Search Item ID or Name..." />
+                 <SearchableSelect label="Item Number" options={itemOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Scan or select Item No..." />
                </div>
                <div className="flex-1 w-full md:w-auto">
                  <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
@@ -381,8 +381,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-100 text-gray-700 font-semibold">
                             <tr>
-                                <th className="px-4 py-2">Item ID</th>
-                                <th className="px-4 py-2">Name</th>
+                                <th className="px-4 py-2">Item Number</th>
+                                <th className="px-4 py-2">Item Name</th>
                                 <th className="px-4 py-2 w-24 text-center">Qty</th>
                                 <th className="px-4 py-2 w-24 text-center">Action</th>
                             </tr>
