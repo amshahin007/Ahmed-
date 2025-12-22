@@ -186,69 +186,75 @@ const MasterData: React.FC<MasterDataProps> = ({
           <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
              <div className="flex items-center gap-3">
                <span className="text-2xl bg-green-100 p-2 rounded-lg">📊</span>
-               <h3 className="text-xl font-bold text-gray-800">Google Sheets Integration</h3>
+               <h3 className="text-xl font-bold text-gray-800">
+                 {activeTab === 'items' ? 'Sync Items Data' : 'Cloud Integration'}
+               </h3>
              </div>
              <button onClick={() => setShowSyncModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
           </div>
           
           <div className="p-6 space-y-8">
-             {/* Section 1: Import Items */}
-             <div className="space-y-4">
-               <div className="flex justify-between items-center border-b pb-2">
-                 <h4 className="font-bold text-lg text-blue-700">1. Import Items from Sheet</h4>
-                 <button 
-                   onClick={handleResetDefaults}
-                   className="text-xs text-blue-600 underline hover:text-blue-800"
-                 >
-                   Reset to Default Link
-                 </button>
-               </div>
-               <p className="text-sm text-gray-600">
-                 Read item master data directly from your Google Sheet. 
-                 <br/><span className="font-semibold text-red-500">Note:</span> Paste your full "Published to web" link below and the GID will update automatically.
-               </p>
-               
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Spreadsheet ID / URL</label>
-                    <input 
-                      className="w-full border rounded p-2 text-sm" 
-                      value={sheetId}
-                      onChange={e => handleSheetIdChange(e.target.value)}
-                      placeholder="Paste full URL or ID here..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">GID (Tab ID)</label>
-                    <input 
-                      className="w-full border rounded p-2 text-sm" 
-                      value={gid}
-                      onChange={e => setGid(e.target.value)}
-                      placeholder="e.g. 229812258"
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1">If '0', it reads the first sheet.</p>
-                  </div>
-               </div>
-               
-               <button 
-                 onClick={handleSyncItems} 
-                 disabled={syncLoading}
-                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 transition flex items-center gap-2 w-full justify-center md:w-auto"
-               >
-                 {syncLoading ? 'Syncing...' : '📥 Import Items Now'}
-               </button>
-               {syncMsg && (
-                 <div className={`p-3 rounded text-sm ${syncMsg.includes('Error') || syncMsg.includes('No items') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-                   {syncMsg}
+             {/* Section 1: Import Items - Only show if Items tab is active (redundant if button hidden, but safe) */}
+             {activeTab === 'items' && (
+               <div className="space-y-4">
+                 <div className="flex justify-between items-center border-b pb-2">
+                   <h4 className="font-bold text-lg text-blue-700">1. Import Items from Sheet</h4>
+                   <button 
+                     onClick={handleResetDefaults}
+                     className="text-xs text-blue-600 underline hover:text-blue-800"
+                   >
+                     Reset to Default Link
+                   </button>
                  </div>
-               )}
-             </div>
+                 <p className="text-sm text-gray-600">
+                   Read item master data directly from your Google Sheet. 
+                   <br/><span className="font-semibold text-red-500">Note:</span> Paste your full "Published to web" link below and the GID will update automatically.
+                 </p>
+                 
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Spreadsheet ID / URL</label>
+                      <input 
+                        className="w-full border rounded p-2 text-sm" 
+                        value={sheetId}
+                        onChange={e => handleSheetIdChange(e.target.value)}
+                        placeholder="Paste full URL or ID here..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">GID (Tab ID)</label>
+                      <input 
+                        className="w-full border rounded p-2 text-sm" 
+                        value={gid}
+                        onChange={e => setGid(e.target.value)}
+                        placeholder="e.g. 229812258"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">If '0', it reads the first sheet.</p>
+                    </div>
+                 </div>
+                 
+                 <button 
+                   onClick={handleSyncItems} 
+                   disabled={syncLoading}
+                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 transition flex items-center gap-2 w-full justify-center md:w-auto"
+                 >
+                   {syncLoading ? 'Syncing...' : '📥 Import Items Now'}
+                 </button>
+                 {syncMsg && (
+                   <div className={`p-3 rounded text-sm ${syncMsg.includes('Error') || syncMsg.includes('No items') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                     {syncMsg}
+                   </div>
+                 )}
+               </div>
+             )}
 
-             {/* Section 2: Write Config */}
+             {/* Section 2: Write Config - Global Issue Logger */}
              <div className="space-y-4">
-               <h4 className="font-bold text-lg text-green-700 border-b pb-2">2. Record Issues to Sheet</h4>
+               <h4 className="font-bold text-lg text-green-700 border-b pb-2">
+                 {activeTab === 'items' ? '2. ' : ''}Record Issues to Sheet
+               </h4>
                <p className="text-sm text-gray-600">
-                 To save every new issue automatically to your sheet, you need to deploy a Google Apps Script.
+                 Configure the Google Apps Script URL to automatically log every new issue created in the app to a Google Sheet.
                </p>
                
                <div>
@@ -646,12 +652,14 @@ const MasterData: React.FC<MasterDataProps> = ({
         </div>
         
         <div className="flex gap-2">
-           <button
-             onClick={() => setShowSyncModal(true)}
-             className="flex items-center px-4 py-2 bg-white text-green-700 border border-green-200 rounded-lg hover:bg-green-50 shadow-sm transition"
-           >
-             <span className="mr-2">📊</span> Cloud Sync
-           </button>
+           {activeTab === 'items' && (
+             <button
+               onClick={() => setShowSyncModal(true)}
+               className="flex items-center px-4 py-2 bg-white text-green-700 border border-green-200 rounded-lg hover:bg-green-50 shadow-sm transition"
+             >
+               <span className="mr-2">📊</span> Sync Items
+             </button>
+           )}
            <button
              onClick={handleAddNew}
              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition"
