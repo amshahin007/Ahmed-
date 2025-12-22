@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -8,14 +8,31 @@ import MasterData from './components/MasterData';
 import { INITIAL_HISTORY, ITEMS as INIT_ITEMS, MACHINES as INIT_MACHINES, LOCATIONS as INIT_LOCATIONS } from './constants';
 import { IssueRecord, Item, Machine, Location } from './types';
 
+// Helper to load from LocalStorage safely
+const loadFromStorage = <T,>(key: string, fallback: T): T => {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : fallback;
+  } catch (error) {
+    console.error(`Error loading ${key} from storage:`, error);
+    return fallback;
+  }
+};
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState('dashboard');
   
-  // App State
-  const [history, setHistory] = useState<IssueRecord[]>(INITIAL_HISTORY);
-  const [items, setItems] = useState<Item[]>(INIT_ITEMS);
-  const [machines, setMachines] = useState<Machine[]>(INIT_MACHINES);
-  const [locations, setLocations] = useState<Location[]>(INIT_LOCATIONS);
+  // App State with Persistence (Initialize from Storage or Fallback to Constants)
+  const [history, setHistory] = useState<IssueRecord[]>(() => loadFromStorage('wf_history', INITIAL_HISTORY));
+  const [items, setItems] = useState<Item[]>(() => loadFromStorage('wf_items', INIT_ITEMS));
+  const [machines, setMachines] = useState<Machine[]>(() => loadFromStorage('wf_machines', INIT_MACHINES));
+  const [locations, setLocations] = useState<Location[]>(() => loadFromStorage('wf_locations', INIT_LOCATIONS));
+
+  // Persistence Effects - Save to LocalStorage whenever state changes
+  useEffect(() => { localStorage.setItem('wf_history', JSON.stringify(history)); }, [history]);
+  useEffect(() => { localStorage.setItem('wf_items', JSON.stringify(items)); }, [items]);
+  useEffect(() => { localStorage.setItem('wf_machines', JSON.stringify(machines)); }, [machines]);
+  useEffect(() => { localStorage.setItem('wf_locations', JSON.stringify(locations)); }, [locations]);
 
   const handleAddIssue = (newIssue: IssueRecord) => {
     setHistory(prev => [newIssue, ...prev]);
