@@ -44,7 +44,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const [lastSubmittedBatch, setLastSubmittedBatch] = useState<IssueRecord[] | null>(null);
   const [emailStatus, setEmailStatus] = useState<string>('');
 
-  // Auto-lookup Item Name for current input
+  // Auto-lookup Item Name for current input (Maintains the string for Line Item creation)
   useEffect(() => {
     const item = items.find(i => i.id === currentItemId);
     if (item) {
@@ -223,7 +223,12 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const sectorOptions: Option[] = sectors.map(s => ({ id: s.id, label: s.name }));
   const divisionOptions: Option[] = availableDivisions.map(d => ({ id: d.id, label: d.name }));
   const machineOptions: Option[] = availableMachines.map(m => ({ id: m.id, label: m.name, subLabel: `${m.model} (${m.id})` }));
+  
+  // Option 1: Search by ID (Label = ID, SubLabel = Name)
   const itemOptions: Option[] = items.map(i => ({ id: i.id, label: i.id, subLabel: i.name }));
+  
+  // Option 2: Search by Name (Label = Name, SubLabel = ID)
+  const itemNameOptions: Option[] = items.map(i => ({ id: i.id, label: i.name, subLabel: i.id }));
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -355,11 +360,18 @@ const IssueForm: React.FC<IssueFormProps> = ({
             
             <div className="flex flex-col md:flex-row gap-4 items-end mb-4">
                <div className="flex-1 w-full">
+                 {/* Option 1: Search by ID */}
                  <SearchableSelect label="Item Number" options={itemOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Scan or select Item No..." />
                </div>
-               <div className="flex-1 w-full md:w-auto">
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
-                 <input type="text" readOnly value={currentItemName} className="w-full px-4 py-2 bg-gray-200 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed" />
+               <div className="flex-1 w-full">
+                 {/* Option 2: Search by Name - Binds to the SAME ID state to sync */}
+                 <SearchableSelect 
+                    label="Item Name" 
+                    options={itemNameOptions} 
+                    value={currentItemId} 
+                    onChange={setCurrentItemId} 
+                    placeholder="Search Item Name..." 
+                 />
                </div>
                <div className="w-full md:w-32">
                  <label className="block text-sm font-medium text-gray-700 mb-1">Qty</label>
