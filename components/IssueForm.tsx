@@ -27,6 +27,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const [divisionId, setDivisionId] = useState('');
   const [machineId, setMachineId] = useState('');
 
+  // --- Email/Notification State ---
+  const [warehouseEmail, setWarehouseEmail] = useState('warehouse@company.com');
+  const [requesterEmail, setRequesterEmail] = useState('');
+
   // --- Line Item State (Current Input) ---
   const [currentItemId, setCurrentItemId] = useState('');
   const [currentItemName, setCurrentItemName] = useState('');
@@ -86,9 +90,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!locationId || !machineId || lineItems.length === 0) return;
+    if (!locationId || !machineId || lineItems.length === 0 || !warehouseEmail) return;
 
     setIsSubmitting(true);
+    setEmailStatus('Processing Request & Sending Email...');
     
     const machine = machines.find(m => m.id === machineId);
     const timestamp = new Date().toISOString();
@@ -100,7 +105,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     for (let i = 0; i < lineItems.length; i++) {
       const line = lineItems[i];
       const newIssue: IssueRecord = {
-        id: `ISS-${batchIdBase}-${i + 1}`, // Unique ID per line
+        id: `REQ-${batchIdBase}-${i + 1}`, // Changed to REQ for Request
         timestamp: timestamp,
         locationId,
         itemId: line.itemId,
@@ -108,20 +113,30 @@ const IssueForm: React.FC<IssueFormProps> = ({
         quantity: line.quantity,
         machineId,
         machineName: machine ? machine.name : 'Unknown Machine',
-        status: 'Pending'
+        status: 'Pending',
+        warehouseEmail,
+        requesterEmail
       };
       newRecords.push(newIssue);
     }
 
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 800));
+    // Simulate Network Delay & Email Sending
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Save all records
+    // 1. Trigger AI Email Generation (Simulation of sending)
+    const emailData = await generateIssueEmail(newRecords);
+    console.log(`[System] Email sent to ${warehouseEmail} with subject: ${emailData.subject}`);
+    if (requesterEmail) {
+        console.log(`[System] CC Email sent to ${requesterEmail}`);
+    }
+    
+    // 2. Save records
     newRecords.forEach(record => onAddIssue(record));
     
     setLastSubmittedBatch(newRecords);
+    setEmailStatus(`Sent to: ${warehouseEmail}`);
     
-    // Reset Form completely
+    // 3. Reset Form logic
     setLocationId('');
     setSectorId('');
     setDivisionId('');
@@ -129,18 +144,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
     setLineItems([]);
     
     setIsSubmitting(false);
-    setEmailStatus('');
-  };
-
-  const handleSendEmail = async () => {
-    if (!lastSubmittedBatch || lastSubmittedBatch.length === 0) return;
-    setEmailStatus('Generating email...');
-    
-    // Send the whole batch to the email service
-    const emailData = await generateIssueEmail(lastSubmittedBatch);
-    
-    console.log("Email Sent (Simulated):", emailData);
-    setEmailStatus(`Email sent: "${emailData.subject}"`);
   };
 
   const handlePrint = () => {
@@ -150,16 +153,17 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const handleExportExcel = () => {
     if (!lastSubmittedBatch || lastSubmittedBatch.length === 0) return;
 
-    const headers = ["Issue ID", "Date", "Location", "Machine", "Machine ID", "Item ID", "Item Name", "Quantity"];
+    const headers = ["Request ID", "Date", "Location", "Machine", "Item ID", "Item Name", "Quantity", "Warehouse Email", "Site Email"];
     const rows = lastSubmittedBatch.map(item => [
         item.id,
         new Date(item.timestamp).toLocaleString(),
         item.locationId,
         item.machineName,
-        item.machineId,
         item.itemId,
         item.itemName,
-        item.quantity
+        item.quantity,
+        item.warehouseEmail || '',
+        item.requesterEmail || ''
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," 
@@ -169,9 +173,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    // Use the batch ID (derived from the first item ID parts) for the filename
     const batchId = lastSubmittedBatch[0].id.split('-')[1]; 
-    link.setAttribute("download", `Issue_Slip_${batchId}.csv`);
+    link.setAttribute("download", `Request_Slip_${batchId}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -197,65 +200,66 @@ const IssueForm: React.FC<IssueFormProps> = ({
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-fade-in-up">
              
              {/* Header */}
-             <div className="bg-green-600 p-6 text-white text-center">
+             <div className="bg-blue-600 p-6 text-white text-center">
                <div className="mx-auto w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-4">
-                 <span className="text-3xl">✓</span>
+                 <span className="text-3xl">📧</span>
                </div>
-               <h2 className="text-2xl font-bold">Issue Recorded!</h2>
-               <p className="opacity-90 mt-1">{lastSubmittedBatch.length} items for {lastSubmittedBatch[0].machineName}</p>
+               <h2 className="text-2xl font-bold">Request Sent!</h2>
+               <p className="opacity-90 mt-1">Notification sent to {lastSubmittedBatch[0].warehouseEmail}</p>
              </div>
              
              {/* Actions Body */}
              <div className="p-8 space-y-4">
-                <p className="text-center text-gray-600 mb-4">Select an action for this slip:</p>
-                
-                <button onClick={handlePrint} className="w-full py-4 bg-gray-900 text-white rounded-xl hover:bg-black font-bold text-lg flex items-center justify-center gap-3 shadow-lg transition-transform hover:scale-[1.02]">
-                   <span className="text-2xl">🖨️</span> Print Slip
-                </button>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <button onClick={handleExportExcel} className="py-3 bg-green-100 text-green-800 rounded-xl hover:bg-green-200 font-semibold flex items-center justify-center gap-2 transition border border-green-200">
-                     <span>📊</span> Export Excel
-                  </button>
-                  <button onClick={handleSendEmail} className="py-3 bg-blue-100 text-blue-800 rounded-xl hover:bg-blue-200 font-semibold flex items-center justify-center gap-2 transition border border-blue-200">
-                     <span>📧</span> {emailStatus === 'Generating email...' ? 'Sending...' : 'Email Slip'}
-                  </button>
+                <div className="text-center text-sm bg-gray-50 p-3 rounded-lg border border-gray-100 mb-6">
+                   <p className="font-medium text-gray-700">Request IDs generated:</p>
+                   <p className="text-gray-500">{lastSubmittedBatch.length} items waiting for approval</p>
                 </div>
                 
-                {emailStatus && !emailStatus.startsWith('Generating') && (
-                   <div className="text-center text-sm text-blue-600 bg-blue-50 p-2 rounded border border-blue-100">{emailStatus}</div>
-                )}
+                <button onClick={handlePrint} className="w-full py-4 bg-gray-900 text-white rounded-xl hover:bg-black font-bold text-lg flex items-center justify-center gap-3 shadow-lg transition-transform hover:scale-[1.02]">
+                   <span className="text-2xl">🖨️</span> Print Request Slip
+                </button>
+                
+                <button onClick={handleExportExcel} className="w-full py-3 bg-green-100 text-green-800 rounded-xl hover:bg-green-200 font-semibold flex items-center justify-center gap-2 transition border border-green-200">
+                    <span>📊</span> Download Excel
+                </button>
              </div>
 
              {/* Footer */}
              <div className="bg-gray-50 p-4 border-t border-gray-100 text-center">
                 <button onClick={() => setLastSubmittedBatch(null)} className="text-gray-500 hover:text-gray-800 font-medium px-6 py-2">
-                   Close & Start New Issue
+                   Start New Request
                 </button>
              </div>
           </div>
           
           {/* PRINT VIEW (Hidden on screen, Visible on Print) */}
           <div className="hidden print:block fixed inset-0 bg-white z-[100] p-10 h-screen w-screen">
-            <div className="text-center mb-8">
-               <h1 className="text-3xl font-bold uppercase tracking-widest border-b-2 border-black pb-4 inline-block">Material Issue Slip</h1>
+            <div className="flex justify-between items-end border-b-2 border-black pb-4 mb-8">
+               <h1 className="text-3xl font-bold uppercase tracking-widest">Material Request</h1>
+               <div className="text-right">
+                 <p className="text-sm">Status: <strong>PENDING APPROVAL</strong></p>
+               </div>
             </div>
             
             <div className="grid grid-cols-2 gap-8 mb-8 text-lg">
                 <div>
                    <p><span className="font-bold">Date:</span> {new Date(lastSubmittedBatch[0].timestamp).toLocaleString()}</p>
                    <p><span className="font-bold">Location:</span> {lastSubmittedBatch[0].locationId}</p>
+                   <p><span className="font-bold">Sent To:</span> {lastSubmittedBatch[0].warehouseEmail}</p>
                 </div>
                 <div>
                    <p><span className="font-bold">Machine:</span> {lastSubmittedBatch[0].machineName}</p>
                    <p><span className="font-bold">Machine ID:</span> {lastSubmittedBatch[0].machineId}</p>
+                   {lastSubmittedBatch[0].requesterEmail && (
+                       <p><span className="font-bold">Requester:</span> {lastSubmittedBatch[0].requesterEmail}</p>
+                   )}
                 </div>
             </div>
 
-            <table className="w-full text-left border-collapse border border-black">
+            <table className="w-full text-left border-collapse border border-black mb-8">
                 <thead>
                     <tr className="bg-gray-100">
-                         <th className="border border-black p-2">Line ID</th>
+                         <th className="border border-black p-2">Request ID</th>
                          <th className="border border-black p-2">Item ID</th>
                          <th className="border border-black p-2">Description</th>
                          <th className="border border-black p-2 text-right">Qty</th>
@@ -273,12 +277,12 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 </tbody>
             </table>
             
-            <div className="mt-16 flex justify-between px-10">
+            <div className="flex justify-between px-10 mt-20">
                 <div className="text-center">
-                    <div className="border-t border-black w-64 pt-2">Authorized Signature</div>
+                    <div className="border-t border-black w-64 pt-2">Requester Signature</div>
                 </div>
                 <div className="text-center">
-                    <div className="border-t border-black w-64 pt-2">Receiver Signature</div>
+                    <div className="border-t border-black w-64 pt-2">Store Keeper Approval</div>
                 </div>
             </div>
           </div>
@@ -289,12 +293,12 @@ const IssueForm: React.FC<IssueFormProps> = ({
       <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
         <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
           <span className="mr-3 p-2 bg-blue-100 text-blue-600 rounded-lg text-xl">📝</span>
-          Create New Issue Slip
+          Create New Request
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-8">
           
-          {/* Section 1: HEADER (Location & Machine) */}
+          {/* Section 1: HEADER */}
           <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">1. Location & Machine</h3>
              
@@ -309,7 +313,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
              </div>
           </div>
 
-          {/* Section 2: LINES (Add Items) */}
+          {/* Section 2: LINES */}
           <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">2. Add Items</h3>
             
@@ -368,10 +372,37 @@ const IssueForm: React.FC<IssueFormProps> = ({
             )}
           </div>
 
+          {/* Section 3: Notification Details */}
+          <div className="bg-blue-50 p-5 rounded-lg border border-blue-100">
+             <h3 className="text-sm font-bold text-blue-800 uppercase tracking-wider mb-4 border-b border-blue-200 pb-2">3. Notification Details</h3>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse Email (To)</label>
+                    <input 
+                        type="email" 
+                        required
+                        value={warehouseEmail}
+                        onChange={(e) => setWarehouseEmail(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                 </div>
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Site/Requester Email (CC)</label>
+                    <input 
+                        type="email" 
+                        placeholder="your.email@site.com"
+                        value={requesterEmail}
+                        onChange={(e) => setRequesterEmail(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                 </div>
+             </div>
+          </div>
+
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              disabled={isSubmitting || lineItems.length === 0 || !locationId || !machineId}
+              disabled={isSubmitting || lineItems.length === 0 || !locationId || !machineId || !warehouseEmail}
               className={`px-8 py-4 rounded-xl text-white font-bold text-lg shadow-md transition-all flex items-center gap-2 ${
                 isSubmitting 
                 ? 'bg-blue-400 cursor-wait' 
@@ -380,9 +411,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
                    : 'bg-green-600 hover:bg-green-700 hover:shadow-lg transform hover:-translate-y-1'
               }`}
             >
-              {isSubmitting ? 'Processing...' : (
+              {isSubmitting ? 'Sending Request...' : (
                  <>
-                   <span>✓</span> Submit Issue Slip ({lineItems.length} items)
+                   <span>🚀</span> Submit Request
                  </>
               )}
             </button>
