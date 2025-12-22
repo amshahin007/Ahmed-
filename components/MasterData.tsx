@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Item, Machine, Location, Sector, Division, User } from '../types';
+import { Item, Machine, Location, Sector, Division, User, IssueRecord } from '../types';
 import SearchableSelect from './SearchableSelect';
-import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE } from '../services/googleSheetsService';
+import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet } from '../services/googleSheetsService';
 
 interface MasterDataProps {
+  history: IssueRecord[]; // Added history for export
   items: Item[];
   machines: Machine[];
   locations: Location[];
@@ -29,7 +30,7 @@ interface MasterDataProps {
 type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions' | 'users';
 
 const MasterData: React.FC<MasterDataProps> = ({ 
-  items, machines, locations, sectors, divisions, users,
+  history, items, machines, locations, sectors, divisions, users,
   onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision, onAddUser,
   onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision, onUpdateUser
 }) => {
@@ -111,6 +112,42 @@ const MasterData: React.FC<MasterDataProps> = ({
     }
   };
 
+  const handleExportHistory = async () => {
+    if (!scriptUrl) {
+      setSyncMsg("Error: Please enter and save the Web App URL first.");
+      return;
+    }
+    if (history.length === 0) {
+      setSyncMsg("No history to export.");
+      return;
+    }
+    
+    if (!confirm(`Are you sure you want to export ${history.length} historical records to the Google Sheet? This may take a moment.`)) return;
+
+    setSyncLoading(true);
+    setSyncMsg(`Starting export of ${history.length} records...`);
+    
+    let successCount = 0;
+    
+    // We process sequentially to avoid overwhelming Apps Script (LockService helps but too many requests can still error)
+    for (let i = 0; i < history.length; i++) {
+        const record = history[i];
+        setSyncMsg(`Exporting ${i + 1}/${history.length}...`);
+        
+        try {
+            await sendIssueToSheet(scriptUrl, record);
+            successCount++;
+            // Small delay to prevent race conditions in sheet appending
+            await new Promise(r => setTimeout(r, 600)); 
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    setSyncLoading(false);
+    setSyncMsg(`Export Complete! Sent ${successCount} records.`);
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     const timestamp = Date.now().toString().slice(-4);
@@ -185,16 +222,18 @@ const MasterData: React.FC<MasterDataProps> = ({
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
           <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
              <div className="flex items-center gap-3">
-               <span className="text-2xl bg-green-100 p-2 rounded-lg">📊</span>
+               <span className="text-2xl bg-green-100 p-2 rounded-lg">
+                 {activeTab === 'items' ? '📊' : '☁️'}
+               </span>
                <h3 className="text-xl font-bold text-gray-800">
-                 {activeTab === 'items' ? 'Sync Items Data' : 'Cloud Integration'}
+                 {activeTab === 'items' ? 'Sync Items Data' : 'Cloud Configuration'}
                </h3>
              </div>
              <button onClick={() => setShowSyncModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
           </div>
           
           <div className="p-6 space-y-8">
-             {/* Section 1: Import Items - Only show if Items tab is active (redundant if button hidden, but safe) */}
+             {/* Section 1: Import Items - Only show if Items tab is active */}
              {activeTab === 'items' && (
                <div className="space-y-4">
                  <div className="flex justify-between items-center border-b pb-2">
@@ -240,11 +279,6 @@ const MasterData: React.FC<MasterDataProps> = ({
                  >
                    {syncLoading ? 'Syncing...' : '📥 Import Items Now'}
                  </button>
-                 {syncMsg && (
-                   <div className={`p-3 rounded text-sm ${syncMsg.includes('Error') || syncMsg.includes('No items') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-                     {syncMsg}
-                   </div>
-                 )}
                </div>
              )}
 
@@ -268,6 +302,22 @@ const MasterData: React.FC<MasterDataProps> = ({
                   <p className="text-xs text-gray-500 mt-1">Leave empty to disable auto-logging.</p>
                </div>
 
+               {scriptUrl && (
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex flex-col items-center">
+                      <p className="text-sm text-green-800 mb-2 font-medium">Bulk Actions</p>
+                      <button 
+                        onClick={handleExportHistory}
+                        disabled={syncLoading}
+                        className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 shadow-sm flex items-center justify-center gap-2"
+                      >
+                         <span>📤</span> Export All Existing History to Sheet
+                      </button>
+                      <p className="text-xs text-green-600 mt-2 text-center">
+                         Useful if you have local records that are not yet in the sheet.
+                      </p>
+                  </div>
+               )}
+
                <details className="text-sm border rounded-lg p-3 bg-gray-50">
                  <summary className="font-medium cursor-pointer text-blue-600 hover:text-blue-800">Show Apps Script Code to Copy</summary>
                  <div className="mt-3">
@@ -278,6 +328,13 @@ const MasterData: React.FC<MasterDataProps> = ({
                  </div>
                </details>
              </div>
+             
+             {/* Common Msg Area */}
+             {syncMsg && (
+                <div className={`p-3 rounded text-sm ${syncMsg.includes('Error') || syncMsg.includes('No items') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                   {syncMsg}
+                </div>
+             )}
           </div>
           
           <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
@@ -652,14 +709,20 @@ const MasterData: React.FC<MasterDataProps> = ({
         </div>
         
         <div className="flex gap-2">
-           {activeTab === 'items' && (
-             <button
+           <button
                onClick={() => setShowSyncModal(true)}
-               className="flex items-center px-4 py-2 bg-white text-green-700 border border-green-200 rounded-lg hover:bg-green-50 shadow-sm transition"
-             >
-               <span className="mr-2">📊</span> Sync Items
-             </button>
-           )}
+               className={`flex items-center px-4 py-2 bg-white border rounded-lg shadow-sm transition ${
+                 activeTab === 'items' 
+                   ? 'text-green-700 border-green-200 hover:bg-green-50' 
+                   : 'text-gray-700 border-gray-200 hover:bg-gray-50'
+               }`}
+           >
+             <span className="mr-2">
+               {activeTab === 'items' ? '📊' : '⚙️'}
+             </span> 
+             {activeTab === 'items' ? 'Sync Items' : 'Cloud Config'}
+           </button>
+
            <button
              onClick={handleAddNew}
              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition"

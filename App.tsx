@@ -141,6 +141,7 @@ const App: React.FC = () => {
         if (user.role !== 'admin') return <Dashboard history={history} />;
         return (
           <MasterData 
+            history={history}
             items={items}
             machines={machines}
             locations={locations}

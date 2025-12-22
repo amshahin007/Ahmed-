@@ -140,28 +140,37 @@ export const sendIssueToSheet = async (scriptUrl: string, issue: IssueRecord) =>
 
 export const APP_SCRIPT_TEMPLATE = `
 function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("IssuesLog");
-  if (!sheet) {
-    sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet("IssuesLog");
-    sheet.appendRow(["ID", "Date", "Location", "Sector", "Division", "Machine", "Item ID", "Item Name", "Quantity", "Status", "Notes"]);
+  var lock = LockService.getScriptLock();
+  lock.tryLock(10000); // Wait up to 10s for previous request to finish
+
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("IssuesLog");
+    if (!sheet) {
+      sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet("IssuesLog");
+      sheet.appendRow(["ID", "Date", "Location", "Sector", "Division", "Machine", "Item ID", "Item Name", "Quantity", "Status", "Notes"]);
+    }
+    
+    var data = JSON.parse(e.postData.contents);
+    
+    sheet.appendRow([
+      data.id,
+      data.timestamp,
+      data.locationId,
+      data.sectorName || "",
+      data.divisionName || "",
+      data.machineName,
+      data.itemId,
+      data.itemName,
+      data.quantity,
+      data.status,
+      data.notes || ""
+    ]);
+    
+    return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
+  } catch(e) {
+    return ContentService.createTextOutput("Error: " + e.toString()).setMimeType(ContentService.MimeType.TEXT);
+  } finally {
+    lock.releaseLock();
   }
-  
-  var data = JSON.parse(e.postData.contents);
-  
-  sheet.appendRow([
-    data.id,
-    data.timestamp,
-    data.locationId,
-    data.sectorName || "",
-    data.divisionName || "",
-    data.machineName,
-    data.itemId,
-    data.itemName,
-    data.quantity,
-    data.status,
-    data.notes || ""
-  ]);
-  
-  return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
 }
 `;
