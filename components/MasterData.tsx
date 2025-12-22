@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Item, Machine, Location, Sector, Division, User } from '../types';
 import SearchableSelect from './SearchableSelect';
+import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, APP_SCRIPT_TEMPLATE } from '../services/googleSheetsService';
 
 interface MasterDataProps {
   items: Item[];
@@ -34,8 +35,21 @@ const MasterData: React.FC<MasterDataProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('items');
   const [showForm, setShowForm] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({});
+
+  // Sync State
+  const [sheetId, setSheetId] = useState(localStorage.getItem('wf_sheet_id') || DEFAULT_SHEET_ID);
+  const [gid, setGid] = useState(localStorage.getItem('wf_items_gid') || DEFAULT_ITEMS_GID);
+  const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('wf_script_url') || '');
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
+
+  // Save config when changed
+  useEffect(() => { localStorage.setItem('wf_sheet_id', sheetId); }, [sheetId]);
+  useEffect(() => { localStorage.setItem('wf_items_gid', gid); }, [gid]);
+  useEffect(() => { localStorage.setItem('wf_script_url', scriptUrl); }, [scriptUrl]);
 
   const handleAddNew = () => {
     setFormData({});
@@ -47,6 +61,39 @@ const MasterData: React.FC<MasterDataProps> = ({
     setFormData({ ...record });
     setIsEditing(true);
     setShowForm(true);
+  };
+
+  const handleSyncItems = async () => {
+    setSyncLoading(true);
+    setSyncMsg('Fetching data...');
+    try {
+      const cleanId = extractSheetIdFromUrl(sheetId);
+      const newItems = await fetchItemsFromSheet(cleanId, gid);
+      
+      if (newItems.length === 0) {
+        setSyncMsg('No items found. Check CSV format.');
+      } else {
+        // Update items (Logic: Overwrite if ID matches, else add)
+        let addedCount = 0;
+        let updatedCount = 0;
+        
+        newItems.forEach(newItem => {
+          const exists = items.find(i => i.id === newItem.id);
+          if (exists) {
+            onUpdateItem(newItem);
+            updatedCount++;
+          } else {
+            onAddItem(newItem);
+            addedCount++;
+          }
+        });
+        setSyncMsg(`Success! Added: ${addedCount}, Updated: ${updatedCount}`);
+      }
+    } catch (e) {
+      setSyncMsg('Error: ' + (e as Error).message);
+    } finally {
+      setSyncLoading(false);
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -107,6 +154,102 @@ const MasterData: React.FC<MasterDataProps> = ({
     setShowForm(false);
     setFormData({});
     setIsEditing(false);
+  };
+
+  const renderSyncModal = () => {
+    if (!showSyncModal) return null;
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+          <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+             <div className="flex items-center gap-3">
+               <span className="text-2xl bg-green-100 p-2 rounded-lg">📊</span>
+               <h3 className="text-xl font-bold text-gray-800">Google Sheets Integration</h3>
+             </div>
+             <button onClick={() => setShowSyncModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
+          </div>
+          
+          <div className="p-6 space-y-8">
+             {/* Section 1: Import Items */}
+             <div className="space-y-4">
+               <h4 className="font-bold text-lg text-blue-700 border-b pb-2">1. Import Items from Sheet</h4>
+               <p className="text-sm text-gray-600">
+                 Read item master data directly from your Google Sheet. 
+                 <br/><span className="font-semibold text-red-500">Requirement:</span> You must go to <em>File &gt; Share &gt; Publish to web</em>, select the Sheet/Tab, choose <strong>CSV</strong>, and Publish.
+               </p>
+               
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Spreadsheet ID (or URL)</label>
+                    <input 
+                      className="w-full border rounded p-2 text-sm" 
+                      value={sheetId}
+                      onChange={e => setSheetId(e.target.value)}
+                      placeholder="1TdSD6XjSY..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">GID (Tab ID)</label>
+                    <input 
+                      className="w-full border rounded p-2 text-sm" 
+                      value={gid}
+                      onChange={e => setGid(e.target.value)}
+                      placeholder="0"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Found at end of URL: #gid=12345</p>
+                  </div>
+               </div>
+               
+               <button 
+                 onClick={handleSyncItems} 
+                 disabled={syncLoading}
+                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 transition flex items-center gap-2"
+               >
+                 {syncLoading ? 'Syncing...' : '📥 Import Items Now'}
+               </button>
+               {syncMsg && (
+                 <div className={`p-3 rounded text-sm ${syncMsg.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                   {syncMsg}
+                 </div>
+               )}
+             </div>
+
+             {/* Section 2: Write Config */}
+             <div className="space-y-4">
+               <h4 className="font-bold text-lg text-green-700 border-b pb-2">2. Record Issues to Sheet</h4>
+               <p className="text-sm text-gray-600">
+                 To save every new issue automatically to your sheet, you need to deploy a Google Apps Script.
+               </p>
+               
+               <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Web App URL (from Apps Script Deployment)</label>
+                  <input 
+                    className="w-full border rounded p-2 text-sm font-mono text-blue-600 bg-gray-50" 
+                    value={scriptUrl}
+                    onChange={e => setScriptUrl(e.target.value)}
+                    placeholder="https://script.google.com/macros/s/..."
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Leave empty to disable auto-logging.</p>
+               </div>
+
+               <details className="text-sm border rounded-lg p-3 bg-gray-50">
+                 <summary className="font-medium cursor-pointer text-blue-600 hover:text-blue-800">Show Apps Script Code to Copy</summary>
+                 <div className="mt-3">
+                   <p className="mb-2 text-xs text-gray-600">Paste this into <strong>Extensions &gt; Apps Script</strong>, then <strong>Deploy &gt; New Deployment &gt; Web App &gt; Anyone</strong>.</p>
+                   <pre className="bg-gray-800 text-green-400 p-3 rounded text-xs overflow-x-auto select-all">
+                      {APP_SCRIPT_TEMPLATE}
+                   </pre>
+                 </div>
+               </details>
+             </div>
+          </div>
+          
+          <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
+            <button onClick={() => setShowSyncModal(false)} className="px-6 py-2 bg-gray-800 text-white rounded hover:bg-gray-900">Done</button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderForm = () => {
@@ -422,16 +565,26 @@ const MasterData: React.FC<MasterDataProps> = ({
             </button>
           ))}
         </div>
-        <button
-          onClick={handleAddNew}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition"
-        >
-          <span className="mr-2 text-xl">+</span> Add {activeTab.slice(0, -1)}
-        </button>
+        
+        <div className="flex gap-2">
+           <button
+             onClick={() => setShowSyncModal(true)}
+             className="flex items-center px-4 py-2 bg-white text-green-700 border border-green-200 rounded-lg hover:bg-green-50 shadow-sm transition"
+           >
+             <span className="mr-2">📊</span> Cloud Sync
+           </button>
+           <button
+             onClick={handleAddNew}
+             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition"
+           >
+             <span className="mr-2 text-xl">+</span> Add {activeTab.slice(0, -1)}
+           </button>
+        </div>
       </div>
 
       {renderTable()}
       {renderForm()}
+      {renderSyncModal()}
     </div>
   );
 };

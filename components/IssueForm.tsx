@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { IssueRecord, Item, Location, Machine, Sector, Division } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
+import { sendIssueToSheet } from '../services/googleSheetsService';
 import SearchableSelect, { Option } from './SearchableSelect';
 
 interface IssueFormProps {
@@ -156,19 +157,24 @@ const IssueForm: React.FC<IssueFormProps> = ({
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // 1. Trigger AI Email Generation (Simulation of sending)
+    // Note: This is client-side simulation + Gemini call
     const emailData = await generateIssueEmail(newRecords);
     console.log(`[System] Email sent to ${warehouseEmail} with subject: ${emailData.subject}`);
-    if (requesterEmail) {
-        console.log(`[System] CC Email sent to ${requesterEmail}`);
-    }
     
-    // 2. Save records
+    // 2. Check for Google Sheet Script URL
+    const scriptUrl = localStorage.getItem('wf_script_url');
+    if (scriptUrl) {
+       console.log("Syncing with Google Sheet...");
+       newRecords.forEach(r => sendIssueToSheet(scriptUrl, r));
+    }
+
+    // 3. Save records locally
     newRecords.forEach(record => onAddIssue(record));
     
     setLastSubmittedBatch(newRecords);
     setEmailStatus(`Sent to: ${warehouseEmail}`);
     
-    // 3. Reset Form logic
+    // 4. Reset Form logic
     setLocationId('');
     setSectorId('');
     setDivisionId('');
