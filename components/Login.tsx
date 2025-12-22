@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { USERS } from '../constants';
 
 interface LoginProps {
   onLogin: (user: User) => void;
+  users: User[];
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -15,7 +15,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     e.preventDefault();
     setError('');
 
-    const user = USERS.find(u => u.username === username && u.password === password);
+    const user = users.find(u => u.username === username && u.password === password);
 
     if (user) {
       onLogin(user);
@@ -72,7 +72,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </form>
 
             <div className="mt-8 pt-6 border-t border-gray-100 text-center text-xs text-gray-400">
-                <p>Demo Credentials:</p>
+                <p>Default Credentials:</p>
                 <div className="mt-2 flex justify-center gap-4">
                     <span>Admin: <strong>admin / admin</strong></span>
                     <span>User: <strong>operator / user</strong></span>

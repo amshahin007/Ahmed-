@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Item, Machine, Location, Sector, Division } from '../types';
+import { Item, Machine, Location, Sector, Division, User } from '../types';
 import SearchableSelect from './SearchableSelect';
 
 interface MasterDataProps {
@@ -8,26 +8,29 @@ interface MasterDataProps {
   locations: Location[];
   sectors: Sector[];
   divisions: Division[];
+  users: User[];
   
   onAddItem: (item: Item) => void;
   onAddMachine: (machine: Machine) => void;
   onAddLocation: (location: Location) => void;
   onAddSector: (sector: Sector) => void;
   onAddDivision: (division: Division) => void;
+  onAddUser: (user: User) => void;
 
   onUpdateItem: (item: Item) => void;
   onUpdateMachine: (machine: Machine) => void;
   onUpdateLocation: (location: Location) => void;
   onUpdateSector: (sector: Sector) => void;
   onUpdateDivision: (division: Division) => void;
+  onUpdateUser: (user: User) => void;
 }
 
-type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions';
+type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions' | 'users';
 
 const MasterData: React.FC<MasterDataProps> = ({ 
-  items, machines, locations, sectors, divisions,
-  onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision,
-  onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision
+  items, machines, locations, sectors, divisions, users,
+  onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision, onAddUser,
+  onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision, onUpdateUser
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('items');
   const [showForm, setShowForm] = useState(false);
@@ -83,6 +86,15 @@ const MasterData: React.FC<MasterDataProps> = ({
       };
       isEditing ? onUpdateDivision(payload) : onAddDivision(payload);
 
+    } else if (activeTab === 'users') {
+      const payload: User = {
+        username: formData.username,
+        name: formData.name,
+        role: formData.role,
+        email: formData.email,
+        password: formData.password || (isEditing ? users.find(u => u.username === formData.username)?.password : 'password') // keep old pass if empty on edit
+      };
+      isEditing ? onUpdateUser(payload) : onAddUser(payload);
     } else { // locations
       const payload: Location = {
         id: formData.id || `WH-${timestamp}`,
@@ -108,20 +120,35 @@ const MasterData: React.FC<MasterDataProps> = ({
           </h3>
           <form onSubmit={handleSave} className="space-y-4">
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700">ID</label>
-              <input 
-                className={`w-full border rounded p-2 ${isEditing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
-                placeholder="Auto-generated if empty"
-                value={formData.id || ''}
-                onChange={e => setFormData({...formData, id: e.target.value})}
-                readOnly={isEditing}
-              />
-              {isEditing && <p className="text-xs text-gray-400 mt-1">ID cannot be changed</p>}
-            </div>
+            {/* ID Field - Different for Users (Username) vs Others (ID) */}
+            {activeTab === 'users' ? (
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Username</label>
+                    <input 
+                        required
+                        className={`w-full border rounded p-2 ${isEditing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-500 outline-none'}`}
+                        value={formData.username || ''}
+                        onChange={e => setFormData({...formData, username: e.target.value})}
+                        readOnly={isEditing}
+                        placeholder="e.g. jdoe"
+                    />
+                </div>
+            ) : (
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">ID</label>
+                    <input 
+                        className={`w-full border rounded p-2 ${isEditing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                        placeholder="Auto-generated if empty"
+                        value={formData.id || ''}
+                        onChange={e => setFormData({...formData, id: e.target.value})}
+                        readOnly={isEditing}
+                    />
+                    {isEditing && <p className="text-xs text-gray-400 mt-1">ID cannot be changed</p>}
+                </div>
+            )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <label className="block text-sm font-medium text-gray-700">{activeTab === 'users' ? 'Full Name' : 'Name'}</label>
               <input 
                 required
                 className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
@@ -204,6 +231,44 @@ const MasterData: React.FC<MasterDataProps> = ({
               </div>
             )}
 
+            {/* Custom fields for Users */}
+            {activeTab === 'users' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  <input 
+                    type="email"
+                    required
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.email || ''}
+                    onChange={e => setFormData({...formData, email: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Role</label>
+                  <select
+                     required
+                     className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                     value={formData.role || 'user'}
+                     onChange={e => setFormData({...formData, role: e.target.value})}
+                  >
+                      <option value="user">User (Operator)</option>
+                      <option value="admin">Admin (Manager)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Password {isEditing && '(Leave blank to keep current)'}</label>
+                  <input 
+                    type="password"
+                    required={!isEditing}
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.password || ''}
+                    onChange={e => setFormData({...formData, password: e.target.value})}
+                  />
+                </div>
+              </>
+            )}
+
             <div className="flex justify-end space-x-3 mt-6">
               <button 
                 type="button"
@@ -250,6 +315,10 @@ const MasterData: React.FC<MasterDataProps> = ({
         headers = ['ID', 'Name', 'Parent Sector', 'Actions'];
         data = divisions;
         break;
+      case 'users':
+        headers = ['Username', 'Name', 'Role', 'Email', 'Actions'];
+        data = users;
+        break;
     }
 
     return (
@@ -262,8 +331,8 @@ const MasterData: React.FC<MasterDataProps> = ({
           </thead>
           <tbody className="divide-y divide-gray-100">
             {data.map((row: any) => (
-              <tr key={row.id} className="hover:bg-gray-50 transition">
-                <td className="px-6 py-3 font-medium text-gray-900">{row.id}</td>
+              <tr key={row.id || row.username} className="hover:bg-gray-50 transition">
+                <td className="px-6 py-3 font-medium text-gray-900">{activeTab === 'users' ? row.username : row.id}</td>
                 <td className="px-6 py-3">{row.name}</td>
                 
                 {/* Specific Columns */}
@@ -290,6 +359,18 @@ const MasterData: React.FC<MasterDataProps> = ({
                   <td className="px-6 py-3 text-gray-500 font-mono text-xs">
                      {row.email || <span className="text-gray-300 italic">No email set</span>}
                   </td>
+                )}
+                {activeTab === 'users' && (
+                  <>
+                    <td className="px-6 py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${row.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {row.role.toUpperCase()}
+                        </span>
+                    </td>
+                    <td className="px-6 py-3 text-gray-500 text-xs">
+                        {row.email}
+                    </td>
+                  </>
                 )}
 
                 <td className="px-6 py-3">
@@ -319,7 +400,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
         <div className="flex flex-wrap gap-2 bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
-          {(['sectors', 'divisions', 'machines', 'items', 'locations'] as const).map(tab => (
+          {(['sectors', 'divisions', 'machines', 'items', 'locations', 'users'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}

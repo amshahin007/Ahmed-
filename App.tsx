@@ -13,7 +13,8 @@ import {
   MACHINES as INIT_MACHINES, 
   LOCATIONS as INIT_LOCATIONS,
   SECTORS as INIT_SECTORS,
-  DIVISIONS as INIT_DIVISIONS 
+  DIVISIONS as INIT_DIVISIONS,
+  USERS as INIT_USERS
 } from './constants';
 import { IssueRecord, Item, Machine, Location, Sector, Division, User } from './types';
 
@@ -42,6 +43,7 @@ const App: React.FC = () => {
   const [locations, setLocations] = useState<Location[]>(() => loadFromStorage('wf_locations', INIT_LOCATIONS));
   const [sectors, setSectors] = useState<Sector[]>(() => loadFromStorage('wf_sectors', INIT_SECTORS));
   const [divisions, setDivisions] = useState<Division[]>(() => loadFromStorage('wf_divisions', INIT_DIVISIONS));
+  const [usersList, setUsersList] = useState<User[]>(() => loadFromStorage('wf_users', INIT_USERS));
 
   // Persistence Effects
   useEffect(() => { localStorage.setItem('wf_user', JSON.stringify(user)); }, [user]);
@@ -51,6 +53,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('wf_locations', JSON.stringify(locations)); }, [locations]);
   useEffect(() => { localStorage.setItem('wf_sectors', JSON.stringify(sectors)); }, [sectors]);
   useEffect(() => { localStorage.setItem('wf_divisions', JSON.stringify(divisions)); }, [divisions]);
+  useEffect(() => { localStorage.setItem('wf_users', JSON.stringify(usersList)); }, [usersList]);
 
   // Auth Handlers
   const handleLogin = (loggedInUser: User) => {
@@ -77,7 +80,9 @@ const App: React.FC = () => {
   const handleAddLocation = (location: Location) => setLocations(prev => [...prev, location]);
   const handleAddSector = (sector: Sector) => setSectors(prev => [...prev, sector]);
   const handleAddDivision = (division: Division) => setDivisions(prev => [...prev, division]);
-
+  
+  const handleAddUser = (newUser: User) => setUsersList(prev => [...prev, newUser]);
+  
   const handleUpdateItem = (updatedItem: Item) => {
     setItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
   };
@@ -93,10 +98,13 @@ const App: React.FC = () => {
   const handleUpdateDivision = (updatedDivision: Division) => {
     setDivisions(prev => prev.map(div => div.id === updatedDivision.id ? updatedDivision : div));
   };
+  const handleUpdateUser = (updatedUser: User) => {
+    setUsersList(prev => prev.map(u => u.username === updatedUser.username ? updatedUser : u));
+  };
 
   // If no user is logged in, show Login Screen
   if (!user) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={handleLogin} users={usersList} />;
   }
 
   // Router Logic based on View
@@ -137,16 +145,19 @@ const App: React.FC = () => {
             locations={locations}
             sectors={sectors}
             divisions={divisions}
+            users={usersList}
             onAddItem={handleAddItem}
             onAddMachine={handleAddMachine}
             onAddLocation={handleAddLocation}
             onAddSector={handleAddSector}
             onAddDivision={handleAddDivision}
+            onAddUser={handleAddUser}
             onUpdateItem={handleUpdateItem}
             onUpdateMachine={handleUpdateMachine}
             onUpdateLocation={handleUpdateLocation}
             onUpdateSector={handleUpdateSector}
             onUpdateDivision={handleUpdateDivision}
+            onUpdateUser={handleUpdateUser}
           />
         );
       default:
