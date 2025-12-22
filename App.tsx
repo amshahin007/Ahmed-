@@ -102,6 +102,10 @@ const App: React.FC = () => {
   const handleUpdateUser = (updatedUser: User) => {
     setUsersList(prev => prev.map(u => u.username === updatedUser.username ? updatedUser : u));
   };
+  
+  const handleDeleteItem = (itemId: string) => {
+    setItems(prev => prev.filter(item => item.id !== itemId));
+  };
 
   // If no user is logged in, show Login Screen
   if (!user) {
@@ -160,6 +164,7 @@ const App: React.FC = () => {
             onUpdateSector={handleUpdateSector}
             onUpdateDivision={handleUpdateDivision}
             onUpdateUser={handleUpdateUser}
+            onDeleteItem={handleDeleteItem}
           />
         );
       default:

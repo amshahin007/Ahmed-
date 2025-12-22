@@ -25,20 +25,28 @@ interface MasterDataProps {
   onUpdateSector: (sector: Sector) => void;
   onUpdateDivision: (division: Division) => void;
   onUpdateUser: (user: User) => void;
+
+  onDeleteItem: (itemId: string) => void;
 }
 
 type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions' | 'users';
 
+const ITEMS_PER_PAGE = 80;
+
 const MasterData: React.FC<MasterDataProps> = ({ 
   history, items, machines, locations, sectors, divisions, users,
   onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision, onAddUser,
-  onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision, onUpdateUser
+  onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision, onUpdateUser,
+  onDeleteItem
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('items');
   const [showForm, setShowForm] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({});
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Sync State
   const [sheetId, setSheetId] = useState(localStorage.getItem('wf_sheet_id') || DEFAULT_SHEET_ID);
@@ -51,6 +59,11 @@ const MasterData: React.FC<MasterDataProps> = ({
   useEffect(() => { localStorage.setItem('wf_sheet_id', sheetId); }, [sheetId]);
   useEffect(() => { localStorage.setItem('wf_items_gid', gid); }, [gid]);
   useEffect(() => { localStorage.setItem('wf_script_url', scriptUrl); }, [scriptUrl]);
+
+  // Reset pagination when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
 
   const handleSheetIdChange = (val: string) => {
     setSheetId(val);
@@ -77,6 +90,12 @@ const MasterData: React.FC<MasterDataProps> = ({
     setFormData({ ...record });
     setIsEditing(true);
     setShowForm(true);
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('Are you sure you want to remove this item? This action cannot be undone.')) {
+      onDeleteItem(id);
+    }
   };
 
   const handleSyncItems = async () => {
@@ -590,90 +609,136 @@ const MasterData: React.FC<MasterDataProps> = ({
         break;
     }
 
+    // Pagination Logic
+    const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE) || 1;
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedData = data.slice(startIndex, endIndex);
+
     return (
-      <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              {headers.map(h => <th key={h} className="px-6 py-3 font-semibold text-gray-700 whitespace-nowrap">{h}</th>)}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {data.map((row: any) => (
-              <tr key={row.id || row.username} className="hover:bg-gray-50 transition">
-                <td className="px-6 py-3 font-medium text-gray-900 align-top">{activeTab === 'users' ? row.username : row.id}</td>
-                
-                {/* Specific Columns for Items */}
-                {activeTab === 'items' && (
-                  <>
-                    <td className="px-6 py-3 text-gray-500 align-top">{row.thirdId || '-'}</td>
-                    <td className="px-6 py-3 text-gray-800 align-top">{row.name}</td>
-                    <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.description2 || '-'}</td>
-                    <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.fullName || '-'}</td>
-                    <td className="px-6 py-3 text-gray-500 align-top">{row.oem || '-'}</td>
-                    <td className="px-6 py-3 text-gray-500 font-mono text-xs align-top">{row.partNumber || '-'}</td>
-                    <td className="px-6 py-3 text-gray-500 align-top">{row.unit}</td>
-                  </>
-                )}
+      <div className="flex flex-col space-y-4">
+        <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
+            <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 border-b">
+                <tr>
+                {headers.map(h => <th key={h} className="px-6 py-3 font-semibold text-gray-700 whitespace-nowrap">{h}</th>)}
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+                {paginatedData.map((row: any) => (
+                <tr key={row.id || row.username} className="hover:bg-gray-50 transition">
+                    <td className="px-6 py-3 font-medium text-gray-900 align-top">{activeTab === 'users' ? row.username : row.id}</td>
+                    
+                    {/* Specific Columns for Items */}
+                    {activeTab === 'items' && (
+                    <>
+                        <td className="px-6 py-3 text-gray-500 align-top">{row.thirdId || '-'}</td>
+                        <td className="px-6 py-3 text-gray-800 align-top">{row.name}</td>
+                        <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.description2 || '-'}</td>
+                        <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.fullName || '-'}</td>
+                        <td className="px-6 py-3 text-gray-500 align-top">{row.oem || '-'}</td>
+                        <td className="px-6 py-3 text-gray-500 font-mono text-xs align-top">{row.partNumber || '-'}</td>
+                        <td className="px-6 py-3 text-gray-500 align-top">{row.unit}</td>
+                    </>
+                    )}
 
-                {activeTab !== 'items' && (
-                   <td className="px-6 py-3 align-top">{row.name}</td>
-                )}
-                
-                {activeTab === 'machines' && (
-                  <>
-                    <td className="px-6 py-3 text-gray-500 align-top">{row.model}</td>
+                    {activeTab !== 'items' && (
+                    <td className="px-6 py-3 align-top">{row.name}</td>
+                    )}
+                    
+                    {activeTab === 'machines' && (
+                    <>
+                        <td className="px-6 py-3 text-gray-500 align-top">{row.model}</td>
+                        <td className="px-6 py-3 text-gray-500 align-top">
+                        {divisions.find(d => d.id === row.divisionId)?.name || '-'}
+                        </td>
+                    </>
+                    )}
+                    {activeTab === 'divisions' && (
                     <td className="px-6 py-3 text-gray-500 align-top">
-                      {divisions.find(d => d.id === row.divisionId)?.name || '-'}
+                        {sectors.find(s => s.id === row.sectorId)?.name || '-'}
                     </td>
-                  </>
-                )}
-                {activeTab === 'divisions' && (
-                  <td className="px-6 py-3 text-gray-500 align-top">
-                     {sectors.find(s => s.id === row.sectorId)?.name || '-'}
-                  </td>
-                )}
-                {activeTab === 'locations' && (
-                  <td className="px-6 py-3 text-gray-500 font-mono text-xs align-top">
-                     {row.email || <span className="text-gray-300 italic">No email set</span>}
-                  </td>
-                )}
-                {activeTab === 'users' && (
-                  <>
-                    <td className="px-6 py-3 align-top">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            row.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                            row.role.includes('manager') ? 'bg-orange-100 text-orange-700' :
-                            'bg-blue-100 text-blue-700'
-                        }`}>
-                            {row.role.replace('_', ' ').toUpperCase()}
-                        </span>
+                    )}
+                    {activeTab === 'locations' && (
+                    <td className="px-6 py-3 text-gray-500 font-mono text-xs align-top">
+                        {row.email || <span className="text-gray-300 italic">No email set</span>}
                     </td>
-                    <td className="px-6 py-3 text-gray-500 text-xs align-top">
-                        {row.email}
-                    </td>
-                  </>
-                )}
+                    )}
+                    {activeTab === 'users' && (
+                    <>
+                        <td className="px-6 py-3 align-top">
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                                row.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                                row.role.includes('manager') ? 'bg-orange-100 text-orange-700' :
+                                'bg-blue-100 text-blue-700'
+                            }`}>
+                                {row.role.replace('_', ' ').toUpperCase()}
+                            </span>
+                        </td>
+                        <td className="px-6 py-3 text-gray-500 text-xs align-top">
+                            {row.email}
+                        </td>
+                    </>
+                    )}
 
-                <td className="px-6 py-3 align-top">
-                   <button 
-                     onClick={() => handleEdit(row)}
-                     className="text-blue-600 hover:text-blue-900 font-medium hover:underline"
-                   >
-                     Edit
-                   </button>
-                </td>
-              </tr>
-            ))}
-            {data.length === 0 && (
-              <tr>
-                <td colSpan={headers.length} className="px-6 py-8 text-center text-gray-400">
-                  No records found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                    <td className="px-6 py-3 align-top">
+                       <div className="flex items-center gap-3">
+                        <button 
+                            onClick={() => handleEdit(row)}
+                            className="text-blue-600 hover:text-blue-900 font-medium hover:underline"
+                        >
+                            Edit
+                        </button>
+                        {activeTab === 'items' && (
+                             <button 
+                                onClick={() => handleDelete(row.id)}
+                                className="text-red-600 hover:text-red-900 font-medium hover:underline text-xs"
+                             >
+                                Remove
+                            </button>
+                        )}
+                       </div>
+                    </td>
+                </tr>
+                ))}
+                {data.length === 0 && (
+                <tr>
+                    <td colSpan={headers.length} className="px-6 py-8 text-center text-gray-400">
+                    No records found.
+                    </td>
+                </tr>
+                )}
+            </tbody>
+            </table>
+        </div>
+
+        {/* Pagination Controls */}
+        {data.length > ITEMS_PER_PAGE && (
+            <div className="flex justify-between items-center px-4">
+                <div className="text-sm text-gray-500">
+                    Showing {startIndex + 1} to {Math.min(endIndex, data.length)} of {data.length} entries
+                </div>
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="p-2 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600"
+                    >
+                        ⬅️
+                    </button>
+                    <span className="text-sm font-medium text-gray-700">
+                        Page {currentPage} of {totalPages}
+                    </span>
+                    <button 
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="p-2 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600"
+                    >
+                        ➡️
+                    </button>
+                </div>
+            </div>
+        )}
       </div>
     );
   };
