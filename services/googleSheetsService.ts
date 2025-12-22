@@ -15,6 +15,12 @@ export const extractSheetIdFromUrl = (url: string): string => {
   return match ? match[1] : url;
 };
 
+export const extractGidFromUrl = (url: string): string | null => {
+  // Try to find gid parameter in URL
+  const match = url.match(/[?&]gid=([0-9]+)/);
+  return match ? match[1] : null;
+};
+
 export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise<Item[]> => {
   let url = '';
   
@@ -31,6 +37,9 @@ export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise
       // Standard Sheet ID
       url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
   }
+  
+  // Add timestamp to prevent caching
+  url += `&_t=${Date.now()}`;
   
   try {
     const response = await fetch(url);
@@ -50,17 +59,16 @@ const parseItemsCSV = (csvText: string): Item[] => {
   if (lines.length < 2) return [];
 
   // Parse headers safely (normalize to lowercase for matching)
-  // Use a regex to split by comma but respect quotes if present (simple version)
-  const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  // Use a regex to split by comma but respect quotes if present
+  const headers = lines[0].toLowerCase().match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[0].toLowerCase().split(',');
+  const cleanHeaders = headers.map(h => h.trim().replace(/^"|"$/g, ''));
   
   // Helper to find index fuzzy
-  const findIdx = (keywords: string[]) => headers.findIndex(h => keywords.some(k => h === k || h.includes(k)));
+  const findIdx = (keywords: string[]) => cleanHeaders.findIndex(h => keywords.some(k => h === k || h.includes(k)));
 
-  // Strict mapping based on user headers: 
-  // "Item Number", "2nd Item Number", "3rd Item Number", "Description", "Description Line 2", "Full Name", "OEM", "Part No", "UM"
-  
-  const idIdx = headers.findIndex(h => h === 'item number' || h === 'item no' || h === 'id');
-  const nameIdx = headers.findIndex(h => h === 'description' || h === 'desc' || h === 'item name');
+  // Strict mapping based on user headers
+  const idIdx = cleanHeaders.findIndex(h => h === 'item number' || h === 'item no' || h === 'id');
+  const nameIdx = cleanHeaders.findIndex(h => h === 'description' || h === 'desc' || h === 'item name');
   
   const id2Idx = findIdx(['2nd item number', '2nd item']);
   const id3Idx = findIdx(['3rd item number', '3rd item']);
@@ -69,27 +77,25 @@ const parseItemsCSV = (csvText: string): Item[] => {
   const oemIdx = findIdx(['oem']);
   const partNoIdx = findIdx(['part no', 'part number']);
   const umIdx = findIdx(['um', 'unit']);
-  const catIdx = findIdx(['category', 'family']); // Fallback if exists
+  const catIdx = findIdx(['category', 'family']); 
 
   const items: Item[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    // Basic CSV parsing handling quoted commas roughly
     let line = lines[i].trim();
     if (!line) continue;
     
-    // Split by comma, handling quotes roughly (this is a simple parser)
-    // For robust parsing of "Name, The", a library is needed, but we'll try a regex split
-    const values = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(',');
-    const cleanValues = values.map((v: string) => v ? v.trim().replace(/^"|"$/g, '').replace(/""/g, '"') : '');
+    // Regex split to handle commas inside quotes correctly
+    const values = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+    
+    if (!values || values.length < 2) continue;
 
-    // Sometimes the split produces fewer columns than headers
-    if (cleanValues.length < 2) continue;
+    const cleanValues = values.map((v: string) => v ? v.trim().replace(/^"|"$/g, '').replace(/""/g, '"') : '');
 
     // Fallbacks
     const idVal = idIdx > -1 ? cleanValues[idIdx] : cleanValues[0];
     
-    // Name logic: Prefer Description, then Full Name, then Description Line 2, then Col 1
+    // Name logic priority
     let nameVal = '';
     if (nameIdx > -1 && cleanValues[nameIdx]) nameVal = cleanValues[nameIdx];
     else if (fullNameIdx > -1 && cleanValues[fullNameIdx]) nameVal = cleanValues[fullNameIdx];

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Item, Machine, Location, Sector, Division, User } from '../types';
 import SearchableSelect from './SearchableSelect';
-import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, APP_SCRIPT_TEMPLATE } from '../services/googleSheetsService';
+import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE } from '../services/googleSheetsService';
 
 interface MasterDataProps {
   items: Item[];
@@ -51,6 +51,21 @@ const MasterData: React.FC<MasterDataProps> = ({
   useEffect(() => { localStorage.setItem('wf_items_gid', gid); }, [gid]);
   useEffect(() => { localStorage.setItem('wf_script_url', scriptUrl); }, [scriptUrl]);
 
+  const handleSheetIdChange = (val: string) => {
+    setSheetId(val);
+    // Auto-extract GID if user pastes a full URL containing gid=...
+    const extractedGid = extractGidFromUrl(val);
+    if (extractedGid) {
+      setGid(extractedGid);
+    }
+  };
+
+  const handleResetDefaults = () => {
+    setSheetId(DEFAULT_SHEET_ID);
+    setGid(DEFAULT_ITEMS_GID);
+    setSyncMsg('Defaults restored.');
+  };
+
   const handleAddNew = () => {
     setFormData({});
     setIsEditing(false);
@@ -71,7 +86,7 @@ const MasterData: React.FC<MasterDataProps> = ({
       const newItems = await fetchItemsFromSheet(cleanId, gid);
       
       if (newItems.length === 0) {
-        setSyncMsg('No items found. Check CSV format.');
+        setSyncMsg('No items found. Check ID/GID or CSV headers.');
       } else {
         // Update items (Logic: Overwrite if ID matches, else add)
         let addedCount = 0;
@@ -179,20 +194,28 @@ const MasterData: React.FC<MasterDataProps> = ({
           <div className="p-6 space-y-8">
              {/* Section 1: Import Items */}
              <div className="space-y-4">
-               <h4 className="font-bold text-lg text-blue-700 border-b pb-2">1. Import Items from Sheet</h4>
+               <div className="flex justify-between items-center border-b pb-2">
+                 <h4 className="font-bold text-lg text-blue-700">1. Import Items from Sheet</h4>
+                 <button 
+                   onClick={handleResetDefaults}
+                   className="text-xs text-blue-600 underline hover:text-blue-800"
+                 >
+                   Reset to Default Link
+                 </button>
+               </div>
                <p className="text-sm text-gray-600">
                  Read item master data directly from your Google Sheet. 
-                 <br/><span className="font-semibold text-red-500">Requirement:</span> You must go to <em>File &gt; Share &gt; Publish to web</em>, select the Sheet/Tab, choose <strong>CSV</strong>, and Publish.
+                 <br/><span className="font-semibold text-red-500">Note:</span> Paste your full "Published to web" link below and the GID will update automatically.
                </p>
                
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Spreadsheet ID (or URL)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Spreadsheet ID / URL</label>
                     <input 
                       className="w-full border rounded p-2 text-sm" 
                       value={sheetId}
-                      onChange={e => setSheetId(e.target.value)}
-                      placeholder="1TdSD6XjSY..."
+                      onChange={e => handleSheetIdChange(e.target.value)}
+                      placeholder="Paste full URL or ID here..."
                     />
                   </div>
                   <div>
@@ -201,21 +224,21 @@ const MasterData: React.FC<MasterDataProps> = ({
                       className="w-full border rounded p-2 text-sm" 
                       value={gid}
                       onChange={e => setGid(e.target.value)}
-                      placeholder="0"
+                      placeholder="e.g. 229812258"
                     />
-                    <p className="text-[10px] text-gray-400 mt-1">Found at end of URL: #gid=12345</p>
+                    <p className="text-[10px] text-gray-400 mt-1">If '0', it reads the first sheet.</p>
                   </div>
                </div>
                
                <button 
                  onClick={handleSyncItems} 
                  disabled={syncLoading}
-                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 transition flex items-center gap-2"
+                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 transition flex items-center gap-2 w-full justify-center md:w-auto"
                >
                  {syncLoading ? 'Syncing...' : '📥 Import Items Now'}
                </button>
                {syncMsg && (
-                 <div className={`p-3 rounded text-sm ${syncMsg.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                 <div className={`p-3 rounded text-sm ${syncMsg.includes('Error') || syncMsg.includes('No items') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
                    {syncMsg}
                  </div>
                )}
