@@ -4,7 +4,7 @@ import SearchableSelect from './SearchableSelect';
 import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet } from '../services/googleSheetsService';
 
 interface MasterDataProps {
-  history: IssueRecord[]; // Added history for export
+  history: IssueRecord[];
   items: Item[];
   machines: Machine[];
   locations: Location[];
@@ -129,7 +129,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     
     let successCount = 0;
     
-    // We process sequentially to avoid overwhelming Apps Script (LockService helps but too many requests can still error)
+    // We process sequentially to avoid overwhelming Apps Script
     for (let i = 0; i < history.length; i++) {
         const record = history[i];
         setSyncMsg(`Exporting ${i + 1}/${history.length}...`);
@@ -137,7 +137,6 @@ const MasterData: React.FC<MasterDataProps> = ({
         try {
             await sendIssueToSheet(scriptUrl, record);
             successCount++;
-            // Small delay to prevent race conditions in sheet appending
             await new Promise(r => setTimeout(r, 600)); 
         } catch (e) {
             console.error(e);
@@ -155,7 +154,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     if (activeTab === 'items') {
       const payload: Item = {
         id: formData.id || `ITM-${timestamp}`,
-        name: formData.name,
+        name: formData.name, // Description
         category: formData.category || 'General',
         unit: formData.unit || 'pcs',
         // New Fields
@@ -282,7 +281,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                </div>
              )}
 
-             {/* Section 2: Write Config - Global Issue Logger */}
+             {/* Section 2: Write Config */}
              <div className="space-y-4">
                <h4 className="font-bold text-lg text-green-700 border-b pb-2">
                  {activeTab === 'items' ? '2. ' : ''}Record Issues to Sheet
@@ -312,16 +311,12 @@ const MasterData: React.FC<MasterDataProps> = ({
                       >
                          <span>📤</span> Export All Existing History to Sheet
                       </button>
-                      <p className="text-xs text-green-600 mt-2 text-center">
-                         Useful if you have local records that are not yet in the sheet.
-                      </p>
                   </div>
                )}
 
                <details className="text-sm border rounded-lg p-3 bg-gray-50">
                  <summary className="font-medium cursor-pointer text-blue-600 hover:text-blue-800">Show Apps Script Code to Copy</summary>
                  <div className="mt-3">
-                   <p className="mb-2 text-xs text-gray-600">Paste this into <strong>Extensions &gt; Apps Script</strong>, then <strong>Deploy &gt; New Deployment &gt; Web App &gt; Anyone</strong>.</p>
                    <pre className="bg-gray-800 text-green-400 p-3 rounded text-xs overflow-x-auto select-all">
                       {APP_SCRIPT_TEMPLATE}
                    </pre>
@@ -329,7 +324,6 @@ const MasterData: React.FC<MasterDataProps> = ({
                </details>
              </div>
              
-             {/* Common Msg Area */}
              {syncMsg && (
                 <div className={`p-3 rounded text-sm ${syncMsg.includes('Error') || syncMsg.includes('No items') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
                    {syncMsg}
@@ -356,7 +350,7 @@ const MasterData: React.FC<MasterDataProps> = ({
           </h3>
           <form onSubmit={handleSave} className="space-y-4">
             
-            {/* ID Field - Different for Users (Username) vs Others (ID) */}
+            {/* ID Field */}
             {activeTab === 'users' ? (
                 <div>
                     <label className="block text-sm font-medium text-gray-700">Username</label>
@@ -366,12 +360,13 @@ const MasterData: React.FC<MasterDataProps> = ({
                         value={formData.username || ''}
                         onChange={e => setFormData({...formData, username: e.target.value})}
                         readOnly={isEditing}
-                        placeholder="e.g. jdoe"
                     />
                 </div>
             ) : (
                 <div>
-                    <label className="block text-sm font-medium text-gray-700">ID (Item Number)</label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      {activeTab === 'items' ? 'Item Number (ID)' : 'ID'}
+                    </label>
                     <input 
                         className={`w-full border rounded p-2 ${isEditing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
                         placeholder="Auto-generated if empty"
@@ -379,12 +374,13 @@ const MasterData: React.FC<MasterDataProps> = ({
                         onChange={e => setFormData({...formData, id: e.target.value})}
                         readOnly={isEditing}
                     />
-                    {isEditing && <p className="text-xs text-gray-400 mt-1">ID cannot be changed</p>}
                 </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">{activeTab === 'users' ? 'Full Name' : 'Description (Name)'}</label>
+              <label className="block text-sm font-medium text-gray-700">
+                 {activeTab === 'users' ? 'Full Name' : activeTab === 'items' ? 'Description' : 'Name'}
+              </label>
               <input 
                 required
                 className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
@@ -393,25 +389,9 @@ const MasterData: React.FC<MasterDataProps> = ({
               />
             </div>
 
-            {/* Custom fields for Items */}
+            {/* Custom fields for Items - Matches user request */}
             {activeTab === 'items' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.fullName || ''}
-                    onChange={e => setFormData({...formData, fullName: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">2nd Item Number</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.secondId || ''}
-                    onChange={e => setFormData({...formData, secondId: e.target.value})}
-                  />
-                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">3rd Item Number</label>
                   <input 
@@ -420,7 +400,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                     onChange={e => setFormData({...formData, thirdId: e.target.value})}
                   />
                 </div>
-                <div className="md:col-span-2">
+                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700">Description Line 2</label>
                   <input 
                     className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
@@ -428,12 +408,12 @@ const MasterData: React.FC<MasterDataProps> = ({
                     onChange={e => setFormData({...formData, description2: e.target.value})}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Part No.</label>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">Full Name</label>
                   <input 
                     className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.partNumber || ''}
-                    onChange={e => setFormData({...formData, partNumber: e.target.value})}
+                    value={formData.fullName || ''}
+                    onChange={e => setFormData({...formData, fullName: e.target.value})}
                   />
                 </div>
                 <div>
@@ -445,19 +425,19 @@ const MasterData: React.FC<MasterDataProps> = ({
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700">Part No.</label>
+                  <input 
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.partNumber || ''}
+                    onChange={e => setFormData({...formData, partNumber: e.target.value})}
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700">Unit (UM)</label>
                   <input 
                     className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
                     value={formData.unit || ''}
                     onChange={e => setFormData({...formData, unit: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Category</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.category || ''}
-                    onChange={e => setFormData({...formData, category: e.target.value})}
                   />
                 </div>
               </div>
@@ -584,7 +564,8 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     switch (activeTab) {
       case 'items':
-        headers = ['ID', 'Name', 'OEM', 'Part No', 'Unit', 'Actions'];
+        // Updated columns based on user request
+        headers = ['Item Number', '3rd Item No', 'Description', 'Desc Line 2', 'Full Name', 'OEM', 'Part No', 'UM', 'Actions'];
         data = items;
         break;
       case 'machines':
@@ -614,44 +595,52 @@ const MasterData: React.FC<MasterDataProps> = ({
         <table className="w-full text-left text-sm">
           <thead className="bg-gray-50 border-b">
             <tr>
-              {headers.map(h => <th key={h} className="px-6 py-3 font-semibold text-gray-700">{h}</th>)}
+              {headers.map(h => <th key={h} className="px-6 py-3 font-semibold text-gray-700 whitespace-nowrap">{h}</th>)}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {data.map((row: any) => (
               <tr key={row.id || row.username} className="hover:bg-gray-50 transition">
-                <td className="px-6 py-3 font-medium text-gray-900">{activeTab === 'users' ? row.username : row.id}</td>
-                <td className="px-6 py-3">{row.name}</td>
+                <td className="px-6 py-3 font-medium text-gray-900 align-top">{activeTab === 'users' ? row.username : row.id}</td>
                 
-                {/* Specific Columns */}
+                {/* Specific Columns for Items */}
                 {activeTab === 'items' && (
                   <>
-                    <td className="px-6 py-3 text-gray-500">{row.oem || '-'}</td>
-                    <td className="px-6 py-3 text-gray-500 font-mono text-xs">{row.partNumber || '-'}</td>
-                    <td className="px-6 py-3 text-gray-500">{row.unit}</td>
+                    <td className="px-6 py-3 text-gray-500 align-top">{row.thirdId || '-'}</td>
+                    <td className="px-6 py-3 text-gray-800 align-top">{row.name}</td>
+                    <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.description2 || '-'}</td>
+                    <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.fullName || '-'}</td>
+                    <td className="px-6 py-3 text-gray-500 align-top">{row.oem || '-'}</td>
+                    <td className="px-6 py-3 text-gray-500 font-mono text-xs align-top">{row.partNumber || '-'}</td>
+                    <td className="px-6 py-3 text-gray-500 align-top">{row.unit}</td>
                   </>
                 )}
+
+                {activeTab !== 'items' && (
+                   <td className="px-6 py-3 align-top">{row.name}</td>
+                )}
+                
                 {activeTab === 'machines' && (
                   <>
-                    <td className="px-6 py-3 text-gray-500">{row.model}</td>
-                    <td className="px-6 py-3 text-gray-500">
+                    <td className="px-6 py-3 text-gray-500 align-top">{row.model}</td>
+                    <td className="px-6 py-3 text-gray-500 align-top">
                       {divisions.find(d => d.id === row.divisionId)?.name || '-'}
                     </td>
                   </>
                 )}
                 {activeTab === 'divisions' && (
-                  <td className="px-6 py-3 text-gray-500">
+                  <td className="px-6 py-3 text-gray-500 align-top">
                      {sectors.find(s => s.id === row.sectorId)?.name || '-'}
                   </td>
                 )}
                 {activeTab === 'locations' && (
-                  <td className="px-6 py-3 text-gray-500 font-mono text-xs">
+                  <td className="px-6 py-3 text-gray-500 font-mono text-xs align-top">
                      {row.email || <span className="text-gray-300 italic">No email set</span>}
                   </td>
                 )}
                 {activeTab === 'users' && (
                   <>
-                    <td className="px-6 py-3">
+                    <td className="px-6 py-3 align-top">
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${
                             row.role === 'admin' ? 'bg-purple-100 text-purple-700' :
                             row.role.includes('manager') ? 'bg-orange-100 text-orange-700' :
@@ -660,13 +649,13 @@ const MasterData: React.FC<MasterDataProps> = ({
                             {row.role.replace('_', ' ').toUpperCase()}
                         </span>
                     </td>
-                    <td className="px-6 py-3 text-gray-500 text-xs">
+                    <td className="px-6 py-3 text-gray-500 text-xs align-top">
                         {row.email}
                     </td>
                   </>
                 )}
 
-                <td className="px-6 py-3">
+                <td className="px-6 py-3 align-top">
                    <button 
                      onClick={() => handleEdit(row)}
                      className="text-blue-600 hover:text-blue-900 font-medium hover:underline"
