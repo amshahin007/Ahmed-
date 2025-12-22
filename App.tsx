@@ -6,6 +6,7 @@ import IssueForm from './components/IssueForm';
 import HistoryTable from './components/HistoryTable';
 import MasterData from './components/MasterData';
 import StockApproval from './components/StockApproval';
+import Login from './components/Login';
 import { 
   INITIAL_HISTORY, 
   ITEMS as INIT_ITEMS, 
@@ -14,7 +15,7 @@ import {
   SECTORS as INIT_SECTORS,
   DIVISIONS as INIT_DIVISIONS 
 } from './constants';
-import { IssueRecord, Item, Machine, Location, Sector, Division } from './types';
+import { IssueRecord, Item, Machine, Location, Sector, Division, User } from './types';
 
 // Helper to load from LocalStorage safely
 const loadFromStorage = <T,>(key: string, fallback: T): T => {
@@ -28,9 +29,13 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
 };
 
 const App: React.FC = () => {
+  // --- Auth State ---
+  const [user, setUser] = useState<User | null>(() => loadFromStorage('wf_user', null));
+
+  // --- View State ---
   const [currentView, setCurrentView] = useState('dashboard');
   
-  // App State with Persistence
+  // --- Data State with Persistence ---
   const [history, setHistory] = useState<IssueRecord[]>(() => loadFromStorage('wf_history', INITIAL_HISTORY));
   const [items, setItems] = useState<Item[]>(() => loadFromStorage('wf_items', INIT_ITEMS));
   const [machines, setMachines] = useState<Machine[]>(() => loadFromStorage('wf_machines', INIT_MACHINES));
@@ -39,6 +44,7 @@ const App: React.FC = () => {
   const [divisions, setDivisions] = useState<Division[]>(() => loadFromStorage('wf_divisions', INIT_DIVISIONS));
 
   // Persistence Effects
+  useEffect(() => { localStorage.setItem('wf_user', JSON.stringify(user)); }, [user]);
   useEffect(() => { localStorage.setItem('wf_history', JSON.stringify(history)); }, [history]);
   useEffect(() => { localStorage.setItem('wf_items', JSON.stringify(items)); }, [items]);
   useEffect(() => { localStorage.setItem('wf_machines', JSON.stringify(machines)); }, [machines]);
@@ -46,6 +52,18 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('wf_sectors', JSON.stringify(sectors)); }, [sectors]);
   useEffect(() => { localStorage.setItem('wf_divisions', JSON.stringify(divisions)); }, [divisions]);
 
+  // Auth Handlers
+  const handleLogin = (loggedInUser: User) => {
+    setUser(loggedInUser);
+    setCurrentView('dashboard');
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('wf_user');
+  };
+
+  // Data Handlers
   const handleAddIssue = (newIssue: IssueRecord) => {
     setHistory(prev => [newIssue, ...prev]);
   };
@@ -54,14 +72,12 @@ const App: React.FC = () => {
     setHistory(prev => prev.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue));
   };
 
-  // Master Data Handlers - Add
   const handleAddItem = (item: Item) => setItems(prev => [...prev, item]);
   const handleAddMachine = (machine: Machine) => setMachines(prev => [...prev, machine]);
   const handleAddLocation = (location: Location) => setLocations(prev => [...prev, location]);
   const handleAddSector = (sector: Sector) => setSectors(prev => [...prev, sector]);
   const handleAddDivision = (division: Division) => setDivisions(prev => [...prev, division]);
 
-  // Master Data Handlers - Update
   const handleUpdateItem = (updatedItem: Item) => {
     setItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
   };
@@ -78,6 +94,12 @@ const App: React.FC = () => {
     setDivisions(prev => prev.map(div => div.id === updatedDivision.id ? updatedDivision : div));
   };
 
+  // If no user is logged in, show Login Screen
+  if (!user) {
+    return <Login onLogin={handleLogin} />;
+  }
+
+  // Router Logic based on View
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
@@ -94,6 +116,8 @@ const App: React.FC = () => {
           />
         );
       case 'stock-approval':
+        // Protected Route
+        if (user.role !== 'admin') return <Dashboard history={history} />;
         return (
           <StockApproval 
             history={history} 
@@ -102,8 +126,10 @@ const App: React.FC = () => {
           />
         );
       case 'history':
-        return <HistoryTable history={history} />;
+        return <HistoryTable history={history} locations={locations} />;
       case 'master-data':
+        // Protected Route
+        if (user.role !== 'admin') return <Dashboard history={history} />;
         return (
           <MasterData 
             items={items}
@@ -131,7 +157,12 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <div className="flex h-screen bg-gray-50 overflow-hidden">
-        <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
+        <Sidebar 
+            currentView={currentView} 
+            setCurrentView={setCurrentView} 
+            currentUser={user}
+            onLogout={handleLogout}
+        />
         
         <main className="flex-1 overflow-y-auto">
           <header className="bg-white shadow-sm px-8 py-4 sticky top-0 z-10">
@@ -139,8 +170,11 @@ const App: React.FC = () => {
               <h2 className="text-xl font-bold text-gray-800 capitalize">
                 {currentView.replace('-', ' ')}
               </h2>
-              <div className="text-sm text-gray-500">
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-right">
+                    <p className="font-medium text-gray-900">Welcome, {user.name}</p>
+                    <p className="text-xs text-gray-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
+                </div>
               </div>
             </div>
           </header>

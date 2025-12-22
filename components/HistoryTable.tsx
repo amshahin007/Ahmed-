@@ -1,19 +1,26 @@
 import React, { useState } from 'react';
-import { IssueRecord } from '../types';
+import { IssueRecord, Location } from '../types';
 
 interface HistoryTableProps {
   history: IssueRecord[];
+  locations: Location[];
 }
 
-const HistoryTable: React.FC<HistoryTableProps> = ({ history }) => {
+const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState('');
 
-  const filteredHistory = history.filter(record => 
-    record.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    record.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    record.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    record.locationId.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredHistory = history.filter(record => {
+    const matchesSearch = 
+      record.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.locationId.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesLocation = selectedLocation ? record.locationId === selectedLocation : true;
+
+    return matchesSearch && matchesLocation;
+  });
 
   const downloadExcel = () => {
     // CSV Export implementation
@@ -63,6 +70,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history }) => {
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        
+        {/* Search Bar */}
         <div className="relative flex-1 max-w-md">
             <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">🔍</span>
             <input
@@ -73,9 +82,24 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history }) => {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
         </div>
+
+        {/* Location Filter Dropdown */}
+        <div className="w-full md:w-64">
+            <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700"
+            >
+                <option value="">All Locations</option>
+                {locations.map(loc => (
+                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                ))}
+            </select>
+        </div>
+
         <button
             onClick={downloadExcel}
-            className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-sm"
+            className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-sm whitespace-nowrap"
         >
             <span className="mr-2">📊</span> Download Excel
         </button>

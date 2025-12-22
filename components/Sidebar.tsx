@@ -1,18 +1,27 @@
 import React from 'react';
+import { User, UserRole } from '../types';
 
 interface SidebarProps {
   currentView: string;
   setCurrentView: (view: string) => void;
+  currentUser: User;
+  onLogout: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentUser, onLogout }) => {
+  
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'issue-form', label: 'New Issue', icon: '📝' },
-    { id: 'stock-approval', label: 'Stock Approval', icon: '✅' },
-    { id: 'history', label: 'History & Reports', icon: '📋' },
-    { id: 'master-data', label: 'Master Data', icon: '⚙️' },
+    { id: 'dashboard', label: 'Dashboard', icon: '📊', roles: ['admin', 'user'] },
+    { id: 'issue-form', label: 'New Issue', icon: '📝', roles: ['admin', 'user'] },
+    { id: 'history', label: 'History & Reports', icon: '📋', roles: ['admin', 'user'] },
+    { id: 'stock-approval', label: 'Stock Approval', icon: '✅', roles: ['admin'] },
+    { id: 'master-data', label: 'Master Data', icon: '⚙️', roles: ['admin'] },
   ];
+
+  // Filter items based on user role
+  const visibleNavItems = navItems.filter(item => 
+    item.roles.includes(currentUser.role)
+  );
 
   return (
     <aside className="w-64 bg-slate-900 text-white min-h-screen flex flex-col shadow-xl">
@@ -22,7 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
       </div>
       
       <nav className="flex-1 py-6 px-3 space-y-2">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setCurrentView(item.id)}
@@ -39,15 +48,21 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
       </nav>
 
       <div className="p-4 border-t border-slate-700">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center font-bold text-sm">
-            AD
+        <div className="flex items-center space-x-3 mb-4">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${currentUser.role === 'admin' ? 'bg-purple-500' : 'bg-blue-500'}`}>
+            {currentUser.username.substring(0,2).toUpperCase()}
           </div>
-          <div>
-            <p className="text-sm font-medium">Admin User</p>
-            <p className="text-xs text-slate-400">Warehouse Mgr</p>
+          <div className="overflow-hidden">
+            <p className="text-sm font-medium truncate">{currentUser.name}</p>
+            <p className="text-xs text-slate-400 capitalize">{currentUser.role}</p>
           </div>
         </div>
+        <button 
+            onClick={onLogout}
+            className="w-full py-2 border border-slate-600 rounded-md text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition"
+        >
+            Sign Out
+        </button>
       </div>
     </aside>
   );

@@ -1,4 +1,21 @@
-import { Item, Machine, Location, IssueRecord, Sector, Division } from './types';
+import { Item, Machine, Location, IssueRecord, Sector, Division, User } from './types';
+
+export const USERS: User[] = [
+  { 
+    username: 'admin', 
+    name: 'Warehouse Manager', 
+    role: 'admin', 
+    email: 'admin@wareflow.com',
+    password: 'admin' 
+  },
+  { 
+    username: 'operator', 
+    name: 'Site Operator', 
+    role: 'user', 
+    email: 'operator@site.com',
+    password: 'user' 
+  }
+];
 
 export const LOCATIONS: Location[] = [
   { id: 'WH-001', name: 'Main Warehouse (Zone A)', email: 'zone.a@site.com' },

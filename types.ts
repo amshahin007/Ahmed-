@@ -1,3 +1,4 @@
+
 export interface Item {
   id: string;
   name: string;
@@ -51,4 +52,14 @@ export interface DashboardMetrics {
   topItem: string;
   topMachine: string;
   recentActivity: number; // Count in last 24h
+}
+
+export type UserRole = 'admin' | 'user';
+
+export interface User {
+  username: string;
+  name: string;
+  role: UserRole;
+  email: string;
+  password?: string; // In a real app, this would be hashed/handled by backend
 }
