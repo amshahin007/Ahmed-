@@ -3,7 +3,7 @@ import { Item, Machine, Location, IssueRecord, Sector, Division, User } from './
 export const USERS: User[] = [
   { 
     username: 'admin', 
-    name: 'Warehouse Manager', 
+    name: 'Admin Manager', 
     role: 'admin', 
     email: 'admin@wareflow.com',
     password: 'admin' 
@@ -13,6 +13,34 @@ export const USERS: User[] = [
     name: 'Site Operator', 
     role: 'user', 
     email: 'operator@site.com',
+    password: 'user' 
+  },
+  { 
+    username: 'warehouse_mgr', 
+    name: 'Warehouse Mgr.', 
+    role: 'warehouse_manager', 
+    email: 'wm@site.com',
+    password: 'user' 
+  },
+  { 
+    username: 'warehouse_sup', 
+    name: 'Warehouse Sup.', 
+    role: 'warehouse_supervisor', 
+    email: 'ws@site.com',
+    password: 'user' 
+  },
+  { 
+    username: 'maint_mgr', 
+    name: 'Maintenance Mgr.', 
+    role: 'maintenance_manager', 
+    email: 'mm@site.com',
+    password: 'user' 
+  },
+  { 
+    username: 'maint_eng', 
+    name: 'Maint. Engineer', 
+    role: 'maintenance_engineer', 
+    email: 'me@site.com',
     password: 'user' 
   }
 ];

@@ -54,7 +54,7 @@ export interface DashboardMetrics {
   recentActivity: number; // Count in last 24h
 }
 
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'warehouse_manager' | 'maintenance_manager' | 'maintenance_engineer' | 'warehouse_supervisor' | 'user';
 
 export interface User {
   username: string;

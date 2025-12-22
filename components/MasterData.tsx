@@ -252,8 +252,12 @@ const MasterData: React.FC<MasterDataProps> = ({
                      value={formData.role || 'user'}
                      onChange={e => setFormData({...formData, role: e.target.value})}
                   >
-                      <option value="user">User (Operator)</option>
-                      <option value="admin">Admin (Manager)</option>
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                      <option value="warehouse_manager">Warehouse Manager</option>
+                      <option value="warehouse_supervisor">Warehouse Supervisor</option>
+                      <option value="maintenance_manager">Maintenance Manager</option>
+                      <option value="maintenance_engineer">Maintenance Engineer</option>
                   </select>
                 </div>
                 <div>
@@ -363,8 +367,12 @@ const MasterData: React.FC<MasterDataProps> = ({
                 {activeTab === 'users' && (
                   <>
                     <td className="px-6 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${row.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {row.role.toUpperCase()}
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            row.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+                            row.role.includes('manager') ? 'bg-orange-100 text-orange-700' :
+                            'bg-blue-100 text-blue-700'
+                        }`}>
+                            {row.role.replace('_', ' ').toUpperCase()}
                         </span>
                     </td>
                     <td className="px-6 py-3 text-gray-500 text-xs">

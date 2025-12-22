@@ -124,8 +124,8 @@ const App: React.FC = () => {
           />
         );
       case 'stock-approval':
-        // Protected Route
-        if (user.role !== 'admin') return <Dashboard history={history} />;
+        // Protected Route: Admin, Warehouse Manager, Warehouse Supervisor
+        if (!['admin', 'warehouse_manager', 'warehouse_supervisor'].includes(user.role)) return <Dashboard history={history} />;
         return (
           <StockApproval 
             history={history} 
@@ -136,7 +136,7 @@ const App: React.FC = () => {
       case 'history':
         return <HistoryTable history={history} locations={locations} />;
       case 'master-data':
-        // Protected Route
+        // Protected Route: Admin only
         if (user.role !== 'admin') return <Dashboard history={history} />;
         return (
           <MasterData 

@@ -11,11 +11,36 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentUser, onLogout }) => {
   
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊', roles: ['admin', 'user'] },
-    { id: 'issue-form', label: 'New Issue', icon: '📝', roles: ['admin', 'user'] },
-    { id: 'history', label: 'History & Reports', icon: '📋', roles: ['admin', 'user'] },
-    { id: 'stock-approval', label: 'Stock Approval', icon: '✅', roles: ['admin'] },
-    { id: 'master-data', label: 'Master Data', icon: '⚙️', roles: ['admin'] },
+    { 
+      id: 'dashboard', 
+      label: 'Dashboard', 
+      icon: '📊', 
+      roles: ['admin', 'user', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer', 'warehouse_supervisor'] 
+    },
+    { 
+      id: 'issue-form', 
+      label: 'New Issue', 
+      icon: '📝', 
+      roles: ['admin', 'user', 'maintenance_manager', 'maintenance_engineer'] 
+    },
+    { 
+      id: 'history', 
+      label: 'History & Reports', 
+      icon: '📋', 
+      roles: ['admin', 'user', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer', 'warehouse_supervisor'] 
+    },
+    { 
+      id: 'stock-approval', 
+      label: 'Stock Approval', 
+      icon: '✅', 
+      roles: ['admin', 'warehouse_manager', 'warehouse_supervisor'] 
+    },
+    { 
+      id: 'master-data', 
+      label: 'Master Data', 
+      icon: '⚙️', 
+      roles: ['admin'] 
+    },
   ];
 
   // Filter items based on user role
@@ -54,7 +79,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
           </div>
           <div className="overflow-hidden">
             <p className="text-sm font-medium truncate">{currentUser.name}</p>
-            <p className="text-xs text-slate-400 capitalize">{currentUser.role}</p>
+            <p className="text-xs text-slate-400 capitalize">{currentUser.role.replace('_', ' ')}</p>
           </div>
         </div>
         <button 
