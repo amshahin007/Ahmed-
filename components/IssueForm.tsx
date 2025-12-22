@@ -90,7 +90,24 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!locationId || !machineId || lineItems.length === 0 || !warehouseEmail) return;
+    
+    // Validation Checks
+    if (!locationId) {
+        alert("Please select a 'Warehouse Location' from the dropdown list.");
+        return;
+    }
+    if (!machineId) {
+        alert("Please select a 'Machine' from the dropdown list.");
+        return;
+    }
+    if (lineItems.length === 0) {
+        alert("Please add at least one item to the list before submitting.");
+        return;
+    }
+    if (!warehouseEmail) {
+        alert("Please provide a Warehouse Email address.");
+        return;
+    }
 
     setIsSubmitting(true);
     setEmailStatus('Processing Request & Sending Email...');
@@ -105,7 +122,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     for (let i = 0; i < lineItems.length; i++) {
       const line = lineItems[i];
       const newIssue: IssueRecord = {
-        id: `REQ-${batchIdBase}-${i + 1}`, // Changed to REQ for Request
+        id: `REQ-${batchIdBase}-${i + 1}`,
         timestamp: timestamp,
         locationId,
         itemId: line.itemId,
@@ -402,13 +419,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              disabled={isSubmitting || lineItems.length === 0 || !locationId || !machineId || !warehouseEmail}
+              disabled={isSubmitting}
               className={`px-8 py-4 rounded-xl text-white font-bold text-lg shadow-md transition-all flex items-center gap-2 ${
                 isSubmitting 
                 ? 'bg-blue-400 cursor-wait' 
-                : (lineItems.length === 0 || !locationId || !machineId)
-                   ? 'bg-gray-400 cursor-not-allowed'
-                   : 'bg-green-600 hover:bg-green-700 hover:shadow-lg transform hover:-translate-y-1'
+                : 'bg-green-600 hover:bg-green-700 hover:shadow-lg transform hover:-translate-y-1'
               }`}
             >
               {isSubmitting ? 'Sending Request...' : (
