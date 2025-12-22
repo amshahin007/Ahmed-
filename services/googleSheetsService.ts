@@ -103,14 +103,17 @@ const parseItemsCSV = (csvText: string): Item[] => {
   const idIdx = cleanHeaders.findIndex(h => h === 'item number' || h === 'item no' || h === 'id');
   const nameIdx = cleanHeaders.findIndex(h => h === 'description' || h === 'desc' || h === 'item name');
   
-  const id2Idx = findIdx(['2nd item number', '2nd item']);
-  const id3Idx = findIdx(['3rd item number', '3rd item']);
-  const desc2Idx = findIdx(['description line 2']);
-  const fullNameIdx = findIdx(['full name']);
-  const oemIdx = findIdx(['oem']);
-  const partNoIdx = findIdx(['part no', 'part number']);
-  const umIdx = findIdx(['um', 'unit']);
-  const catIdx = findIdx(['category', 'family']); 
+  const id2Idx = findIdx(['2nd item number', '2nd item', 'second item']);
+  const id3Idx = findIdx(['3rd item number', '3rd item', 'third item']);
+  
+  // Expanded keywords for Desc Line 2 and Full Name
+  const desc2Idx = findIdx(['description line 2', 'desc line 2', 'description 2', 'desc 2', 'spec']);
+  const fullNameIdx = findIdx(['full name', 'item full name', 'fullname']);
+  
+  const oemIdx = findIdx(['oem', 'manufacturer']);
+  const partNoIdx = findIdx(['part no', 'part number', 'pn']);
+  const umIdx = findIdx(['um', 'unit', 'uom']);
+  const catIdx = findIdx(['category', 'family', 'group']); 
 
   const items: Item[] = [];
 
