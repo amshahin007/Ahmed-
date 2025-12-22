@@ -6,16 +6,20 @@ export const DEFAULT_SHEET_ID = '2PACX-1vSMVlbr82tagYILVNamzhxIriPF3LAXrMaAHlRlp
 export const DEFAULT_ITEMS_GID = '229812258'; 
 
 export const extractSheetIdFromUrl = (url: string): string => {
+  if (!url) return '';
+  const trimmed = url.trim();
+  
   // Handle "Published to web" URLs (e.g., .../d/e/2PACX-.../pubhtml)
-  const publishedMatch = url.match(/\/d\/e\/([a-zA-Z0-9-_]+)/);
+  const publishedMatch = trimmed.match(/\/d\/e\/([a-zA-Z0-9-_]+)/);
   if (publishedMatch) return publishedMatch[1];
 
   // Handle standard URLs (e.g., .../d/1A2B.../edit)
-  const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
-  return match ? match[1] : url;
+  const match = trimmed.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  return match ? match[1] : trimmed;
 };
 
 export const extractGidFromUrl = (url: string): string | null => {
+  if (!url) return null;
   // Try to find gid parameter in URL
   const match = url.match(/[?&]gid=([0-9]+)/);
   return match ? match[1] : null;
@@ -23,19 +27,21 @@ export const extractGidFromUrl = (url: string): string | null => {
 
 export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise<Item[]> => {
   let url = '';
+  const cleanId = sheetId.trim();
+  const cleanGid = gid ? gid.trim() : '';
   
   // Determine URL format based on ID type
-  if (sheetId.startsWith('2PACX')) {
+  if (cleanId.startsWith('2PACX')) {
       // Published Sheet
       // The user provided structure: .../pub?gid=...&single=true&output=csv
-      url = `https://docs.google.com/spreadsheets/d/e/${sheetId}/pub?output=csv`;
+      url = `https://docs.google.com/spreadsheets/d/e/${cleanId}/pub?output=csv`;
       
-      if (gid) {
-         url += `&gid=${gid}&single=true`;
+      if (cleanGid) {
+         url += `&gid=${cleanGid}&single=true`;
       }
   } else {
       // Standard Sheet ID
-      url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+      url = `https://docs.google.com/spreadsheets/d/${cleanId}/export?format=csv&gid=${cleanGid}`;
   }
   
   // Add timestamp to prevent caching
@@ -44,7 +50,7 @@ export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`Failed to fetch. Status: ${response.status}.`);
+      throw new Error(`Failed to fetch. Status: ${response.status}. Check if sheet is published/public.`);
     }
     const text = await response.text();
     return parseItemsCSV(text);
@@ -54,14 +60,41 @@ export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise
   }
 };
 
+// Robust CSV Line Parser that handles quotes and commas correctly
+const parseCSVLine = (text: string): string[] => {
+    const result: string[] = [];
+    let cell = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') {
+            // Handle escaped quotes ("") inside quotes if needed, 
+            // but simple toggle is usually enough for Google Sheets export
+            if (inQuotes && text[i+1] === '"') {
+                cell += '"';
+                i++; // skip next quote
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            result.push(cell.trim());
+            cell = '';
+        } else {
+            cell += char;
+        }
+    }
+    result.push(cell.trim());
+    return result;
+};
+
 const parseItemsCSV = (csvText: string): Item[] => {
   const lines = csvText.split(/\r?\n/);
   if (lines.length < 2) return [];
 
-  // Parse headers safely (normalize to lowercase for matching)
-  // Use a regex to split by comma but respect quotes if present
-  const headers = lines[0].toLowerCase().match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[0].toLowerCase().split(',');
-  const cleanHeaders = headers.map(h => h.trim().replace(/^"|"$/g, ''));
+  // Parse headers
+  const headers = parseCSVLine(lines[0]);
+  const cleanHeaders = headers.map(h => h.toLowerCase().replace(/^"|"$/g, '').trim());
   
   // Helper to find index fuzzy
   const findIdx = (keywords: string[]) => cleanHeaders.findIndex(h => keywords.some(k => h === k || h.includes(k)));
@@ -85,12 +118,10 @@ const parseItemsCSV = (csvText: string): Item[] => {
     let line = lines[i].trim();
     if (!line) continue;
     
-    // Regex split to handle commas inside quotes correctly
-    const values = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
-    
-    if (!values || values.length < 2) continue;
+    const values = parseCSVLine(line);
+    if (values.length < 2) continue;
 
-    const cleanValues = values.map((v: string) => v ? v.trim().replace(/^"|"$/g, '').replace(/""/g, '"') : '');
+    const cleanValues = values.map(v => v.replace(/^"|"$/g, ''));
 
     // Fallbacks
     const idVal = idIdx > -1 ? cleanValues[idIdx] : cleanValues[0];
