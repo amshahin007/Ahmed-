@@ -1,4 +1,4 @@
-import { Item, Machine, Location, IssueRecord } from './types';
+import { Item, Machine, Location, IssueRecord, Sector, Division } from './types';
 
 export const LOCATIONS: Location[] = [
   { id: 'WH-001', name: 'Main Warehouse (Zone A)' },
@@ -7,12 +7,25 @@ export const LOCATIONS: Location[] = [
   { id: 'WH-004', name: 'Maintenance Workshop' },
 ];
 
+export const SECTORS: Sector[] = [
+  { id: 'SEC-001', name: 'Production' },
+  { id: 'SEC-002', name: 'Packaging' },
+  { id: 'SEC-003', name: 'Utilities' },
+];
+
+export const DIVISIONS: Division[] = [
+  { id: 'DIV-001', name: 'Machinery 1 (Heavy)', sectorId: 'SEC-001' },
+  { id: 'DIV-002', name: 'Machinery 2 (Light)', sectorId: 'SEC-001' },
+  { id: 'DIV-003', name: 'Final Pack Line', sectorId: 'SEC-002' },
+  { id: 'DIV-004', name: 'Power Plant', sectorId: 'SEC-003' },
+];
+
 export const MACHINES: Machine[] = [
-  { id: 'M-101', name: 'Conveyor Belt Alpha', model: 'CV-2000' },
-  { id: 'M-102', name: 'Robotic Arm Bravo', model: 'KUKA-KR6' },
-  { id: 'M-103', name: 'Packaging Unit Charlie', model: 'PAC-X1' },
-  { id: 'M-104', name: 'CNC Lathe Delta', model: 'Mazak-500' },
-  { id: 'M-105', name: 'Hydraulic Press Echo', model: 'HP-50T' },
+  { id: 'M-101', name: 'Conveyor Belt Alpha', model: 'CV-2000', divisionId: 'DIV-001' },
+  { id: 'M-102', name: 'Robotic Arm Bravo', model: 'KUKA-KR6', divisionId: 'DIV-002' },
+  { id: 'M-103', name: 'Packaging Unit Charlie', model: 'PAC-X1', divisionId: 'DIV-003' },
+  { id: 'M-104', name: 'CNC Lathe Delta', model: 'Mazak-500', divisionId: 'DIV-001' },
+  { id: 'M-105', name: 'Hydraulic Press Echo', model: 'HP-50T', divisionId: 'DIV-002' },
 ];
 
 export const ITEMS: Item[] = [

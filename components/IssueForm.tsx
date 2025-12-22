@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { IssueRecord, Item, Location, Machine } from '../types';
+import { IssueRecord, Item, Location, Machine, Sector, Division } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
 import SearchableSelect, { Option } from './SearchableSelect';
 
@@ -8,14 +8,25 @@ interface IssueFormProps {
   items: Item[];
   locations: Location[];
   machines: Machine[];
+  sectors: Sector[];
+  divisions: Division[];
 }
 
-const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue, items, locations, machines }) => {
+const IssueForm: React.FC<IssueFormProps> = ({ 
+  onAddIssue, items, locations, machines, sectors, divisions 
+}) => {
+  // Form State
   const [locationId, setLocationId] = useState('');
+  
+  // Cascade State
+  const [sectorId, setSectorId] = useState('');
+  const [divisionId, setDivisionId] = useState('');
+  const [machineId, setMachineId] = useState('');
+
   const [itemId, setItemId] = useState('');
   const [itemName, setItemName] = useState('');
   const [quantity, setQuantity] = useState<number | ''>('');
-  const [machineId, setMachineId] = useState('');
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSubmitted, setLastSubmitted] = useState<IssueRecord | null>(null);
   const [emailStatus, setEmailStatus] = useState<string>('');
@@ -29,6 +40,17 @@ const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue, items, locations, mac
       setItemName('');
     }
   }, [itemId, items]);
+
+  // Reset downstream fields when upstream changes
+  useEffect(() => {
+    setDivisionId('');
+    setMachineId('');
+  }, [sectorId]);
+
+  useEffect(() => {
+    setMachineId('');
+  }, [divisionId]);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,11 +79,15 @@ const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue, items, locations, mac
     setLastSubmitted(newIssue);
     
     // Reset form
+    // Keep location as sticky, maybe useful? No, reset all for clean state.
     setLocationId('');
+    setSectorId('');
+    setDivisionId('');
+    setMachineId('');
     setItemId('');
     setItemName('');
     setQuantity('');
-    setMachineId('');
+    
     setIsSubmitting(false);
     setEmailStatus('');
   };
@@ -78,23 +104,36 @@ const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue, items, locations, mac
     window.print();
   };
 
-  // Convert Master Data to Options for SearchableSelect
+  // --- Filtering Logic for Cascade ---
+
+  const availableDivisions = sectorId 
+    ? divisions.filter(d => d.sectorId === sectorId) 
+    : [];
+
+  const availableMachines = divisionId
+    ? machines.filter(m => m.divisionId === divisionId)
+    : [];
+
+  // --- Options Generation ---
+
   const locationOptions: Option[] = locations.map(l => ({ 
-    id: l.id, 
-    label: l.name, 
-    subLabel: l.id 
+    id: l.id, label: l.name, subLabel: l.id 
   }));
 
-  const machineOptions: Option[] = machines.map(m => ({ 
-    id: m.id, 
-    label: m.name, 
-    subLabel: `${m.model} (${m.id})` 
+  const sectorOptions: Option[] = sectors.map(s => ({
+    id: s.id, label: s.name
+  }));
+
+  const divisionOptions: Option[] = availableDivisions.map(d => ({
+    id: d.id, label: d.name
+  }));
+
+  const machineOptions: Option[] = availableMachines.map(m => ({ 
+    id: m.id, label: m.name, subLabel: `${m.model} (${m.id})` 
   }));
 
   const itemOptions: Option[] = items.map(i => ({ 
-    id: i.id, 
-    label: i.id, // Primary search/display is ID as requested
-    subLabel: i.name 
+    id: i.id, label: i.id, subLabel: i.name 
   }));
 
   return (
@@ -106,70 +145,102 @@ const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue, items, locations, mac
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Location Select */}
-            <div>
-              <SearchableSelect
-                label="Select Location"
-                required
-                options={locationOptions}
-                value={locationId}
-                onChange={setLocationId}
-                placeholder="Search warehouse zone..."
-              />
-            </div>
+          
+          {/* Section 1: Where & What Machine */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4">
+             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Location & Machine Context</h3>
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <SearchableSelect
+                    label="Warehouse Location"
+                    required
+                    options={locationOptions}
+                    value={locationId}
+                    onChange={setLocationId}
+                    placeholder="Search warehouse zone..."
+                  />
+                </div>
+                
+                {/* Sector Select */}
+                <div>
+                   <SearchableSelect
+                    label="Sector"
+                    options={sectorOptions}
+                    value={sectorId}
+                    onChange={setSectorId}
+                    placeholder="Select Sector first..."
+                   />
+                </div>
 
-            {/* Machine Select */}
-            <div>
-              <SearchableSelect
-                label="Select Machine"
-                required
-                options={machineOptions}
-                value={machineId}
-                onChange={setMachineId}
-                placeholder="Search machine name or model..."
-              />
-            </div>
+                {/* Division Select (Dependent on Sector) */}
+                <div>
+                   <SearchableSelect
+                    label="Division"
+                    disabled={!sectorId}
+                    options={divisionOptions}
+                    value={divisionId}
+                    onChange={setDivisionId}
+                    placeholder={!sectorId ? "Select Sector first" : "Select Division..."}
+                   />
+                </div>
 
-            {/* Item ID Input */}
-            <div>
-               <SearchableSelect
-                label="Item Number"
-                required
-                options={itemOptions}
-                value={itemId}
-                onChange={setItemId}
-                placeholder="Search Item ID (e.g. ITM-001)"
-              />
-              <p className="text-xs text-gray-400 mt-1">Select ID to auto-fill name.</p>
-            </div>
+                {/* Machine Select (Dependent on Division) */}
+                <div>
+                  <SearchableSelect
+                    label="Select Machine"
+                    required
+                    disabled={!divisionId}
+                    options={machineOptions}
+                    value={machineId}
+                    onChange={setMachineId}
+                    placeholder={!divisionId ? "Select Division first" : "Search machine..."}
+                  />
+                </div>
+             </div>
+          </div>
 
-            {/* Item Name (Read-only) */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
-              <input
-                type="text"
-                readOnly
-                value={itemName}
-                placeholder="Auto-populated..."
-                className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed"
-              />
-            </div>
+          {/* Section 2: What Item */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Item Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Item ID Input */}
+              <div>
+                 <SearchableSelect
+                  label="Item Number"
+                  required
+                  options={itemOptions}
+                  value={itemId}
+                  onChange={setItemId}
+                  placeholder="Search Item ID..."
+                />
+              </div>
 
-            {/* Quantity */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-              <input
-                type="number"
-                required
-                min="1"
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-              />
-            </div>
+              {/* Item Name (Read-only) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={itemName}
+                  placeholder="Auto-populated..."
+                  className="w-full px-4 py-2 bg-gray-200 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed"
+                />
+              </div>
 
+              {/* Quantity */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Number(e.target.value))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="pt-4 flex justify-end">

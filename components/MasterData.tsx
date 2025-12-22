@@ -1,28 +1,37 @@
 import React, { useState } from 'react';
-import { Item, Machine, Location } from '../types';
+import { Item, Machine, Location, Sector, Division } from '../types';
+import SearchableSelect from './SearchableSelect';
 
 interface MasterDataProps {
   items: Item[];
   machines: Machine[];
   locations: Location[];
+  sectors: Sector[];
+  divisions: Division[];
+  
   onAddItem: (item: Item) => void;
   onAddMachine: (machine: Machine) => void;
   onAddLocation: (location: Location) => void;
+  onAddSector: (sector: Sector) => void;
+  onAddDivision: (division: Division) => void;
+
   onUpdateItem: (item: Item) => void;
   onUpdateMachine: (machine: Machine) => void;
   onUpdateLocation: (location: Location) => void;
+  onUpdateSector: (sector: Sector) => void;
+  onUpdateDivision: (division: Division) => void;
 }
 
+type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions';
+
 const MasterData: React.FC<MasterDataProps> = ({ 
-  items, machines, locations, 
-  onAddItem, onAddMachine, onAddLocation,
-  onUpdateItem, onUpdateMachine, onUpdateLocation
+  items, machines, locations, sectors, divisions,
+  onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision,
+  onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision
 }) => {
-  const [activeTab, setActiveTab] = useState<'items' | 'machines' | 'locations'>('items');
+  const [activeTab, setActiveTab] = useState<TabType>('items');
   const [showForm, setShowForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-
-  // Generic form state
   const [formData, setFormData] = useState<any>({});
 
   const handleAddNew = () => {
@@ -39,33 +48,47 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    const timestamp = Date.now().toString().slice(-4);
     
     if (activeTab === 'items') {
       const payload: Item = {
-        id: formData.id || `ITM-${Date.now().toString().slice(-4)}`,
+        id: formData.id || `ITM-${timestamp}`,
         name: formData.name,
         category: formData.category || 'General',
         unit: formData.unit || 'pcs'
       };
-      if (isEditing) onUpdateItem(payload);
-      else onAddItem(payload);
+      isEditing ? onUpdateItem(payload) : onAddItem(payload);
 
     } else if (activeTab === 'machines') {
       const payload: Machine = {
-        id: formData.id || `M-${Date.now().toString().slice(-4)}`,
+        id: formData.id || `M-${timestamp}`,
         name: formData.name,
-        model: formData.model
+        model: formData.model,
+        divisionId: formData.divisionId
       };
-      if (isEditing) onUpdateMachine(payload);
-      else onAddMachine(payload);
+      isEditing ? onUpdateMachine(payload) : onAddMachine(payload);
 
-    } else {
-      const payload: Location = {
-        id: formData.id || `WH-${Date.now().toString().slice(-4)}`,
+    } else if (activeTab === 'sectors') {
+      const payload: Sector = {
+        id: formData.id || `SEC-${timestamp}`,
         name: formData.name
       };
-      if (isEditing) onUpdateLocation(payload);
-      else onAddLocation(payload);
+      isEditing ? onUpdateSector(payload) : onAddSector(payload);
+
+    } else if (activeTab === 'divisions') {
+      const payload: Division = {
+        id: formData.id || `DIV-${timestamp}`,
+        name: formData.name,
+        sectorId: formData.sectorId
+      };
+      isEditing ? onUpdateDivision(payload) : onAddDivision(payload);
+
+    } else { // locations
+      const payload: Location = {
+        id: formData.id || `WH-${timestamp}`,
+        name: formData.name
+      };
+      isEditing ? onUpdateLocation(payload) : onAddLocation(payload);
     }
 
     setShowForm(false);
@@ -78,7 +101,7 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md animate-fade-in-up">
+        <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md animate-fade-in-up max-h-[90vh] overflow-y-auto">
           <h3 className="text-xl font-bold mb-4 capitalize">
             {isEditing ? 'Edit' : 'Add New'} {activeTab.slice(0, -1)}
           </h3>
@@ -106,6 +129,7 @@ const MasterData: React.FC<MasterDataProps> = ({
               />
             </div>
 
+            {/* Custom fields for Items */}
             {activeTab === 'items' && (
               <>
                 <div>
@@ -127,13 +151,39 @@ const MasterData: React.FC<MasterDataProps> = ({
               </>
             )}
 
+            {/* Custom fields for Machines */}
             {activeTab === 'machines' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Model</label>
-                <input 
-                  className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                  value={formData.model || ''}
-                  onChange={e => setFormData({...formData, model: e.target.value})}
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Model</label>
+                  <input 
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.model || ''}
+                    onChange={e => setFormData({...formData, model: e.target.value})}
+                  />
+                </div>
+                <div className="mt-2">
+                  <SearchableSelect
+                     label="Division (Optional)"
+                     options={divisions.map(d => ({ id: d.id, label: d.name }))}
+                     value={formData.divisionId || ''}
+                     onChange={(val) => setFormData({...formData, divisionId: val})}
+                     placeholder="Select Division"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Custom fields for Divisions */}
+            {activeTab === 'divisions' && (
+              <div className="mt-2">
+                <SearchableSelect
+                   label="Parent Sector"
+                   required
+                   options={sectors.map(s => ({ id: s.id, label: s.name }))}
+                   value={formData.sectorId || ''}
+                   onChange={(val) => setFormData({...formData, sectorId: val})}
+                   placeholder="Select Sector"
                 />
               </div>
             )}
@@ -163,15 +213,27 @@ const MasterData: React.FC<MasterDataProps> = ({
     let headers: string[] = [];
     let data: any[] = [];
 
-    if (activeTab === 'items') {
-      headers = ['ID', 'Name', 'Category', 'Unit', 'Actions'];
-      data = items;
-    } else if (activeTab === 'machines') {
-      headers = ['ID', 'Name', 'Model', 'Actions'];
-      data = machines;
-    } else {
-      headers = ['ID', 'Name', 'Actions'];
-      data = locations;
+    switch (activeTab) {
+      case 'items':
+        headers = ['ID', 'Name', 'Category', 'Unit', 'Actions'];
+        data = items;
+        break;
+      case 'machines':
+        headers = ['ID', 'Name', 'Model', 'Division', 'Actions'];
+        data = machines;
+        break;
+      case 'locations':
+        headers = ['ID', 'Name', 'Actions'];
+        data = locations;
+        break;
+      case 'sectors':
+        headers = ['ID', 'Name', 'Actions'];
+        data = sectors;
+        break;
+      case 'divisions':
+        headers = ['ID', 'Name', 'Parent Sector', 'Actions'];
+        data = divisions;
+        break;
     }
 
     return (
@@ -187,6 +249,8 @@ const MasterData: React.FC<MasterDataProps> = ({
               <tr key={row.id} className="hover:bg-gray-50 transition">
                 <td className="px-6 py-3 font-medium text-gray-900">{row.id}</td>
                 <td className="px-6 py-3">{row.name}</td>
+                
+                {/* Specific Columns */}
                 {activeTab === 'items' && (
                   <>
                     <td className="px-6 py-3 text-gray-500">{row.category}</td>
@@ -194,8 +258,19 @@ const MasterData: React.FC<MasterDataProps> = ({
                   </>
                 )}
                 {activeTab === 'machines' && (
-                  <td className="px-6 py-3 text-gray-500">{row.model}</td>
+                  <>
+                    <td className="px-6 py-3 text-gray-500">{row.model}</td>
+                    <td className="px-6 py-3 text-gray-500">
+                      {divisions.find(d => d.id === row.divisionId)?.name || '-'}
+                    </td>
+                  </>
                 )}
+                {activeTab === 'divisions' && (
+                  <td className="px-6 py-3 text-gray-500">
+                     {sectors.find(s => s.id === row.sectorId)?.name || '-'}
+                  </td>
+                )}
+
                 <td className="px-6 py-3">
                    <button 
                      onClick={() => handleEdit(row)}
@@ -221,9 +296,9 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div className="flex space-x-2 bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
-          {(['items', 'machines', 'locations'] as const).map(tab => (
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
+        <div className="flex flex-wrap gap-2 bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
+          {(['sectors', 'divisions', 'machines', 'items', 'locations'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -241,7 +316,7 @@ const MasterData: React.FC<MasterDataProps> = ({
           onClick={handleAddNew}
           className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition"
         >
-          <span className="mr-2 text-xl">+</span> Add New
+          <span className="mr-2 text-xl">+</span> Add {activeTab.slice(0, -1)}
         </button>
       </div>
 

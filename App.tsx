@@ -5,8 +5,15 @@ import Dashboard from './components/Dashboard';
 import IssueForm from './components/IssueForm';
 import HistoryTable from './components/HistoryTable';
 import MasterData from './components/MasterData';
-import { INITIAL_HISTORY, ITEMS as INIT_ITEMS, MACHINES as INIT_MACHINES, LOCATIONS as INIT_LOCATIONS } from './constants';
-import { IssueRecord, Item, Machine, Location } from './types';
+import { 
+  INITIAL_HISTORY, 
+  ITEMS as INIT_ITEMS, 
+  MACHINES as INIT_MACHINES, 
+  LOCATIONS as INIT_LOCATIONS,
+  SECTORS as INIT_SECTORS,
+  DIVISIONS as INIT_DIVISIONS 
+} from './constants';
+import { IssueRecord, Item, Machine, Location, Sector, Division } from './types';
 
 // Helper to load from LocalStorage safely
 const loadFromStorage = <T,>(key: string, fallback: T): T => {
@@ -22,17 +29,21 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState('dashboard');
   
-  // App State with Persistence (Initialize from Storage or Fallback to Constants)
+  // App State with Persistence
   const [history, setHistory] = useState<IssueRecord[]>(() => loadFromStorage('wf_history', INITIAL_HISTORY));
   const [items, setItems] = useState<Item[]>(() => loadFromStorage('wf_items', INIT_ITEMS));
   const [machines, setMachines] = useState<Machine[]>(() => loadFromStorage('wf_machines', INIT_MACHINES));
   const [locations, setLocations] = useState<Location[]>(() => loadFromStorage('wf_locations', INIT_LOCATIONS));
+  const [sectors, setSectors] = useState<Sector[]>(() => loadFromStorage('wf_sectors', INIT_SECTORS));
+  const [divisions, setDivisions] = useState<Division[]>(() => loadFromStorage('wf_divisions', INIT_DIVISIONS));
 
-  // Persistence Effects - Save to LocalStorage whenever state changes
+  // Persistence Effects
   useEffect(() => { localStorage.setItem('wf_history', JSON.stringify(history)); }, [history]);
   useEffect(() => { localStorage.setItem('wf_items', JSON.stringify(items)); }, [items]);
   useEffect(() => { localStorage.setItem('wf_machines', JSON.stringify(machines)); }, [machines]);
   useEffect(() => { localStorage.setItem('wf_locations', JSON.stringify(locations)); }, [locations]);
+  useEffect(() => { localStorage.setItem('wf_sectors', JSON.stringify(sectors)); }, [sectors]);
+  useEffect(() => { localStorage.setItem('wf_divisions', JSON.stringify(divisions)); }, [divisions]);
 
   const handleAddIssue = (newIssue: IssueRecord) => {
     setHistory(prev => [newIssue, ...prev]);
@@ -42,6 +53,8 @@ const App: React.FC = () => {
   const handleAddItem = (item: Item) => setItems(prev => [...prev, item]);
   const handleAddMachine = (machine: Machine) => setMachines(prev => [...prev, machine]);
   const handleAddLocation = (location: Location) => setLocations(prev => [...prev, location]);
+  const handleAddSector = (sector: Sector) => setSectors(prev => [...prev, sector]);
+  const handleAddDivision = (division: Division) => setDivisions(prev => [...prev, division]);
 
   // Master Data Handlers - Update
   const handleUpdateItem = (updatedItem: Item) => {
@@ -52,6 +65,12 @@ const App: React.FC = () => {
   };
   const handleUpdateLocation = (updatedLocation: Location) => {
     setLocations(prev => prev.map(location => location.id === updatedLocation.id ? updatedLocation : location));
+  };
+  const handleUpdateSector = (updatedSector: Sector) => {
+    setSectors(prev => prev.map(sector => sector.id === updatedSector.id ? updatedSector : sector));
+  };
+  const handleUpdateDivision = (updatedDivision: Division) => {
+    setDivisions(prev => prev.map(div => div.id === updatedDivision.id ? updatedDivision : div));
   };
 
   const renderContent = () => {
@@ -65,6 +84,8 @@ const App: React.FC = () => {
             items={items}
             machines={machines}
             locations={locations}
+            sectors={sectors}
+            divisions={divisions}
           />
         );
       case 'history':
@@ -75,12 +96,18 @@ const App: React.FC = () => {
             items={items}
             machines={machines}
             locations={locations}
+            sectors={sectors}
+            divisions={divisions}
             onAddItem={handleAddItem}
             onAddMachine={handleAddMachine}
             onAddLocation={handleAddLocation}
+            onAddSector={handleAddSector}
+            onAddDivision={handleAddDivision}
             onUpdateItem={handleUpdateItem}
             onUpdateMachine={handleUpdateMachine}
             onUpdateLocation={handleUpdateLocation}
+            onUpdateSector={handleUpdateSector}
+            onUpdateDivision={handleUpdateDivision}
           />
         );
       default:

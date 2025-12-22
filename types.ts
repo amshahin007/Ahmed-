@@ -5,10 +5,22 @@ export interface Item {
   unit: string;
 }
 
+export interface Sector {
+  id: string;
+  name: string;
+}
+
+export interface Division {
+  id: string;
+  name: string;
+  sectorId: string;
+}
+
 export interface Machine {
   id: string;
   name: string;
   model: string;
+  divisionId?: string; // Optional for backward compatibility, but used for filtering
 }
 
 export interface Location {
