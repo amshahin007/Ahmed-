@@ -17,7 +17,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history }) => {
 
   const downloadExcel = () => {
     // Simple CSV Export implementation
-    const headers = ["ID", "Date", "Location", "Item ID", "Item Name", "Quantity", "Machine", "Status"];
+    const headers = ["ID", "Date", "Location", "Item ID", "Item Name", "Quantity", "Machine", "Status", "Notes"];
     const rows = filteredHistory.map(h => [
         h.id,
         h.timestamp,
@@ -26,7 +26,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history }) => {
         h.itemName,
         h.quantity,
         h.machineName,
-        h.status
+        h.status,
+        h.notes || ''
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," 
@@ -96,9 +97,10 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history }) => {
                                 <td className="px-6 py-4 truncate max-w-[150px]">{record.machineName}</td>
                                 <td className="px-6 py-4">
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                        record.status === 'Completed' ? 'bg-green-100 text-green-700' :
+                                        record.status === 'Completed' || record.status === 'Approved' ? 'bg-green-100 text-green-700' :
                                         record.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
-                                        'bg-blue-100 text-blue-700'
+                                        record.status === 'Rejected' ? 'bg-red-100 text-red-700' :
+                                        'bg-gray-100 text-gray-700'
                                     }`}>
                                         {record.status}
                                     </span>

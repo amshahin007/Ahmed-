@@ -37,7 +37,8 @@ export interface IssueRecord {
   quantity: number;
   machineId: string;
   machineName: string;
-  status: 'Pending' | 'Approved' | 'Completed';
+  status: 'Pending' | 'Approved' | 'Completed' | 'Rejected';
+  notes?: string; // For rejection reasons or approval comments
 }
 
 export interface DashboardMetrics {

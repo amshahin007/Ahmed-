@@ -9,6 +9,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'issue-form', label: 'New Issue', icon: '📝' },
+    { id: 'stock-approval', label: 'Stock Approval', icon: '✅' },
     { id: 'history', label: 'History & Reports', icon: '📋' },
     { id: 'master-data', label: 'Master Data', icon: '⚙️' },
   ];

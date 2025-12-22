@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import IssueForm from './components/IssueForm';
 import HistoryTable from './components/HistoryTable';
 import MasterData from './components/MasterData';
+import StockApproval from './components/StockApproval';
 import { 
   INITIAL_HISTORY, 
   ITEMS as INIT_ITEMS, 
@@ -49,6 +50,10 @@ const App: React.FC = () => {
     setHistory(prev => [newIssue, ...prev]);
   };
 
+  const handleUpdateIssue = (updatedIssue: IssueRecord) => {
+    setHistory(prev => prev.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue));
+  };
+
   // Master Data Handlers - Add
   const handleAddItem = (item: Item) => setItems(prev => [...prev, item]);
   const handleAddMachine = (machine: Machine) => setMachines(prev => [...prev, machine]);
@@ -86,6 +91,13 @@ const App: React.FC = () => {
             locations={locations}
             sectors={sectors}
             divisions={divisions}
+          />
+        );
+      case 'stock-approval':
+        return (
+          <StockApproval 
+            history={history} 
+            onUpdateIssue={handleUpdateIssue} 
           />
         );
       case 'history':
