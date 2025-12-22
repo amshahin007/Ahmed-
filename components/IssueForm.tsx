@@ -267,7 +267,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
           </div>
           
           {/* PRINT VIEW (Hidden on screen, Visible on Print) */}
-          <div className="hidden print:block fixed inset-0 bg-white z-[100] p-10 h-screen w-screen">
+          <div className="hidden print:block fixed inset-0 bg-white z-[100] p-10 h-screen w-screen overflow-auto">
             <div className="flex justify-between items-end border-b-2 border-black pb-4 mb-8">
                <h1 className="text-3xl font-bold uppercase tracking-widest">Material Request</h1>
                <div className="text-right">
@@ -326,19 +326,19 @@ const IssueForm: React.FC<IssueFormProps> = ({
       )}
 
       {/* FORM CONTAINER */}
-      <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-          <span className="mr-3 p-2 bg-blue-100 text-blue-600 rounded-lg text-xl">📝</span>
+      <div className="bg-white p-4 md:p-8 rounded-xl shadow-sm border border-gray-200">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-6 flex items-center">
+          <span className="mr-3 p-2 bg-blue-100 text-blue-600 rounded-lg text-lg md:text-xl">📝</span>
           Create New Request
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8">
           
           {/* Section 1: HEADER */}
-          <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
+          <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200">
              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">1. Location & Machine</h3>
              
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 <SearchableSelect label="Warehouse Location" required options={locationOptions} value={locationId} onChange={setLocationId} placeholder="Search warehouse zone..." />
                 
                 <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." />
@@ -350,7 +350,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
           </div>
 
           {/* Section 2: LINES */}
-          <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
+          <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200">
             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">2. Add Items</h3>
             
             <div className="flex flex-col md:flex-row gap-4 items-end mb-4">
@@ -361,7 +361,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                  <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
                  <input type="text" readOnly value={currentItemName} className="w-full px-4 py-2 bg-gray-200 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed" />
                </div>
-               <div className="w-32">
+               <div className="w-full md:w-32">
                  <label className="block text-sm font-medium text-gray-700 mb-1">Qty</label>
                  <input type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(Number(e.target.value))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
                </div>
@@ -369,7 +369,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                  type="button" 
                  onClick={handleAddLineItem}
                  disabled={!currentItemId || !currentQuantity}
-                 className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition shadow-sm h-[42px]"
+                 className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition shadow-sm h-[42px]"
                >
                  + Add
                </button>
@@ -377,8 +377,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
             {/* Added Items Table */}
             {lineItems.length > 0 ? (
-                <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-                    <table className="w-full text-sm text-left">
+                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                    <table className="w-full text-sm text-left min-w-[500px]">
                         <thead className="bg-gray-100 text-gray-700 font-semibold">
                             <tr>
                                 <th className="px-4 py-2">Item Number</th>
@@ -409,9 +409,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
           </div>
 
           {/* Section 3: Notification Details */}
-          <div className="bg-blue-50 p-5 rounded-lg border border-blue-100">
+          <div className="bg-blue-50 p-4 md:p-5 rounded-lg border border-blue-100">
              <h3 className="text-sm font-bold text-blue-800 uppercase tracking-wider mb-4 border-b border-blue-200 pb-2">3. Notification Details</h3>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse Email (To)</label>
                     <input 
@@ -424,11 +424,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
                  </div>
                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Site/Requester Email (CC)</label>
-                    <div className="flex items-center px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600">
+                    <div className="flex items-center px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 overflow-hidden text-ellipsis">
                        {requesterEmail ? (
-                          <span className="font-medium text-gray-800">{requesterEmail}</span>
+                          <span className="font-medium text-gray-800 truncate">{requesterEmail}</span>
                        ) : (
-                          <span className="text-gray-400 italic">Select a Location to auto-fill</span>
+                          <span className="text-gray-400 italic">Select Location</span>
                        )}
                     </div>
                  </div>
@@ -439,7 +439,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`px-8 py-4 rounded-xl text-white font-bold text-lg shadow-md transition-all flex items-center gap-2 ${
+              className={`w-full md:w-auto px-8 py-4 rounded-xl text-white font-bold text-lg shadow-md transition-all flex items-center justify-center gap-2 ${
                 isSubmitting 
                 ? 'bg-blue-400 cursor-wait' 
                 : 'bg-green-600 hover:bg-green-700 hover:shadow-lg transform hover:-translate-y-1'

@@ -35,6 +35,7 @@ const App: React.FC = () => {
 
   // --- View State ---
   const [currentView, setCurrentView] = useState('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // --- Data State with Persistence ---
   const [history, setHistory] = useState<IssueRecord[]>(() => loadFromStorage('wf_history', INITIAL_HISTORY));
@@ -173,24 +174,41 @@ const App: React.FC = () => {
             setCurrentView={setCurrentView} 
             currentUser={user}
             onLogout={handleLogout}
+            isOpen={isSidebarOpen}
+            onClose={() => setIsSidebarOpen(false)}
         />
         
-        <main className="flex-1 overflow-y-auto">
-          <header className="bg-white shadow-sm px-8 py-4 sticky top-0 z-10">
+        <main className="flex-1 overflow-y-auto flex flex-col h-screen relative">
+          <header className="bg-white shadow-sm px-4 md:px-8 py-4 sticky top-0 z-10 flex-shrink-0">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-800 capitalize">
-                {currentView.replace('-', ' ')}
-              </h2>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="md:hidden text-gray-500 hover:text-blue-600 focus:outline-none"
+                >
+                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                   </svg>
+                </button>
+                <h2 className="text-xl font-bold text-gray-800 capitalize truncate max-w-[150px] md:max-w-none">
+                  {currentView.replace('-', ' ')}
+                </h2>
+              </div>
+              
               <div className="flex items-center gap-4">
-                <div className="text-sm text-right">
+                <div className="text-sm text-right hidden sm:block">
                     <p className="font-medium text-gray-900">Welcome, {user.name}</p>
                     <p className="text-xs text-gray-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
+                </div>
+                {/* Mobile User Icon */}
+                <div className="sm:hidden w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs">
+                    {user.username.substring(0,2).toUpperCase()}
                 </div>
               </div>
             </div>
           </header>
 
-          <div className="p-8">
+          <div className="p-4 md:p-8 flex-1 overflow-y-auto">
             {renderContent()}
           </div>
         </main>
