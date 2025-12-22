@@ -10,6 +10,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'issue-form', label: 'New Issue', icon: '📝' },
     { id: 'history', label: 'History & Reports', icon: '📋' },
+    { id: 'master-data', label: 'Master Data', icon: '⚙️' },
   ];
 
   return (

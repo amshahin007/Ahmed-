@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { ITEMS, LOCATIONS, MACHINES } from '../constants';
-import { IssueRecord } from '../types';
+import { IssueRecord, Item, Location, Machine } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
 
 interface IssueFormProps {
   onAddIssue: (issue: IssueRecord) => void;
+  items: Item[];
+  locations: Location[];
+  machines: Machine[];
 }
 
-const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue }) => {
+const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue, items, locations, machines }) => {
   const [locationId, setLocationId] = useState('');
   const [itemId, setItemId] = useState('');
   const [itemName, setItemName] = useState('');
@@ -19,13 +21,13 @@ const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue }) => {
 
   // Auto-lookup Item Name
   useEffect(() => {
-    const item = ITEMS.find(i => i.id === itemId);
+    const item = items.find(i => i.id === itemId);
     if (item) {
       setItemName(item.name);
     } else {
       setItemName('');
     }
-  }, [itemId]);
+  }, [itemId, items]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +35,7 @@ const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue }) => {
 
     setIsSubmitting(true);
     
-    const machine = MACHINES.find(m => m.id === machineId);
+    const machine = machines.find(m => m.id === machineId);
     
     const newIssue: IssueRecord = {
       id: `ISS-${Date.now().toString().slice(-6)}`,
@@ -96,7 +98,7 @@ const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue }) => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
               >
                 <option value="">-- Select Warehouse Zone --</option>
-                {LOCATIONS.map(loc => (
+                {locations.map(loc => (
                   <option key={loc.id} value={loc.id}>{loc.name} ({loc.id})</option>
                 ))}
               </select>
@@ -112,7 +114,7 @@ const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue }) => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
               >
                 <option value="">-- Select Machine --</option>
-                {MACHINES.map(m => (
+                {machines.map(m => (
                   <option key={m.id} value={m.id}>{m.name} - {m.model}</option>
                 ))}
               </select>
@@ -131,7 +133,7 @@ const IssueForm: React.FC<IssueFormProps> = ({ onAddIssue }) => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition uppercase"
               />
               <datalist id="item-list">
-                {ITEMS.map(item => (
+                {items.map(item => (
                    <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </datalist>

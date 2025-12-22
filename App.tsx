@@ -4,31 +4,54 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import IssueForm from './components/IssueForm';
 import HistoryTable from './components/HistoryTable';
-import { INITIAL_HISTORY } from './constants';
-import { IssueRecord } from './types';
+import MasterData from './components/MasterData';
+import { INITIAL_HISTORY, ITEMS as INIT_ITEMS, MACHINES as INIT_MACHINES, LOCATIONS as INIT_LOCATIONS } from './constants';
+import { IssueRecord, Item, Machine, Location } from './types';
 
 const App: React.FC = () => {
-  // Using simple state for view switching within a Single Page App feel
-  // HashRouter is included but for this specific layout, direct state composition 
-  // allows for smoother "tab" transitions without full re-mounts if we wanted to preserve form state.
-  // However, to keep it simple and clean, we'll just swap components based on state.
-  
   const [currentView, setCurrentView] = useState('dashboard');
+  
+  // App State
   const [history, setHistory] = useState<IssueRecord[]>(INITIAL_HISTORY);
+  const [items, setItems] = useState<Item[]>(INIT_ITEMS);
+  const [machines, setMachines] = useState<Machine[]>(INIT_MACHINES);
+  const [locations, setLocations] = useState<Location[]>(INIT_LOCATIONS);
 
   const handleAddIssue = (newIssue: IssueRecord) => {
-    // Add to top of list
     setHistory(prev => [newIssue, ...prev]);
   };
+
+  // Master Data Handlers
+  const handleAddItem = (item: Item) => setItems(prev => [...prev, item]);
+  const handleAddMachine = (machine: Machine) => setMachines(prev => [...prev, machine]);
+  const handleAddLocation = (location: Location) => setLocations(prev => [...prev, location]);
 
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
         return <Dashboard history={history} />;
       case 'issue-form':
-        return <IssueForm onAddIssue={handleAddIssue} />;
+        return (
+          <IssueForm 
+            onAddIssue={handleAddIssue} 
+            items={items}
+            machines={machines}
+            locations={locations}
+          />
+        );
       case 'history':
         return <HistoryTable history={history} />;
+      case 'master-data':
+        return (
+          <MasterData 
+            items={items}
+            machines={machines}
+            locations={locations}
+            onAddItem={handleAddItem}
+            onAddMachine={handleAddMachine}
+            onAddLocation={handleAddLocation}
+          />
+        );
       default:
         return <Dashboard history={history} />;
     }
