@@ -1,13 +1,12 @@
 
 import { Item, IssueRecord } from '../types';
 
-// Updated Default ID based on user request (Published 2PACX ID)
+// Updated Default ID and GID based on user request
 export const DEFAULT_SHEET_ID = '2PACX-1vSMVlbr82tagYILVNamzhxIriPF3LAXrMaAHlRlp1-0F98Pfbu6orN0fTh6HDAh2vZP6WUH6LN2spNv';
-export const DEFAULT_ITEMS_GID = '0'; // Default to first sheet for 2PACX/Published sheets
+export const DEFAULT_ITEMS_GID = '229812258'; 
 
 export const extractSheetIdFromUrl = (url: string): string => {
   // Handle "Published to web" URLs (e.g., .../d/e/2PACX-.../pubhtml)
-  // Match content between /d/e/ and /pubhtml or /pub...
   const publishedMatch = url.match(/\/d\/e\/([a-zA-Z0-9-_]+)/);
   if (publishedMatch) return publishedMatch[1];
 
@@ -22,12 +21,10 @@ export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise
   // Determine URL format based on ID type
   if (sheetId.startsWith('2PACX')) {
       // Published Sheet
-      // Use /pub?output=csv to get the CSV content
+      // The user provided structure: .../pub?gid=...&single=true&output=csv
       url = `https://docs.google.com/spreadsheets/d/e/${sheetId}/pub?output=csv`;
       
-      // If a specific GID is provided (and not default 0), we append it.
-      // Note: This often requires the sheet to be published as "Entire Document".
-      if (gid && gid !== '0') {
+      if (gid) {
          url += `&gid=${gid}&single=true`;
       }
   } else {
@@ -38,7 +35,7 @@ export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`Failed to fetch. Status: ${response.status}. Ensure the sheet is "Published to the web".`);
+      throw new Error(`Failed to fetch. Status: ${response.status}.`);
     }
     const text = await response.text();
     return parseItemsCSV(text);
@@ -53,51 +50,66 @@ const parseItemsCSV = (csvText: string): Item[] => {
   if (lines.length < 2) return [];
 
   // Parse headers safely (normalize to lowercase for matching)
+  // Use a regex to split by comma but respect quotes if present (simple version)
   const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/^"|"$/g, ''));
   
-  // Find column indices
-  const idIdx = headers.findIndex(h => h === 'item number' || h === 'item code' || h === 'id');
-  const nameIdx = headers.findIndex(h => h === 'description' || h === 'item name' || h === 'name');
+  // Helper to find index fuzzy
+  const findIdx = (keywords: string[]) => headers.findIndex(h => keywords.some(k => h === k || h.includes(k)));
+
+  // Strict mapping based on user headers: 
+  // "Item Number", "2nd Item Number", "3rd Item Number", "Description", "Description Line 2", "Full Name", "OEM", "Part No", "UM"
   
-  // Specific Fields
-  const id2Idx = headers.findIndex(h => h.includes('2nd item'));
-  const id3Idx = headers.findIndex(h => h.includes('3rd item'));
-  const desc2Idx = headers.findIndex(h => h.includes('description line 2'));
-  const fullNameIdx = headers.findIndex(h => h.includes('full name'));
-  const oemIdx = headers.findIndex(h => h === 'oem');
-  const partNoIdx = headers.findIndex(h => h === 'part no' || h === 'part number');
-  const umIdx = headers.findIndex(h => h === 'um' || h === 'unit' || h === 'uom');
-  const catIdx = headers.findIndex(h => h.includes('category') || h.includes('family'));
+  const idIdx = headers.findIndex(h => h === 'item number' || h === 'item no' || h === 'id');
+  const nameIdx = headers.findIndex(h => h === 'description' || h === 'desc' || h === 'item name');
+  
+  const id2Idx = findIdx(['2nd item number', '2nd item']);
+  const id3Idx = findIdx(['3rd item number', '3rd item']);
+  const desc2Idx = findIdx(['description line 2']);
+  const fullNameIdx = findIdx(['full name']);
+  const oemIdx = findIdx(['oem']);
+  const partNoIdx = findIdx(['part no', 'part number']);
+  const umIdx = findIdx(['um', 'unit']);
+  const catIdx = findIdx(['category', 'family']); // Fallback if exists
 
   const items: Item[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
+    // Basic CSV parsing handling quoted commas roughly
+    let line = lines[i].trim();
     if (!line) continue;
     
-    // Simple CSV split (handling simple commas)
-    // For production with robust CSV needs, consider a library like PapaParse
-    const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+    // Split by comma, handling quotes roughly (this is a simple parser)
+    // For robust parsing of "Name, The", a library is needed, but we'll try a regex split
+    const values = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || line.split(',');
+    const cleanValues = values.map((v: string) => v ? v.trim().replace(/^"|"$/g, '').replace(/""/g, '"') : '');
+
+    // Sometimes the split produces fewer columns than headers
+    if (cleanValues.length < 2) continue;
+
+    // Fallbacks
+    const idVal = idIdx > -1 ? cleanValues[idIdx] : cleanValues[0];
     
-    // Fallback: If no explicit "Item Number" header, use col 0
-    // Fallback: If no explicit "Description" header, use col 1
-    const idVal = idIdx > -1 ? values[idIdx] : values[0];
-    const nameVal = nameIdx > -1 ? values[nameIdx] : (values[1] || 'Unknown Item');
+    // Name logic: Prefer Description, then Full Name, then Description Line 2, then Col 1
+    let nameVal = '';
+    if (nameIdx > -1 && cleanValues[nameIdx]) nameVal = cleanValues[nameIdx];
+    else if (fullNameIdx > -1 && cleanValues[fullNameIdx]) nameVal = cleanValues[fullNameIdx];
+    else if (desc2Idx > -1 && cleanValues[desc2Idx]) nameVal = cleanValues[desc2Idx];
+    else nameVal = cleanValues[1] || 'Unknown';
 
     if (idVal) {
       items.push({
         id: idVal,
         name: nameVal,
-        category: catIdx > -1 ? values[catIdx] : 'General',
-        unit: umIdx > -1 ? values[umIdx] : 'pcs',
+        category: catIdx > -1 ? cleanValues[catIdx] : 'General',
+        unit: umIdx > -1 ? cleanValues[umIdx] : 'pcs',
         
         // Extended Fields
-        secondId: id2Idx > -1 ? values[id2Idx] : undefined,
-        thirdId: id3Idx > -1 ? values[id3Idx] : undefined,
-        description2: desc2Idx > -1 ? values[desc2Idx] : undefined,
-        fullName: fullNameIdx > -1 ? values[fullNameIdx] : undefined,
-        oem: oemIdx > -1 ? values[oemIdx] : undefined,
-        partNumber: partNoIdx > -1 ? values[partNoIdx] : undefined,
+        secondId: id2Idx > -1 ? cleanValues[id2Idx] : undefined,
+        thirdId: id3Idx > -1 ? cleanValues[id3Idx] : undefined,
+        description2: desc2Idx > -1 ? cleanValues[desc2Idx] : undefined,
+        fullName: fullNameIdx > -1 ? cleanValues[fullNameIdx] : undefined,
+        oem: oemIdx > -1 ? cleanValues[oemIdx] : undefined,
+        partNumber: partNoIdx > -1 ? cleanValues[partNoIdx] : undefined,
       });
     }
   }
@@ -106,8 +118,6 @@ const parseItemsCSV = (csvText: string): Item[] => {
 
 export const sendIssueToSheet = async (scriptUrl: string, issue: IssueRecord) => {
   try {
-    // We use no-cors because Google Apps Script Web Apps don't easily support CORS for simple POSTs
-    // "no-cors" means we can send data but cannot read the response.
     await fetch(scriptUrl, {
       method: 'POST',
       mode: 'no-cors', 
@@ -119,19 +129,10 @@ export const sendIssueToSheet = async (scriptUrl: string, issue: IssueRecord) =>
     console.log("Sent to Google Sheet");
   } catch (error) {
     console.error("Failed to send to Google Sheet", error);
-    // Don't throw, just log, so we don't break the UI flow
   }
 };
 
 export const APP_SCRIPT_TEMPLATE = `
-// 1. Paste this code into Extensions > Apps Script in your Google Sheet
-// 2. Save and Click "Deploy" > "New Deployment"
-// 3. Select type: "Web App"
-// 4. Description: "WareFlow Logger"
-// 5. Execute as: "Me"
-// 6. Who has access: "Anyone" (Important for the app to access it)
-// 7. Click Deploy and copy the "Web App URL"
-
 function doPost(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("IssuesLog");
   if (!sheet) {
