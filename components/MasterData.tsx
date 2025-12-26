@@ -216,7 +216,8 @@ const MasterData: React.FC<MasterDataProps> = ({
         name: formData.name,
         role: formData.role,
         email: formData.email,
-        password: formData.password || (isEditing ? users.find(u => u.username === formData.username)?.password : 'password') // keep old pass if empty on edit
+        password: formData.password || (isEditing ? users.find(u => u.username === formData.username)?.password : 'password'),
+        allowedLocationIds: formData.allowedLocationIds
       };
       isEditing ? onUpdateUser(payload) : onAddUser(payload);
     } else { // locations
@@ -553,6 +554,28 @@ const MasterData: React.FC<MasterDataProps> = ({
                     onChange={e => setFormData({...formData, password: e.target.value})}
                   />
                 </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Allowed Locations (Write Access)</label>
+                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50 grid grid-cols-1 gap-2">
+                    {locations.map(loc => (
+                      <label key={loc.id} className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
+                        <input
+                          type="checkbox"
+                          className="rounded text-blue-600 focus:ring-blue-500"
+                          checked={formData.allowedLocationIds?.includes(loc.id) || false}
+                          onChange={(e) => {
+                             const current = formData.allowedLocationIds || [];
+                             if (e.target.checked) setFormData({...formData, allowedLocationIds: [...current, loc.id]});
+                             else setFormData({...formData, allowedLocationIds: current.filter((id: string) => id !== loc.id)});
+                          }}
+                        />
+                        <span className="text-gray-700">{loc.name}</span>
+                        <span className="text-gray-400 text-xs">({loc.id})</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">If none selected, user can create issues for <strong>ALL</strong> locations (unless they are Admin).</p>
+                </div>
               </>
             )}
 
@@ -604,7 +627,7 @@ const MasterData: React.FC<MasterDataProps> = ({
         data = divisions;
         break;
       case 'users':
-        headers = ['Username', 'Name', 'Role', 'Email', 'Actions'];
+        headers = ['Username', 'Name', 'Role', 'Email', 'Locations', 'Actions'];
         data = users;
         break;
     }
@@ -677,6 +700,23 @@ const MasterData: React.FC<MasterDataProps> = ({
                         </td>
                         <td className="px-6 py-3 text-gray-500 text-xs align-top">
                             {row.email}
+                        </td>
+                        <td className="px-6 py-3 text-gray-500 text-xs align-top max-w-[150px]">
+                           {row.role === 'admin' ? (
+                             <span className="text-green-600 font-bold">All Access</span>
+                           ) : (
+                             row.allowedLocationIds && row.allowedLocationIds.length > 0 ? (
+                               <div className="flex flex-wrap gap-1">
+                                 {row.allowedLocationIds.map((lid: string) => (
+                                   <span key={lid} className="px-1.5 py-0.5 bg-gray-100 rounded border border-gray-200">
+                                      {locations.find(l => l.id === lid)?.name || lid}
+                                   </span>
+                                 ))}
+                               </div>
+                             ) : (
+                               <span className="text-gray-400 italic">No restrictions</span>
+                             )
+                           )}
                         </td>
                     </>
                     )}

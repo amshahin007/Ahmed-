@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { IssueRecord, Item, Location, Machine, Sector, Division } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { IssueRecord, Item, Location, Machine, Sector, Division, User } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
 import { sendIssueToSheet } from '../services/googleSheetsService';
 import SearchableSelect, { Option } from './SearchableSelect';
@@ -11,6 +11,7 @@ interface IssueFormProps {
   machines: Machine[];
   sectors: Sector[];
   divisions: Division[];
+  currentUser: User;
 }
 
 interface LineItem {
@@ -20,7 +21,7 @@ interface LineItem {
 }
 
 const IssueForm: React.FC<IssueFormProps> = ({ 
-  onAddIssue, items, locations, machines, sectors, divisions 
+  onAddIssue, items, locations, machines, sectors, divisions, currentUser 
 }) => {
   // --- Header State (Context) ---
   const [locationId, setLocationId] = useState('');
@@ -224,8 +225,23 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const availableDivisions = sectorId ? divisions.filter(d => d.sectorId === sectorId) : [];
   const availableMachines = divisionId ? machines.filter(m => m.divisionId === divisionId) : [];
 
+  // --- Permission Logic for Locations ---
+  const allowedLocations = useMemo(() => {
+    // Admin sees all
+    if (currentUser.role === 'admin') return locations;
+    
+    // If user has specific allowed locations, filter the list
+    if (currentUser.allowedLocationIds && currentUser.allowedLocationIds.length > 0) {
+      return locations.filter(loc => currentUser.allowedLocationIds!.includes(loc.id));
+    }
+
+    // Default: If no restrictions set, allow all (or change to return [] to be strict)
+    return locations;
+  }, [locations, currentUser]);
+
+
   // --- Options Generation ---
-  const locationOptions: Option[] = locations.map(l => ({ id: l.id, label: l.name }));
+  const locationOptions: Option[] = allowedLocations.map(l => ({ id: l.id, label: l.name }));
   const sectorOptions: Option[] = sectors.map(s => ({ id: s.id, label: s.name }));
   const divisionOptions: Option[] = availableDivisions.map(d => ({ id: d.id, label: d.name }));
   const machineOptions: Option[] = availableMachines.map(m => ({ id: m.id, label: m.name, subLabel: `${m.model} (${m.id})` }));
@@ -355,7 +371,15 @@ const IssueForm: React.FC<IssueFormProps> = ({
              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">1. Location & Machine</h3>
              
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <SearchableSelect label="Warehouse Location" required options={locationOptions} value={locationId} onChange={setLocationId} placeholder="Search warehouse zone..." />
+                <SearchableSelect 
+                  label="Warehouse Location" 
+                  required 
+                  options={locationOptions} 
+                  value={locationId} 
+                  onChange={setLocationId} 
+                  placeholder={allowedLocations.length === 0 ? "No access to locations" : "Search warehouse zone..."}
+                  disabled={allowedLocations.length === 0}
+                />
                 
                 <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." />
                 
@@ -363,6 +387,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 
                 <SearchableSelect label="Machine" required disabled={!divisionId} options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Select Machine..." />
              </div>
+             {allowedLocations.length === 0 && (
+               <p className="text-xs text-red-500 mt-2">You do not have permission to create issues for any locations. Please contact your administrator.</p>
+             )}
           </div>
 
           {/* Section 2: LINES */}
@@ -461,10 +488,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || allowedLocations.length === 0}
               className={`w-full md:w-auto px-8 py-4 rounded-xl text-white font-bold text-lg shadow-md transition-all flex items-center justify-center gap-2 ${
-                isSubmitting 
-                ? 'bg-blue-400 cursor-wait' 
+                isSubmitting || allowedLocations.length === 0
+                ? 'bg-gray-400 cursor-not-allowed' 
                 : 'bg-green-600 hover:bg-green-700 hover:shadow-lg transform hover:-translate-y-1'
               }`}
             >

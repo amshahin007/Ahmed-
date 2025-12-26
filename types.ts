@@ -70,4 +70,5 @@ export interface User {
   role: UserRole;
   email: string;
   password?: string; // In a real app, this would be hashed/handled by backend
+  allowedLocationIds?: string[]; // Array of Location IDs this user is permitted to create issues for
 }

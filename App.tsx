@@ -126,6 +126,7 @@ const App: React.FC = () => {
             locations={locations}
             sectors={sectors}
             divisions={divisions}
+            currentUser={user}
           />
         );
       case 'stock-approval':
