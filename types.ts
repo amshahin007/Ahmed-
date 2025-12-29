@@ -35,6 +35,7 @@ export interface Machine {
   // New Classification Fields
   mainGroup?: string;
   subGroup?: string;
+  category?: string;   // New Field
   brand?: string;
 }
 

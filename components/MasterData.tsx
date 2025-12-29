@@ -195,6 +195,7 @@ const MasterData: React.FC<MasterDataProps> = ({
         divisionId: formData.divisionId,
         mainGroup: formData.mainGroup,
         subGroup: formData.subGroup,
+        category: formData.category,
         brand: formData.brand
       };
       isEditing ? onUpdateMachine(payload) : onAddMachine(payload);
@@ -515,6 +516,15 @@ const MasterData: React.FC<MasterDataProps> = ({
                       />
                    </div>
                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Category</label>
+                      <input 
+                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={formData.category || ''}
+                        onChange={e => setFormData({...formData, category: e.target.value})}
+                        placeholder="e.g. Engine Parts"
+                      />
+                   </div>
+                   <div>
                       <label className="block text-sm font-medium text-gray-700">Brand / Manufacturer</label>
                       <input 
                         className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
@@ -656,12 +666,11 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     switch (activeTab) {
       case 'items':
-        // Updated columns based on user request
         headers = ['Item Number', '3rd Item No', 'Description', 'Desc Line 2', 'Full Name', 'Category', 'Brand / Manufacturer', 'OEM', 'Part No', 'UM', 'Actions'];
         data = items;
         break;
       case 'machines':
-        headers = ['ID', 'Name', 'Model', 'Main Group', 'Sub Group', 'Brand / Manufacturer', 'Division', 'Actions'];
+        headers = ['ID', 'Name', 'Model', 'Main Group', 'Sub Group', 'Category', 'Brand / Manufacturer', 'Division', 'Actions'];
         data = machines;
         break;
       case 'locations':
@@ -726,6 +735,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                         <td className="px-6 py-3 text-gray-500 align-top">{row.model}</td>
                          <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.mainGroup || '-'}</td>
                          <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.subGroup || '-'}</td>
+                         <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.category || '-'}</td>
                          <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.brand || '-'}</td>
                         <td className="px-6 py-3 text-gray-500 align-top">
                         {divisions.find(d => d.id === row.divisionId)?.name || '-'}

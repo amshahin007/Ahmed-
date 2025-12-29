@@ -32,6 +32,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   // --- Machine Filters ---
   const [filterMainGroup, setFilterMainGroup] = useState('');
   const [filterSubGroup, setFilterSubGroup] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
   const [filterBrand, setFilterBrand] = useState('');
 
   // --- Email/Notification State ---
@@ -61,7 +62,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     }
   }, [currentItemId, items]);
 
-  // Reset downstream fields when upstream changes
+  // Reset downstream fields when upstream changes (Org Structure)
   useEffect(() => {
     setDivisionId('');
     setMachineId('');
@@ -70,11 +71,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
   useEffect(() => {
     setMachineId('');
   }, [divisionId]);
-
-  // Reset downstream Machine filters when upstream changes
-  useEffect(() => { setFilterSubGroup(''); setFilterBrand(''); setMachineId(''); }, [filterMainGroup]);
-  useEffect(() => { setFilterBrand(''); setMachineId(''); }, [filterSubGroup]);
-  useEffect(() => { setMachineId(''); }, [filterBrand]);
 
   // Auto-fill Requester (Site) Email based on Location
   useEffect(() => {
@@ -192,6 +188,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     setMachineId('');
     setFilterMainGroup('');
     setFilterSubGroup('');
+    setFilterCategory('');
     setFilterBrand('');
     setLineItems([]);
     
@@ -234,10 +231,85 @@ const IssueForm: React.FC<IssueFormProps> = ({
     document.body.removeChild(link);
   };
 
-  // --- Filtering Logic for Cascade ---
-  const availableDivisions = sectorId ? divisions.filter(d => d.sectorId === sectorId) : [];
+  // --- Filtering & Logic ---
+
+  // Helper to infer unique upstream values based on current selection
+  const inferUpstreamFilters = (
+     currentMain: string, 
+     currentSub: string, 
+     currentCat: string, 
+     currentBrand: string
+  ) => {
+    // Get all machines that match the non-empty filters provided
+    const matchingMachines = machines.filter(m => {
+        if (currentMain && m.mainGroup !== currentMain) return false;
+        if (currentSub && m.subGroup !== currentSub) return false;
+        if (currentCat && m.category !== currentCat) return false;
+        if (currentBrand && m.brand !== currentBrand) return false;
+        return true;
+    });
+
+    if (matchingMachines.length === 0) return;
+
+    // Check uniqueness for each field
+    const uniqueMains = Array.from(new Set(matchingMachines.map(m => m.mainGroup).filter(Boolean)));
+    const uniqueSubs = Array.from(new Set(matchingMachines.map(m => m.subGroup).filter(Boolean)));
+    const uniqueCats = Array.from(new Set(matchingMachines.map(m => m.category).filter(Boolean)));
+    const uniqueBrands = Array.from(new Set(matchingMachines.map(m => m.brand).filter(Boolean)));
+
+    // Auto-fill if there's exactly one possibility and it's not already set
+    if (uniqueMains.length === 1 && !currentMain) setFilterMainGroup(uniqueMains[0] as string);
+    if (uniqueSubs.length === 1 && !currentSub) setFilterSubGroup(uniqueSubs[0] as string);
+    if (uniqueCats.length === 1 && !currentCat) setFilterCategory(uniqueCats[0] as string);
+    if (uniqueBrands.length === 1 && !currentBrand) setFilterBrand(uniqueBrands[0] as string);
+  };
+
+  // Handlers with cascading clear logic
+  const handleMainGroupChange = (val: string) => {
+    setFilterMainGroup(val);
+    setFilterSubGroup('');
+    setFilterCategory('');
+    setFilterBrand('');
+    setMachineId('');
+  };
+
+  const handleSubGroupChange = (val: string) => {
+    setFilterSubGroup(val);
+    setFilterCategory('');
+    setFilterBrand('');
+    setMachineId('');
+    inferUpstreamFilters(filterMainGroup, val, '', '');
+  };
+
+  const handleCategoryChange = (val: string) => {
+    setFilterCategory(val);
+    setFilterBrand('');
+    setMachineId('');
+    inferUpstreamFilters(filterMainGroup, filterSubGroup, val, '');
+  };
+
+  const handleBrandChange = (val: string) => {
+    setFilterBrand(val);
+    setMachineId('');
+    inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, val);
+  };
+
+  const handleMachineChange = (val: string) => {
+    setMachineId(val);
+    const m = machines.find(machine => machine.id === val);
+    if (m) {
+        // Auto-fill everything based on the selected machine
+        if (m.mainGroup) setFilterMainGroup(m.mainGroup);
+        if (m.subGroup) setFilterSubGroup(m.subGroup);
+        if (m.category) setFilterCategory(m.category);
+        if (m.brand) setFilterBrand(m.brand);
+    }
+  };
+
+  // --- Calculate Options ---
+  // The logic here is to show options that are VALID given the upstream selection.
+  // However, for inference to work best, sometimes we want to see all options if upstream is empty.
   
-  // Calculate Filter Options derived from ALL machines (or filtered subset)
   const mainGroupOptions = useMemo(() => {
     const groups = new Set<string>();
     machines.forEach(m => { if(m.mainGroup) groups.add(m.mainGroup) });
@@ -247,34 +319,43 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const subGroupOptions = useMemo(() => {
     const subs = new Set<string>();
     machines.forEach(m => {
-       if (filterMainGroup && m.mainGroup !== filterMainGroup) return; // Filter by parent
+       if (filterMainGroup && m.mainGroup !== filterMainGroup) return; 
        if (m.subGroup) subs.add(m.subGroup);
     });
     return Array.from(subs).map(g => ({ id: g, label: g }));
   }, [machines, filterMainGroup]);
+
+  const categoryOptions = useMemo(() => {
+    const cats = new Set<string>();
+    machines.forEach(m => {
+       if (filterMainGroup && m.mainGroup !== filterMainGroup) return;
+       if (filterSubGroup && m.subGroup !== filterSubGroup) return;
+       if (m.category) cats.add(m.category);
+    });
+    return Array.from(cats).map(c => ({ id: c, label: c }));
+  }, [machines, filterMainGroup, filterSubGroup]);
 
   const brandOptions = useMemo(() => {
     const brands = new Set<string>();
     machines.forEach(m => {
        if (filterMainGroup && m.mainGroup !== filterMainGroup) return;
        if (filterSubGroup && m.subGroup !== filterSubGroup) return;
+       if (filterCategory && m.category !== filterCategory) return;
        if (m.brand) brands.add(m.brand);
     });
     return Array.from(brands).map(b => ({ id: b, label: b }));
-  }, [machines, filterMainGroup, filterSubGroup]);
+  }, [machines, filterMainGroup, filterSubGroup, filterCategory]);
 
-  // Final Machine List logic
   const availableMachines = machines.filter(m => {
-    // 1. Division Logic (Existing)
     if (divisionId && m.divisionId !== divisionId) return false;
-    
-    // 2. New Classification Filters
     if (filterMainGroup && m.mainGroup !== filterMainGroup) return false;
     if (filterSubGroup && m.subGroup !== filterSubGroup) return false;
+    if (filterCategory && m.category !== filterCategory) return false;
     if (filterBrand && m.brand !== filterBrand) return false;
-
     return true;
   });
+
+  const availableDivisions = sectorId ? divisions.filter(d => d.sectorId === sectorId) : [];
 
   // --- Permission Logic for Locations ---
   const allowedLocations = useMemo(() => {
@@ -286,7 +367,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
       return locations.filter(loc => currentUser.allowedLocationIds!.includes(loc.id));
     }
 
-    // Default: If no restrictions set, allow all (or change to return [] to be strict)
+    // Default: If no restrictions set, allow all
     return locations;
   }, [locations, currentUser]);
 
@@ -294,306 +375,4 @@ const IssueForm: React.FC<IssueFormProps> = ({
   // --- Options Generation ---
   const locationOptions: Option[] = allowedLocations.map(l => ({ id: l.id, label: l.name }));
   const sectorOptions: Option[] = sectors.map(s => ({ id: s.id, label: s.name }));
-  const divisionOptions: Option[] = availableDivisions.map(d => ({ id: d.id, label: d.name }));
-  const machineOptions: Option[] = availableMachines.map(m => {
-    let sub = `${m.model} (${m.id})`;
-    if (m.brand) sub += ` - ${m.brand}`;
-    return { id: m.id, label: m.name, subLabel: sub };
-  });
-  
-  // Option 1: Search by ID (Label = ID, SubLabel = Name)
-  const itemOptions: Option[] = items.map(i => ({ id: i.id, label: i.id, subLabel: i.name }));
-  
-  // Option 2: Search by Name (Label = Name, SubLabel = ID + optional PartNo/OEM info)
-  const itemNameOptions: Option[] = items.map(i => {
-    let sub = i.id;
-    if (i.partNumber) sub += ` | PN: ${i.partNumber}`;
-    if (i.oem) sub += ` | OEM: ${i.oem}`;
-    return { id: i.id, label: i.name, subLabel: sub };
-  });
-
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      
-      {/* SUCCESS MODAL POPUP */}
-      {lastSubmittedBatch && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-fade-in-up">
-             
-             {/* Header */}
-             <div className="bg-blue-600 p-6 text-white text-center">
-               <div className="mx-auto w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-4">
-                 <span className="text-3xl">📧</span>
-               </div>
-               <h2 className="text-2xl font-bold">Request Sent!</h2>
-               <p className="opacity-90 mt-1">Notification sent to {lastSubmittedBatch[0].warehouseEmail}</p>
-             </div>
-             
-             {/* Actions Body */}
-             <div className="p-8 space-y-4">
-                <div className="text-center text-sm bg-gray-50 p-3 rounded-lg border border-gray-100 mb-6">
-                   <p className="font-medium text-gray-700">Request IDs generated:</p>
-                   <p className="text-gray-500">{lastSubmittedBatch.length} items waiting for approval</p>
-                </div>
-                
-                <button onClick={handlePrint} className="w-full py-4 bg-gray-900 text-white rounded-xl hover:bg-black font-bold text-lg flex items-center justify-center gap-3 shadow-lg transition-transform hover:scale-[1.02]">
-                   <span className="text-2xl">🖨️</span> Print Request Slip
-                </button>
-                
-                <button onClick={handleExportExcel} className="w-full py-3 bg-green-100 text-green-800 rounded-xl hover:bg-green-200 font-semibold flex items-center justify-center gap-2 transition border border-green-200">
-                    <span>📊</span> Download Excel
-                </button>
-             </div>
-
-             {/* Footer */}
-             <div className="bg-gray-50 p-4 border-t border-gray-100 text-center">
-                <button onClick={() => setLastSubmittedBatch(null)} className="text-gray-500 hover:text-gray-800 font-medium px-6 py-2">
-                   Start New Request
-                </button>
-             </div>
-          </div>
-          
-          {/* PRINT VIEW (Hidden on screen, Visible on Print) */}
-          <div className="hidden print:block fixed inset-0 bg-white z-[100] p-10 h-screen w-screen overflow-auto">
-            <div className="flex justify-between items-end border-b-2 border-black pb-4 mb-8">
-               <h1 className="text-3xl font-bold uppercase tracking-widest">Material Request</h1>
-               <div className="text-right">
-                 <p className="text-sm">Status: <strong>PENDING APPROVAL</strong></p>
-               </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-8 mb-8 text-lg">
-                <div>
-                   <p><span className="font-bold">Date:</span> {new Date(lastSubmittedBatch[0].timestamp).toLocaleString()}</p>
-                   <p><span className="font-bold">Location:</span> {lastSubmittedBatch[0].locationId}</p>
-                   <p><span className="font-bold">Sent To:</span> {lastSubmittedBatch[0].warehouseEmail}</p>
-                   {lastSubmittedBatch[0].sectorName && <p><span className="font-bold">Sector:</span> {lastSubmittedBatch[0].sectorName}</p>}
-                </div>
-                <div>
-                   <p><span className="font-bold">Machine:</span> {lastSubmittedBatch[0].machineName}</p>
-                   {lastSubmittedBatch[0].divisionName && <p><span className="font-bold">Division:</span> {lastSubmittedBatch[0].divisionName}</p>}
-                   <p><span className="font-bold">Machine ID:</span> {lastSubmittedBatch[0].machineId}</p>
-                   {lastSubmittedBatch[0].requesterEmail && (
-                       <p><span className="font-bold">Site Email:</span> {lastSubmittedBatch[0].requesterEmail}</p>
-                   )}
-                </div>
-            </div>
-
-            <table className="w-full text-left border-collapse border border-black mb-8">
-                <thead>
-                    <tr className="bg-gray-100">
-                         <th className="border border-black p-2">Request ID</th>
-                         <th className="border border-black p-2">Item Number</th>
-                         <th className="border border-black p-2">Item Name</th>
-                         <th className="border border-black p-2 text-right">Qty</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {lastSubmittedBatch.map(item => (
-                        <tr key={item.id}>
-                            <td className="border border-black p-2">{item.id}</td>
-                            <td className="border border-black p-2">{item.itemId}</td>
-                            <td className="border border-black p-2">{item.itemName}</td>
-                            <td className="border border-black p-2 text-right font-bold">{item.quantity}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-            
-            <div className="flex justify-between px-10 mt-20">
-                <div className="text-center">
-                    <div className="border-t border-black w-64 pt-2">Requester Signature</div>
-                </div>
-                <div className="text-center">
-                    <div className="border-t border-black w-64 pt-2">Store Keeper Approval</div>
-                </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* FORM CONTAINER */}
-      <div className="bg-white p-4 md:p-8 rounded-xl shadow-sm border border-gray-200">
-        <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-6 flex items-center">
-          <span className="mr-3 p-2 bg-blue-100 text-blue-600 rounded-lg text-lg md:text-xl">📝</span>
-          Create New Request
-        </h2>
-
-        <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8">
-          
-          {/* Section 1: HEADER */}
-          <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200">
-             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">1. Location & Machine</h3>
-             
-             {/* Main Location Select */}
-             <div className="mb-4">
-                 <SearchableSelect 
-                  label="Warehouse Location" 
-                  required 
-                  options={locationOptions} 
-                  value={locationId} 
-                  onChange={setLocationId} 
-                  placeholder={allowedLocations.length === 0 ? "No access to locations" : "Search warehouse zone..."}
-                  disabled={allowedLocations.length === 0}
-                />
-             </div>
-
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                
-                {/* Org Filters */}
-                <div className="bg-white p-3 rounded border border-gray-200 shadow-sm">
-                   <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Organizational Filter</h4>
-                   <div className="space-y-3">
-                      <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." />
-                      <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
-                   </div>
-                </div>
-
-                {/* Tech Filters (New) */}
-                <div className="bg-white p-3 rounded border border-gray-200 shadow-sm">
-                   <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Technical Filter</h4>
-                   <div className="space-y-3">
-                      <SearchableSelect label="Main Group" options={mainGroupOptions} value={filterMainGroup} onChange={setFilterMainGroup} placeholder="Filter by Group..." />
-                      <SearchableSelect label="Sub Group" disabled={!filterMainGroup} options={subGroupOptions} value={filterSubGroup} onChange={setFilterSubGroup} placeholder="Filter by Sub Group..." />
-                      <SearchableSelect label="Brand / Manufacturer" options={brandOptions} value={filterBrand} onChange={setFilterBrand} placeholder="Filter by Brand..." />
-                   </div>
-                </div>
-                
-                {/* Machine Select - Spans full width on mobile, col-span-2 on desktop */}
-                <div className="md:col-span-2">
-                    <SearchableSelect 
-                       label="Machine Selection" 
-                       required 
-                       options={machineOptions} 
-                       value={machineId} 
-                       onChange={setMachineId} 
-                       placeholder={availableMachines.length === 0 ? "No machines found match filters" : "Select Specific Equipment / Machine..."} 
-                    />
-                    <p className="text-xs text-gray-400 mt-1">
-                       {availableMachines.length} machines available based on current filters.
-                    </p>
-                </div>
-             </div>
-
-             {allowedLocations.length === 0 && (
-               <p className="text-xs text-red-500 mt-2">You do not have permission to create issues for any locations. Please contact your administrator.</p>
-             )}
-          </div>
-
-          {/* Section 2: LINES */}
-          <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200">
-            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">2. Add Items</h3>
-            
-            <div className="flex flex-col md:flex-row gap-4 items-end mb-4">
-               <div className="flex-1 w-full">
-                 {/* Option 1: Search by ID */}
-                 <SearchableSelect label="Item Number" options={itemOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Scan or select Item No..." />
-               </div>
-               <div className="flex-1 w-full">
-                 {/* Option 2: Search by Name - Binds to the SAME ID state to sync */}
-                 <SearchableSelect 
-                    label="Item Name" 
-                    options={itemNameOptions} 
-                    value={currentItemId} 
-                    onChange={setCurrentItemId} 
-                    placeholder="Search Item Name..." 
-                 />
-               </div>
-               <div className="w-full md:w-32">
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Qty</label>
-                 <input type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(Number(e.target.value))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-               </div>
-               <button 
-                 type="button" 
-                 onClick={handleAddLineItem}
-                 disabled={!currentItemId || !currentQuantity}
-                 className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition shadow-sm h-[42px]"
-               >
-                 + Add
-               </button>
-            </div>
-
-            {/* Added Items Table */}
-            {lineItems.length > 0 ? (
-                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                    <table className="w-full text-sm text-left min-w-[500px]">
-                        <thead className="bg-gray-100 text-gray-700 font-semibold">
-                            <tr>
-                                <th className="px-4 py-2">Item Number</th>
-                                <th className="px-4 py-2">Item Name</th>
-                                <th className="px-4 py-2 w-24 text-center">Qty</th>
-                                <th className="px-4 py-2 w-24 text-center">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {lineItems.map((line, idx) => (
-                                <tr key={idx} className="hover:bg-gray-50">
-                                    <td className="px-4 py-2 font-mono text-gray-600">{line.itemId}</td>
-                                    <td className="px-4 py-2">{line.itemName}</td>
-                                    <td className="px-4 py-2 text-center font-bold">{line.quantity}</td>
-                                    <td className="px-4 py-2 text-center">
-                                        <button type="button" onClick={() => handleRemoveLineItem(idx)} className="text-red-500 hover:text-red-700 font-medium">Remove</button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            ) : (
-                <div className="text-center py-6 text-gray-400 border-2 border-dashed border-gray-300 rounded-lg">
-                    No items added yet. Search and add items above.
-                </div>
-            )}
-          </div>
-
-          {/* Section 3: Notification Details */}
-          <div className="bg-blue-50 p-4 md:p-5 rounded-lg border border-blue-100">
-             <h3 className="text-sm font-bold text-blue-800 uppercase tracking-wider mb-4 border-b border-blue-200 pb-2">3. Notification Details</h3>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse Email (To)</label>
-                    <input 
-                        type="email" 
-                        required
-                        value={warehouseEmail}
-                        onChange={(e) => setWarehouseEmail(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                 </div>
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Site/Requester Email (CC)</label>
-                    <div className="flex items-center px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 overflow-hidden text-ellipsis">
-                       {requesterEmail ? (
-                          <span className="font-medium text-gray-800 truncate">{requesterEmail}</span>
-                       ) : (
-                          <span className="text-gray-400 italic">Select Location</span>
-                       )}
-                    </div>
-                 </div>
-             </div>
-          </div>
-
-          <div className="pt-2 flex justify-end">
-            <button
-              type="submit"
-              disabled={isSubmitting || allowedLocations.length === 0}
-              className={`w-full md:w-auto px-8 py-4 rounded-xl text-white font-bold text-lg shadow-md transition-all flex items-center justify-center gap-2 ${
-                isSubmitting || allowedLocations.length === 0
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-green-600 hover:bg-green-700 hover:shadow-lg transform hover:-translate-y-1'
-              }`}
-            >
-              {isSubmitting ? 'Sending Request...' : (
-                 <>
-                   <span>🚀</span> Submit Request
-                 </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-export default IssueForm;
+  const divisionOptions: Option[] = availableDivisions.map(d => ({ id: d.id, label: d.
