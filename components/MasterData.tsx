@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord } from '../types';
 import SearchableSelect from './SearchableSelect';
-import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet } from '../services/googleSheetsService';
+import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet, parseCSVLine } from '../services/googleSheetsService';
 
 interface MasterDataProps {
   history: IssueRecord[];
@@ -44,6 +44,9 @@ const MasterData: React.FC<MasterDataProps> = ({
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({});
+  
+  // File Import Ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -232,6 +235,165 @@ const MasterData: React.FC<MasterDataProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // --- Import Logic ---
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      processCSVImport(text);
+    };
+    reader.readAsText(file);
+    // Reset input
+    event.target.value = '';
+  };
+
+  const processCSVImport = (csvText: string) => {
+    const lines = csvText.split(/\r?\n/);
+    if (lines.length < 2) {
+        alert("File appears to be empty or missing headers.");
+        return;
+    }
+
+    const headers = parseCSVLine(lines[0]).map(h => h.trim());
+    let added = 0;
+    let updated = 0;
+
+    // Helper to find header index case-insensitively
+    const getIdx = (candidates: string[]) => 
+        headers.findIndex(h => candidates.some(c => c.toLowerCase() === h.toLowerCase()));
+
+    // Define Mappings based on Active Tab
+    // Maps internal Key -> Array of possible CSV Header names
+    let fieldMap: Record<string, string[]> = {};
+
+    if (activeTab === 'items') {
+        fieldMap = {
+            id: ['Item Number', 'ID', 'Item No'],
+            name: ['Description', 'Name', 'Item Name'],
+            category: ['Category'],
+            unit: ['Unit', 'UM', 'UOM'],
+            thirdId: ['3rd Item No', '3rd Item'],
+            description2: ['Desc Line 2', 'Description 2'],
+            fullName: ['Full Name'],
+            brand: ['Brand', 'Manufacturer'],
+            oem: ['OEM'],
+            partNumber: ['Part No', 'Part Number', 'PN']
+        };
+    } else if (activeTab === 'machines') {
+        fieldMap = {
+            id: ['ID', 'Machine ID'],
+            name: ['Name', 'Machine Name'],
+            model: ['Model'],
+            mainGroup: ['Main Group'],
+            subGroup: ['Sub Group'],
+            category: ['Category'],
+            brand: ['Brand'],
+            divisionId: ['Division ID', 'Division']
+        };
+    } else if (activeTab === 'locations') {
+        fieldMap = {
+            id: ['ID', 'Location ID'],
+            name: ['Name', 'Location Name'],
+            email: ['Email', 'Site Email']
+        };
+    } else if (activeTab === 'sectors') {
+        fieldMap = {
+            id: ['ID'],
+            name: ['Name']
+        };
+    } else if (activeTab === 'divisions') {
+        fieldMap = {
+            id: ['ID'],
+            name: ['Name'],
+            sectorId: ['Sector ID', 'Sector']
+        };
+    } else if (activeTab === 'users') {
+        fieldMap = {
+            username: ['Username', 'User'],
+            name: ['Name', 'Full Name'],
+            role: ['Role'],
+            email: ['Email'],
+            // Special handling for locations array not simple string map
+        };
+    }
+
+    // Process Rows
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if(!line) continue;
+        const values = parseCSVLine(line);
+        const getValue = (key: string) => {
+           const idx = getIdx(fieldMap[key] || []);
+           if (idx > -1 && values[idx]) return values[idx].replace(/^"|"$/g, '').trim();
+           return undefined;
+        };
+
+        // Determine ID Key (usually 'id', but 'username' for users)
+        const idKey = activeTab === 'users' ? 'username' : 'id';
+        const idVal = getValue(idKey);
+        
+        if (!idVal) continue; // Skip rows without ID
+
+        // Construct Payload
+        let payload: any = {};
+        
+        // Basic Fields
+        Object.keys(fieldMap).forEach(key => {
+            const val = getValue(key);
+            if (val !== undefined) payload[key] = val;
+        });
+
+        // Defaults/Fallbacks based on Tab
+        if (activeTab === 'items') {
+             if (!payload.category) payload.category = 'General';
+             if (!payload.unit) payload.unit = 'pcs';
+        } else if (activeTab === 'users') {
+             if (!payload.password) payload.password = 'password'; // Default password for bulk import
+             if (!payload.role) payload.role = 'user';
+        }
+
+        // Action: Update or Add
+        const list = activeTab === 'items' ? items : 
+                     activeTab === 'machines' ? machines :
+                     activeTab === 'locations' ? locations :
+                     activeTab === 'sectors' ? sectors :
+                     activeTab === 'divisions' ? divisions : users;
+        
+        // @ts-ignore - dynamic access
+        const exists = list.find((item: any) => item[idKey] === idVal);
+
+        if (exists) {
+            // Merge existing data with imported data (imported takes precedence if present)
+            const merged = { ...exists, ...payload };
+            if (activeTab === 'items') onUpdateItem(merged);
+            else if (activeTab === 'machines') onUpdateMachine(merged);
+            else if (activeTab === 'locations') onUpdateLocation(merged);
+            else if (activeTab === 'sectors') onUpdateSector(merged);
+            else if (activeTab === 'divisions') onUpdateDivision(merged);
+            else if (activeTab === 'users') onUpdateUser(merged);
+            updated++;
+        } else {
+            // Add new
+            if (activeTab === 'items') onAddItem(payload);
+            else if (activeTab === 'machines') onAddMachine(payload);
+            else if (activeTab === 'locations') onAddLocation(payload);
+            else if (activeTab === 'sectors') onAddSector(payload);
+            else if (activeTab === 'divisions') onAddDivision(payload);
+            else if (activeTab === 'users') onAddUser(payload);
+            added++;
+        }
+    }
+
+    alert(`Import Complete!\nAdded: ${added}\nUpdated: ${updated}`);
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -918,6 +1080,15 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Hidden File Input for Imports */}
+      <input 
+        type="file" 
+        accept=".csv,.txt" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        className="hidden" 
+      />
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
         <div className="flex flex-wrap gap-2 bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
           {(['sectors', 'divisions', 'machines', 'items', 'locations', 'users'] as const).map(tab => (
@@ -936,6 +1107,14 @@ const MasterData: React.FC<MasterDataProps> = ({
         </div>
         
         <div className="flex gap-2">
+           <button
+             onClick={handleImportClick}
+             className="flex items-center px-4 py-2 bg-orange-100 text-orange-800 border border-orange-200 rounded-lg hover:bg-orange-200 shadow-sm transition"
+           >
+             <span className="mr-2 text-xl">📂</span>
+             Import Excel/CSV
+           </button>
+
            <button
              onClick={handleExportDataToExcel}
              className="flex items-center px-4 py-2 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-200 shadow-sm transition"

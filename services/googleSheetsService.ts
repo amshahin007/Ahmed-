@@ -61,7 +61,7 @@ export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise
 };
 
 // Robust CSV Line Parser that handles quotes and commas correctly
-const parseCSVLine = (text: string): string[] => {
+export const parseCSVLine = (text: string): string[] => {
     const result: string[] = [];
     let cell = '';
     let inQuotes = false;
