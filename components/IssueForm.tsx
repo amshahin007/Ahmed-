@@ -455,7 +455,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                    <div className="space-y-3">
                       <SearchableSelect label="Main Group" options={mainGroupOptions} value={filterMainGroup} onChange={setFilterMainGroup} placeholder="Filter by Group..." />
                       <SearchableSelect label="Sub Group" disabled={!filterMainGroup} options={subGroupOptions} value={filterSubGroup} onChange={setFilterSubGroup} placeholder="Filter by Sub Group..." />
-                      <SearchableSelect label="Brand" options={brandOptions} value={filterBrand} onChange={setFilterBrand} placeholder="Filter by Brand..." />
+                      <SearchableSelect label="Brand / Manufacturer" options={brandOptions} value={filterBrand} onChange={setFilterBrand} placeholder="Filter by Brand..." />
                    </div>
                 </div>
                 
