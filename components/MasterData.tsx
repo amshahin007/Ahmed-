@@ -166,6 +166,74 @@ const MasterData: React.FC<MasterDataProps> = ({
     setSyncMsg(`Export Complete! Sent ${successCount} records.`);
   };
 
+  const handleExportDataToExcel = () => {
+    let headers: string[] = [];
+    let rows: string[][] = [];
+    const timestamp = new Date().toISOString().slice(0, 10);
+
+    const escapeCsv = (val: any) => {
+        if (val === null || val === undefined) return '';
+        const str = String(val);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+    };
+
+    switch (activeTab) {
+      case 'items':
+        headers = ['Item Number', 'Description', 'Category', 'Unit', '3rd Item No', 'Desc Line 2', 'Full Name', 'Brand', 'OEM', 'Part No'];
+        rows = items.map(i => [
+            i.id, i.name, i.category, i.unit, 
+            i.thirdId, i.description2, i.fullName, i.brand, i.oem, i.partNumber
+        ].map(escapeCsv));
+        break;
+      case 'machines':
+        headers = ['ID', 'Name', 'Model', 'Main Group', 'Sub Group', 'Category', 'Brand', 'Division ID'];
+        rows = machines.map(m => [
+            m.id, m.name, m.model, 
+            m.mainGroup, m.subGroup, m.category, m.brand, m.divisionId
+        ].map(escapeCsv));
+        break;
+      case 'locations':
+        headers = ['ID', 'Name', 'Email'];
+        rows = locations.map(l => [l.id, l.name, l.email].map(escapeCsv));
+        break;
+      case 'sectors':
+        headers = ['ID', 'Name'];
+        rows = sectors.map(s => [s.id, s.name].map(escapeCsv));
+        break;
+      case 'divisions':
+        headers = ['ID', 'Name', 'Sector ID'];
+        rows = divisions.map(d => [d.id, d.name, d.sectorId].map(escapeCsv));
+        break;
+      case 'users':
+        headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations'];
+        rows = users.map(u => [
+            u.username, u.name, u.role, u.email, 
+            (u.allowedLocationIds || []).join(';')
+        ].map(escapeCsv));
+        break;
+    }
+
+    if (rows.length === 0) {
+        alert("No data to export.");
+        return;
+    }
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + headers.join(",") + "\n" 
+        + rows.map(e => e.join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `WareFlow_${activeTab}_Master_${timestamp}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     const timestamp = Date.now().toString().slice(-4);
@@ -868,6 +936,14 @@ const MasterData: React.FC<MasterDataProps> = ({
         </div>
         
         <div className="flex gap-2">
+           <button
+             onClick={handleExportDataToExcel}
+             className="flex items-center px-4 py-2 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-200 shadow-sm transition"
+           >
+             <span className="mr-2 text-xl">📥</span>
+             Export Excel
+           </button>
+
            <button
                onClick={() => setShowSyncModal(true)}
                className={`flex items-center px-4 py-2 bg-white border rounded-lg shadow-sm transition ${
