@@ -644,10 +644,18 @@ const MasterData: React.FC<MasterDataProps> = ({
              {/* Section 2: Write Config */}
              <div className="space-y-4">
                <h4 className="font-bold text-lg text-green-700 border-b pb-2">
-                 {activeTab === 'items' ? '2. ' : ''}Record Issues to Sheet
+                 {activeTab === 'items' ? '2. ' : ''}Record Issues to Cloud Database
                </h4>
                <p className="text-sm text-gray-600">
-                 Configure the Google Apps Script URL to automatically log every new issue created in the app to a Google Sheet.
+                 To create a cloud database for your records:
+                 <br/>
+                 1. Create a new Google Sheet named <strong className="text-black bg-yellow-100 px-1">"Main Issue Backup"</strong>.
+                 <br/>
+                 2. Open <b>Extensions &gt; Apps Script</b> in that sheet.
+                 <br/>
+                 3. Paste the code below and <b>Deploy as Web App</b> (Who has access: Anyone).
+                 <br/>
+                 4. Paste the URL below.
                </p>
                
                <div>
@@ -694,302 +702,6 @@ const MasterData: React.FC<MasterDataProps> = ({
           <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
             <button onClick={() => setShowSyncModal(false)} className="px-6 py-2 bg-gray-800 text-white rounded hover:bg-gray-900">Done</button>
           </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderForm = () => {
-    if (!showForm) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-lg animate-fade-in-up max-h-[90vh] overflow-y-auto">
-          <h3 className="text-xl font-bold mb-4 capitalize">
-            {isEditing ? 'Edit' : 'Add New'} {activeTab.slice(0, -1)}
-          </h3>
-          <form onSubmit={handleSave} className="space-y-4">
-            
-            {/* ID Field */}
-            {activeTab === 'users' ? (
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Username</label>
-                    <input 
-                        required
-                        className={`w-full border rounded p-2 ${isEditing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-500 outline-none'}`}
-                        value={formData.username || ''}
-                        onChange={e => setFormData({...formData, username: e.target.value})}
-                        readOnly={isEditing}
-                    />
-                </div>
-            ) : (
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      {activeTab === 'items' ? 'Item Number (ID)' : 'ID'}
-                    </label>
-                    <input 
-                        className={`w-full border rounded p-2 ${isEditing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
-                        placeholder="Auto-generated if empty"
-                        value={formData.id || ''}
-                        onChange={e => setFormData({...formData, id: e.target.value})}
-                        readOnly={isEditing}
-                    />
-                </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                 {activeTab === 'users' ? 'Full Name' : activeTab === 'items' ? 'Description' : 'Name'}
-              </label>
-              <input 
-                required
-                className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                value={formData.name || ''}
-                onChange={e => setFormData({...formData, name: e.target.value})}
-              />
-            </div>
-
-            {/* Custom fields for Items - Matches user request */}
-            {activeTab === 'items' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">3rd Item Number</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.thirdId || ''}
-                    onChange={e => setFormData({...formData, thirdId: e.target.value})}
-                  />
-                </div>
-                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Description Line 2</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.description2 || ''}
-                    onChange={e => setFormData({...formData, description2: e.target.value})}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.fullName || ''}
-                    onChange={e => setFormData({...formData, fullName: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Category</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.category || ''}
-                    onChange={e => setFormData({...formData, category: e.target.value})}
-                    placeholder="e.g. Spare Parts"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Brand / Manufacturer</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.brand || ''}
-                    onChange={e => setFormData({...formData, brand: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">OEM</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.oem || ''}
-                    onChange={e => setFormData({...formData, oem: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Part No.</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.partNumber || ''}
-                    onChange={e => setFormData({...formData, partNumber: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Unit (UM)</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.unit || ''}
-                    onChange={e => setFormData({...formData, unit: e.target.value})}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Custom fields for Machines */}
-            {activeTab === 'machines' && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Model</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.model || ''}
-                    onChange={e => setFormData({...formData, model: e.target.value})}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700">Main Group</label>
-                      <input 
-                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                        value={formData.mainGroup || ''}
-                        onChange={e => setFormData({...formData, mainGroup: e.target.value})}
-                        placeholder="e.g. Generators"
-                      />
-                   </div>
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700">Sub Group</label>
-                      <input 
-                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                        value={formData.subGroup || ''}
-                        onChange={e => setFormData({...formData, subGroup: e.target.value})}
-                        placeholder="e.g. Diesel"
-                      />
-                   </div>
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700">Category</label>
-                      <input 
-                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                        value={formData.category || ''}
-                        onChange={e => setFormData({...formData, category: e.target.value})}
-                        placeholder="e.g. Engine Parts"
-                      />
-                   </div>
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700">Brand / Manufacturer</label>
-                      <input 
-                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                        value={formData.brand || ''}
-                        onChange={e => setFormData({...formData, brand: e.target.value})}
-                        placeholder="e.g. Caterpillar"
-                      />
-                   </div>
-                </div>
-                <div className="mt-2">
-                  <SearchableSelect
-                     label="Division (Optional)"
-                     options={divisions.map(d => ({ id: d.id, label: d.name }))}
-                     value={formData.divisionId || ''}
-                     onChange={(val) => setFormData({...formData, divisionId: val})}
-                     placeholder="Select Division"
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Custom fields for Divisions */}
-            {activeTab === 'divisions' && (
-              <div className="mt-2">
-                <SearchableSelect
-                   label="Parent Sector"
-                   required
-                   options={sectors.map(s => ({ id: s.id, label: s.name }))}
-                   value={formData.sectorId || ''}
-                   onChange={(val) => setFormData({...formData, sectorId: val})}
-                   placeholder="Select Sector"
-                />
-              </div>
-            )}
-            
-            {/* Custom fields for Locations */}
-            {activeTab === 'locations' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Site Email</label>
-                <input 
-                  type="email"
-                  className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                  placeholder="site.contact@email.com"
-                  value={formData.email || ''}
-                  onChange={e => setFormData({...formData, email: e.target.value})}
-                />
-                <p className="text-xs text-gray-400 mt-1">Requests for this location will be CC'd here.</p>
-              </div>
-            )}
-
-            {/* Custom fields for Users */}
-            {activeTab === 'users' && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
-                  <input 
-                    type="email"
-                    required
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.email || ''}
-                    onChange={e => setFormData({...formData, email: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Role</label>
-                  <select
-                     required
-                     className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                     value={formData.role || 'user'}
-                     onChange={e => setFormData({...formData, role: e.target.value})}
-                  >
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                      <option value="warehouse_manager">Warehouse Manager</option>
-                      <option value="warehouse_supervisor">Warehouse Supervisor</option>
-                      <option value="maintenance_manager">Maintenance Manager</option>
-                      <option value="maintenance_engineer">Maintenance Engineer</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Password {isEditing && '(Leave blank to keep current)'}</label>
-                  <input 
-                    type="password"
-                    required={!isEditing}
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.password || ''}
-                    onChange={e => setFormData({...formData, password: e.target.value})}
-                  />
-                </div>
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Allowed Locations (Write Access)</label>
-                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50 grid grid-cols-1 gap-2">
-                    {locations.map(loc => (
-                      <label key={loc.id} className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
-                        <input
-                          type="checkbox"
-                          className="rounded text-blue-600 focus:ring-blue-500"
-                          checked={formData.allowedLocationIds?.includes(loc.id) || false}
-                          onChange={(e) => {
-                             const current = formData.allowedLocationIds || [];
-                             if (e.target.checked) setFormData({...formData, allowedLocationIds: [...current, loc.id]});
-                             else setFormData({...formData, allowedLocationIds: current.filter((id: string) => id !== loc.id)});
-                          }}
-                        />
-                        <span className="text-gray-700">{loc.name}</span>
-                        <span className="text-gray-400 text-xs">({loc.id})</span>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">If none selected, user can create issues for <strong>ALL</strong> locations (unless they are Admin).</p>
-                </div>
-              </>
-            )}
-
-            <div className="flex justify-end space-x-3 mt-6">
-              <button 
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded transition"
-              >
-                Cancel
-              </button>
-              <button 
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition shadow-sm"
-              >
-                {isEditing ? 'Update' : 'Save'}
-              </button>
-            </div>
-          </form>
         </div>
       </div>
     );
@@ -1170,6 +882,283 @@ const MasterData: React.FC<MasterDataProps> = ({
                 </div>
             </div>
         )}
+      </div>
+    );
+  };
+
+  const renderForm = () => {
+    if (!showForm) return null;
+
+    const commonInputClass = "w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none";
+    const labelClass = "block text-sm font-medium text-gray-700 mb-1";
+
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+            <h3 className="text-xl font-bold text-gray-800">
+              {isEditing ? 'Edit' : 'Add New'} {activeTab === 'items' ? 'Item' : activeTab === 'users' ? 'User' : activeTab.slice(0, -1)}
+            </h3>
+            <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
+          </div>
+          
+          <form onSubmit={handleSave} className="p-6 space-y-4">
+            
+            {/* ID Field */}
+            {activeTab !== 'users' && (
+              <div>
+                <label className={labelClass}>ID {isEditing && <span className="text-xs text-gray-400">(Read-only)</span>}</label>
+                <input
+                  type="text"
+                  className={`${commonInputClass} ${isEditing ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  value={formData.id || ''}
+                  onChange={e => setFormData({ ...formData, id: e.target.value })}
+                  placeholder={isEditing ? '' : 'Leave empty to auto-generate'}
+                  disabled={isEditing}
+                />
+              </div>
+            )}
+
+            {/* ITEMS */}
+            {activeTab === 'items' && (
+              <>
+                 <div>
+                    <label className={labelClass}>Description / Name</label>
+                    <input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={labelClass}>Category</label>
+                      <input className={commonInputClass} value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} placeholder="General" />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Unit (UM)</label>
+                      <input className={commonInputClass} value={formData.unit || ''} onChange={e => setFormData({...formData, unit: e.target.value})} placeholder="pcs" />
+                    </div>
+                 </div>
+                 <div>
+                    <label className={labelClass}>Full Name</label>
+                    <input className={commonInputClass} value={formData.fullName || ''} onChange={e => setFormData({...formData, fullName: e.target.value})} />
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <label className={labelClass}>2nd Item No</label>
+                       <input className={commonInputClass} value={formData.secondId || ''} onChange={e => setFormData({...formData, secondId: e.target.value})} />
+                    </div>
+                    <div>
+                       <label className={labelClass}>3rd Item No</label>
+                       <input className={commonInputClass} value={formData.thirdId || ''} onChange={e => setFormData({...formData, thirdId: e.target.value})} />
+                    </div>
+                 </div>
+                 <div>
+                    <label className={labelClass}>Desc Line 2</label>
+                    <input className={commonInputClass} value={formData.description2 || ''} onChange={e => setFormData({...formData, description2: e.target.value})} />
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <label className={labelClass}>Brand</label>
+                       <input className={commonInputClass} value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} />
+                    </div>
+                    <div>
+                       <label className={labelClass}>Part Number</label>
+                       <input className={commonInputClass} value={formData.partNumber || ''} onChange={e => setFormData({...formData, partNumber: e.target.value})} />
+                    </div>
+                 </div>
+                 <div>
+                       <label className={labelClass}>OEM</label>
+                       <input className={commonInputClass} value={formData.oem || ''} onChange={e => setFormData({...formData, oem: e.target.value})} />
+                 </div>
+              </>
+            )}
+
+            {/* MACHINES */}
+            {activeTab === 'machines' && (
+              <>
+                <div>
+                   <label className={labelClass}>Machine Name</label>
+                   <input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                </div>
+                <div>
+                   <label className={labelClass}>Model</label>
+                   <input className={commonInputClass} value={formData.model || ''} onChange={e => setFormData({...formData, model: e.target.value})} />
+                </div>
+                <div>
+                    <label className={labelClass}>Division</label>
+                    <select 
+                      className={commonInputClass}
+                      value={formData.divisionId || ''}
+                      onChange={e => setFormData({...formData, divisionId: e.target.value})}
+                    >
+                        <option value="">Select Division...</option>
+                        {divisions.map(d => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <label className={labelClass}>Main Group</label>
+                       <input className={commonInputClass} value={formData.mainGroup || ''} onChange={e => setFormData({...formData, mainGroup: e.target.value})} />
+                    </div>
+                    <div>
+                       <label className={labelClass}>Sub Group</label>
+                       <input className={commonInputClass} value={formData.subGroup || ''} onChange={e => setFormData({...formData, subGroup: e.target.value})} />
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                       <label className={labelClass}>Category</label>
+                       <input className={commonInputClass} value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} />
+                    </div>
+                    <div>
+                       <label className={labelClass}>Brand</label>
+                       <input className={commonInputClass} value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} />
+                    </div>
+                </div>
+              </>
+            )}
+
+            {/* LOCATIONS */}
+            {activeTab === 'locations' && (
+              <>
+                 <div>
+                    <label className={labelClass}>Location Name</label>
+                    <input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                 </div>
+                 <div>
+                    <label className={labelClass}>Site Email</label>
+                    <input type="email" className={commonInputClass} value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
+                 </div>
+              </>
+            )}
+
+            {/* SECTORS */}
+            {activeTab === 'sectors' && (
+              <>
+                 <div>
+                    <label className={labelClass}>Sector Name</label>
+                    <input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                 </div>
+              </>
+            )}
+
+            {/* DIVISIONS */}
+            {activeTab === 'divisions' && (
+              <>
+                 <div>
+                    <label className={labelClass}>Division Name</label>
+                    <input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                 </div>
+                 <div>
+                    <label className={labelClass}>Parent Sector</label>
+                    <select 
+                      required
+                      className={commonInputClass}
+                      value={formData.sectorId || ''}
+                      onChange={e => setFormData({...formData, sectorId: e.target.value})}
+                    >
+                        <option value="">Select Sector...</option>
+                        {sectors.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                    </select>
+                 </div>
+              </>
+            )}
+
+            {/* USERS */}
+            {activeTab === 'users' && (
+              <>
+                 <div>
+                    <label className={labelClass}>Username</label>
+                    <input 
+                       required 
+                       className={`${commonInputClass} ${isEditing ? 'bg-gray-100 cursor-not-allowed' : ''}`} 
+                       value={formData.username || ''} 
+                       onChange={e => setFormData({...formData, username: e.target.value})}
+                       disabled={isEditing}
+                    />
+                 </div>
+                 <div>
+                    <label className={labelClass}>Full Name</label>
+                    <input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                 </div>
+                 <div>
+                    <label className={labelClass}>Email</label>
+                    <input required type="email" className={commonInputClass} value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
+                 </div>
+                 <div>
+                    <label className={labelClass}>Role</label>
+                    <select 
+                      required
+                      className={commonInputClass}
+                      value={formData.role || 'user'}
+                      onChange={e => setFormData({...formData, role: e.target.value})}
+                    >
+                        <option value="user">User (Operator)</option>
+                        <option value="admin">Admin</option>
+                        <option value="warehouse_manager">Warehouse Manager</option>
+                        <option value="warehouse_supervisor">Warehouse Supervisor</option>
+                        <option value="maintenance_manager">Maintenance Manager</option>
+                        <option value="maintenance_engineer">Maintenance Engineer</option>
+                    </select>
+                 </div>
+                 <div>
+                    <label className={labelClass}>Password</label>
+                    <input 
+                      type="password" 
+                      className={commonInputClass} 
+                      value={formData.password || ''} 
+                      onChange={e => setFormData({...formData, password: e.target.value})} 
+                      placeholder={isEditing ? 'Leave blank to keep current' : 'Enter password'} 
+                    />
+                 </div>
+                 {/* Multi-Select for Locations */}
+                 <div>
+                    <label className={labelClass}>Allowed Locations (Optional)</label>
+                    <div className="border border-gray-300 rounded-lg p-2 max-h-32 overflow-y-auto bg-gray-50">
+                        {locations.map(loc => (
+                            <label key={loc.id} className="flex items-center space-x-2 p-1 hover:bg-white cursor-pointer rounded">
+                                <input 
+                                  type="checkbox"
+                                  checked={(formData.allowedLocationIds || []).includes(loc.id)}
+                                  onChange={(e) => {
+                                      const current = formData.allowedLocationIds || [];
+                                      if (e.target.checked) {
+                                          setFormData({...formData, allowedLocationIds: [...current, loc.id]});
+                                      } else {
+                                          setFormData({...formData, allowedLocationIds: current.filter((id: string) => id !== loc.id)});
+                                      }
+                                  }}
+                                  className="rounded text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700">{loc.name}</span>
+                            </label>
+                        ))}
+                        {locations.length === 0 && <p className="text-xs text-gray-400 p-1">No locations defined yet.</p>}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">Users can only create issues for these locations. Admin has all access.</p>
+                 </div>
+              </>
+            )}
+
+            <div className="pt-4 flex justify-end gap-3 border-t border-gray-100 mt-4">
+               <button 
+                 type="button"
+                 onClick={() => setShowForm(false)}
+                 className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+               >
+                 Cancel
+               </button>
+               <button 
+                 type="submit"
+                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition transform hover:-translate-y-0.5"
+               >
+                 {isEditing ? 'Update' : 'Create'} {activeTab === 'users' ? 'User' : 'Record'}
+               </button>
+            </div>
+          </form>
+        </div>
       </div>
     );
   };

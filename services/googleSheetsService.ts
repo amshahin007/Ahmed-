@@ -178,10 +178,32 @@ function doPost(e) {
   lock.tryLock(10000); // Wait up to 10s for previous request to finish
 
   try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("IssuesLog");
+    // Defines the sheet name as requested acting as a cloud DB
+    var sheetName = "Main Issue Backup";
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = spreadsheet.getSheetByName(sheetName);
+    
+    // Create sheet if it doesn't exist
     if (!sheet) {
-      sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet("IssuesLog");
-      sheet.appendRow(["ID", "Date", "Location", "Sector", "Division", "Machine", "Item ID", "Item Name", "Quantity", "Status", "Notes"]);
+      sheet = spreadsheet.insertSheet(sheetName);
+      // Initialize Headers
+      sheet.appendRow([
+        "ID", 
+        "Date", 
+        "Location", 
+        "Sector", 
+        "Division", 
+        "Machine", 
+        "Item ID", 
+        "Item Name", 
+        "Quantity", 
+        "Status", 
+        "Notes", 
+        "Warehouse Email", 
+        "Site Email"
+      ]);
+      // Freeze header row
+      sheet.setFrozenRows(1);
     }
     
     var data = JSON.parse(e.postData.contents);
@@ -197,7 +219,9 @@ function doPost(e) {
       data.itemName,
       data.quantity,
       data.status,
-      data.notes || ""
+      data.notes || "",
+      data.warehouseEmail || "",
+      data.requesterEmail || ""
     ]);
     
     return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
