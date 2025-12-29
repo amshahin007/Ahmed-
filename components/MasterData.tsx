@@ -33,6 +33,53 @@ type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions' | 'u
 
 const ITEMS_PER_PAGE = 80;
 
+// Base configuration for columns
+const COLUMNS_CONFIG: Record<TabType, { key: string, label: string }[]> = {
+  items: [
+    { key: 'id', label: 'Item Number' },
+    { key: 'thirdId', label: '3rd Item No' },
+    { key: 'name', label: 'Description' },
+    { key: 'description2', label: 'Desc Line 2' },
+    { key: 'fullName', label: 'Full Name' },
+    { key: 'category', label: 'Category' },
+    { key: 'brand', label: 'Brand / Manufacturer' },
+    { key: 'oem', label: 'OEM' },
+    { key: 'partNumber', label: 'Part No' },
+    { key: 'unit', label: 'UM' }
+  ],
+  machines: [
+    { key: 'id', label: 'ID' },
+    { key: 'name', label: 'Name' },
+    { key: 'model', label: 'Model' },
+    { key: 'mainGroup', label: 'Main Group' },
+    { key: 'subGroup', label: 'Sub Group' },
+    { key: 'category', label: 'Category' },
+    { key: 'brand', label: 'Brand / Manufacturer' },
+    { key: 'divisionId', label: 'Division' }
+  ],
+  locations: [
+    { key: 'id', label: 'ID' },
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Site Email' }
+  ],
+  sectors: [
+    { key: 'id', label: 'ID' },
+    { key: 'name', label: 'Name' }
+  ],
+  divisions: [
+    { key: 'id', label: 'ID' },
+    { key: 'name', label: 'Name' },
+    { key: 'sectorId', label: 'Parent Sector' }
+  ],
+  users: [
+    { key: 'username', label: 'Username' },
+    { key: 'name', label: 'Name' },
+    { key: 'role', label: 'Role' },
+    { key: 'email', label: 'Email' },
+    { key: 'allowedLocationIds', label: 'Locations' }
+  ]
+};
+
 const MasterData: React.FC<MasterDataProps> = ({ 
   history, items, machines, locations, sectors, divisions, users,
   onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision, onAddUser,
@@ -58,10 +105,39 @@ const MasterData: React.FC<MasterDataProps> = ({
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
 
+  // Column Management State
+  const [columnSettings, setColumnSettings] = useState<Record<TabType, { key: string; label: string; visible: boolean }[]>>(() => {
+    const saved = localStorage.getItem('wf_column_settings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Basic validation to ensure keys exist
+        if (parsed.items && parsed.machines) return parsed;
+      } catch (e) {
+        console.error("Failed to load column settings", e);
+      }
+    }
+    // Default Initialization
+    const defaults: any = {};
+    (Object.keys(COLUMNS_CONFIG) as TabType[]).forEach(tab => {
+      defaults[tab] = COLUMNS_CONFIG[tab].map(c => ({ ...c, visible: true }));
+    });
+    return defaults;
+  });
+
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
+
   // Save config when changed
   useEffect(() => { localStorage.setItem('wf_sheet_id', sheetId); }, [sheetId]);
   useEffect(() => { localStorage.setItem('wf_items_gid', gid); }, [gid]);
   useEffect(() => { localStorage.setItem('wf_script_url', scriptUrl); }, [scriptUrl]);
+  
+  // Save column settings when changed
+  useEffect(() => {
+    localStorage.setItem('wf_column_settings', JSON.stringify(columnSettings));
+  }, [columnSettings]);
 
   // Reset pagination when tab changes
   useEffect(() => {
@@ -396,6 +472,35 @@ const MasterData: React.FC<MasterDataProps> = ({
     alert(`Import Complete!\nAdded: ${added}\nUpdated: ${updated}`);
   };
 
+  // --- Column Management Logic ---
+  const toggleColumnVisibility = (key: string) => {
+    setColumnSettings(prev => ({
+      ...prev,
+      [activeTab]: prev[activeTab].map(col => 
+        col.key === key ? { ...col, visible: !col.visible } : col
+      )
+    }));
+  };
+
+  const handleDragStart = (e: React.DragEvent<HTMLTableHeaderCellElement>, position: number) => {
+    dragItem.current = position;
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLTableHeaderCellElement>, position: number) => {
+    dragOverItem.current = position;
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLTableHeaderCellElement>) => {
+    e.preventDefault();
+    const copyListItems = [...columnSettings[activeTab]];
+    const dragItemContent = copyListItems[dragItem.current!];
+    copyListItems.splice(dragItem.current!, 1);
+    copyListItems.splice(dragOverItem.current!, 0, dragItemContent);
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setColumnSettings(prev => ({ ...prev, [activeTab]: copyListItems }));
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     const timestamp = Date.now().toString().slice(-4);
@@ -594,331 +699,53 @@ const MasterData: React.FC<MasterDataProps> = ({
     );
   };
 
-  const renderForm = () => {
-    if (!showForm) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-lg animate-fade-in-up max-h-[90vh] overflow-y-auto">
-          <h3 className="text-xl font-bold mb-4 capitalize">
-            {isEditing ? 'Edit' : 'Add New'} {activeTab.slice(0, -1)}
-          </h3>
-          <form onSubmit={handleSave} className="space-y-4">
-            
-            {/* ID Field */}
-            {activeTab === 'users' ? (
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Username</label>
-                    <input 
-                        required
-                        className={`w-full border rounded p-2 ${isEditing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:ring-2 focus:ring-blue-500 outline-none'}`}
-                        value={formData.username || ''}
-                        onChange={e => setFormData({...formData, username: e.target.value})}
-                        readOnly={isEditing}
-                    />
-                </div>
-            ) : (
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      {activeTab === 'items' ? 'Item Number (ID)' : 'ID'}
-                    </label>
-                    <input 
-                        className={`w-full border rounded p-2 ${isEditing ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
-                        placeholder="Auto-generated if empty"
-                        value={formData.id || ''}
-                        onChange={e => setFormData({...formData, id: e.target.value})}
-                        readOnly={isEditing}
-                    />
-                </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                 {activeTab === 'users' ? 'Full Name' : activeTab === 'items' ? 'Description' : 'Name'}
-              </label>
-              <input 
-                required
-                className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                value={formData.name || ''}
-                onChange={e => setFormData({...formData, name: e.target.value})}
-              />
-            </div>
-
-            {/* Custom fields for Items - Matches user request */}
-            {activeTab === 'items' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">3rd Item Number</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.thirdId || ''}
-                    onChange={e => setFormData({...formData, thirdId: e.target.value})}
-                  />
-                </div>
-                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Description Line 2</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.description2 || ''}
-                    onChange={e => setFormData({...formData, description2: e.target.value})}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.fullName || ''}
-                    onChange={e => setFormData({...formData, fullName: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Category</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.category || ''}
-                    onChange={e => setFormData({...formData, category: e.target.value})}
-                    placeholder="e.g. Spare Parts"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Brand / Manufacturer</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.brand || ''}
-                    onChange={e => setFormData({...formData, brand: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">OEM</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.oem || ''}
-                    onChange={e => setFormData({...formData, oem: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Part No.</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.partNumber || ''}
-                    onChange={e => setFormData({...formData, partNumber: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Unit (UM)</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.unit || ''}
-                    onChange={e => setFormData({...formData, unit: e.target.value})}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Custom fields for Machines */}
-            {activeTab === 'machines' && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Model</label>
-                  <input 
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.model || ''}
-                    onChange={e => setFormData({...formData, model: e.target.value})}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700">Main Group</label>
-                      <input 
-                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                        value={formData.mainGroup || ''}
-                        onChange={e => setFormData({...formData, mainGroup: e.target.value})}
-                        placeholder="e.g. Generators"
-                      />
-                   </div>
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700">Sub Group</label>
-                      <input 
-                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                        value={formData.subGroup || ''}
-                        onChange={e => setFormData({...formData, subGroup: e.target.value})}
-                        placeholder="e.g. Diesel"
-                      />
-                   </div>
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700">Category</label>
-                      <input 
-                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                        value={formData.category || ''}
-                        onChange={e => setFormData({...formData, category: e.target.value})}
-                        placeholder="e.g. Engine Parts"
-                      />
-                   </div>
-                   <div>
-                      <label className="block text-sm font-medium text-gray-700">Brand / Manufacturer</label>
-                      <input 
-                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                        value={formData.brand || ''}
-                        onChange={e => setFormData({...formData, brand: e.target.value})}
-                        placeholder="e.g. Caterpillar"
-                      />
-                   </div>
-                </div>
-                <div className="mt-2">
-                  <SearchableSelect
-                     label="Division (Optional)"
-                     options={divisions.map(d => ({ id: d.id, label: d.name }))}
-                     value={formData.divisionId || ''}
-                     onChange={(val) => setFormData({...formData, divisionId: val})}
-                     placeholder="Select Division"
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Custom fields for Divisions */}
-            {activeTab === 'divisions' && (
-              <div className="mt-2">
-                <SearchableSelect
-                   label="Parent Sector"
-                   required
-                   options={sectors.map(s => ({ id: s.id, label: s.name }))}
-                   value={formData.sectorId || ''}
-                   onChange={(val) => setFormData({...formData, sectorId: val})}
-                   placeholder="Select Sector"
-                />
-              </div>
-            )}
-            
-            {/* Custom fields for Locations */}
-            {activeTab === 'locations' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Site Email</label>
-                <input 
-                  type="email"
-                  className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                  placeholder="site.contact@email.com"
-                  value={formData.email || ''}
-                  onChange={e => setFormData({...formData, email: e.target.value})}
-                />
-                <p className="text-xs text-gray-400 mt-1">Requests for this location will be CC'd here.</p>
-              </div>
-            )}
-
-            {/* Custom fields for Users */}
-            {activeTab === 'users' && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Email</label>
-                  <input 
-                    type="email"
-                    required
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.email || ''}
-                    onChange={e => setFormData({...formData, email: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Role</label>
-                  <select
-                     required
-                     className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                     value={formData.role || 'user'}
-                     onChange={e => setFormData({...formData, role: e.target.value})}
-                  >
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                      <option value="warehouse_manager">Warehouse Manager</option>
-                      <option value="warehouse_supervisor">Warehouse Supervisor</option>
-                      <option value="maintenance_manager">Maintenance Manager</option>
-                      <option value="maintenance_engineer">Maintenance Engineer</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Password {isEditing && '(Leave blank to keep current)'}</label>
-                  <input 
-                    type="password"
-                    required={!isEditing}
-                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
-                    value={formData.password || ''}
-                    onChange={e => setFormData({...formData, password: e.target.value})}
-                  />
-                </div>
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Allowed Locations (Write Access)</label>
-                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50 grid grid-cols-1 gap-2">
-                    {locations.map(loc => (
-                      <label key={loc.id} className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-gray-100 p-1 rounded">
-                        <input
-                          type="checkbox"
-                          className="rounded text-blue-600 focus:ring-blue-500"
-                          checked={formData.allowedLocationIds?.includes(loc.id) || false}
-                          onChange={(e) => {
-                             const current = formData.allowedLocationIds || [];
-                             if (e.target.checked) setFormData({...formData, allowedLocationIds: [...current, loc.id]});
-                             else setFormData({...formData, allowedLocationIds: current.filter((id: string) => id !== loc.id)});
-                          }}
-                        />
-                        <span className="text-gray-700">{loc.name}</span>
-                        <span className="text-gray-400 text-xs">({loc.id})</span>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">If none selected, user can create issues for <strong>ALL</strong> locations (unless they are Admin).</p>
-                </div>
-              </>
-            )}
-
-            <div className="flex justify-end space-x-3 mt-6">
-              <button 
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded transition"
-              >
-                Cancel
-              </button>
-              <button 
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition shadow-sm"
-              >
-                {isEditing ? 'Update' : 'Save'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
+  const renderCellContent = (key: string, row: any) => {
+    // Special Renderers
+    if (activeTab === 'machines' && key === 'divisionId') {
+      return divisions.find(d => d.id === row.divisionId)?.name || '-';
+    }
+    if (activeTab === 'divisions' && key === 'sectorId') {
+      return sectors.find(s => s.id === row.sectorId)?.name || '-';
+    }
+    if (activeTab === 'users' && key === 'role') {
+       return (
+         <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+            row.role === 'admin' ? 'bg-purple-100 text-purple-700' :
+            row.role.includes('manager') ? 'bg-orange-100 text-orange-700' :
+            'bg-blue-100 text-blue-700'
+         }`}>
+            {row.role.replace('_', ' ').toUpperCase()}
+         </span>
+       );
+    }
+    if (activeTab === 'users' && key === 'allowedLocationIds') {
+        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs">All Access</span>;
+        if (!row.allowedLocationIds || row.allowedLocationIds.length === 0) return <span className="text-gray-400 italic text-xs">No restrictions</span>;
+        
+        return (
+           <div className="flex flex-wrap gap-1 max-w-[200px]">
+             {row.allowedLocationIds.map((lid: string) => (
+               <span key={lid} className="px-1.5 py-0.5 bg-gray-100 rounded border border-gray-200 text-xs">
+                  {locations.find(l => l.id === lid)?.name || lid}
+               </span>
+             ))}
+           </div>
+        );
+    }
+    
+    // Default Text Render
+    return <span className="text-gray-700">{row[key] || '-'}</span>;
   };
 
   const renderTable = () => {
-    let headers: string[] = [];
     let data: any[] = [];
-
     switch (activeTab) {
-      case 'items':
-        headers = ['Item Number', '3rd Item No', 'Description', 'Desc Line 2', 'Full Name', 'Category', 'Brand / Manufacturer', 'OEM', 'Part No', 'UM', 'Actions'];
-        data = items;
-        break;
-      case 'machines':
-        headers = ['ID', 'Name', 'Model', 'Main Group', 'Sub Group', 'Category', 'Brand / Manufacturer', 'Division', 'Actions'];
-        data = machines;
-        break;
-      case 'locations':
-        headers = ['ID', 'Name', 'Site Email', 'Actions'];
-        data = locations;
-        break;
-      case 'sectors':
-        headers = ['ID', 'Name', 'Actions'];
-        data = sectors;
-        break;
-      case 'divisions':
-        headers = ['ID', 'Name', 'Parent Sector', 'Actions'];
-        data = divisions;
-        break;
-      case 'users':
-        headers = ['Username', 'Name', 'Role', 'Email', 'Locations', 'Actions'];
-        data = users;
-        break;
+      case 'items': data = items; break;
+      case 'machines': data = machines; break;
+      case 'locations': data = locations; break;
+      case 'sectors': data = sectors; break;
+      case 'divisions': data = divisions; break;
+      case 'users': data = users; break;
     }
 
     // Pagination Logic
@@ -927,94 +754,64 @@ const MasterData: React.FC<MasterDataProps> = ({
     const endIndex = startIndex + ITEMS_PER_PAGE;
     const paginatedData = data.slice(startIndex, endIndex);
 
+    const visibleColumns = columnSettings[activeTab].filter(c => c.visible);
+
     return (
       <div className="flex flex-col space-y-4">
+        {/* Columns Management Tool (Hidden by default) */}
+        {showColumnMenu && (
+           <div className="absolute z-10 bg-white border border-gray-200 rounded-lg shadow-xl p-4 right-4 mt-12 w-64 max-h-96 overflow-y-auto">
+              <div className="flex justify-between items-center mb-2 border-b pb-2">
+                 <h4 className="font-bold text-sm text-gray-700">Manage Columns</h4>
+                 <button onClick={() => setShowColumnMenu(false)} className="text-gray-400 hover:text-gray-600">&times;</button>
+              </div>
+              <div className="space-y-2">
+                 {columnSettings[activeTab].map(col => (
+                    <label key={col.key} className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded">
+                       <input 
+                         type="checkbox" 
+                         checked={col.visible} 
+                         onChange={() => toggleColumnVisibility(col.key)}
+                         className="rounded text-blue-600"
+                       />
+                       <span>{col.label}</span>
+                    </label>
+                 ))}
+              </div>
+           </div>
+        )}
+
         <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
             <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 border-b">
                 <tr>
-                {headers.map(h => <th key={h} className="px-6 py-3 font-semibold text-gray-700 whitespace-nowrap">{h}</th>)}
+                {visibleColumns.map((col, index) => (
+                    <th 
+                      key={col.key} 
+                      className="px-6 py-3 font-semibold text-gray-700 whitespace-nowrap cursor-move hover:bg-gray-100 select-none border-r border-transparent hover:border-gray-200 transition-colors"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, index)}
+                      onDragEnter={(e) => handleDragEnter(e, index)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={handleDrop}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400">⋮⋮</span>
+                        {col.label}
+                      </div>
+                    </th>
+                ))}
+                <th className="px-6 py-3 font-semibold text-gray-700 whitespace-nowrap">Actions</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
                 {paginatedData.map((row: any) => (
                 <tr key={row.id || row.username} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-3 font-medium text-gray-900 align-top">{activeTab === 'users' ? row.username : row.id}</td>
-                    
-                    {/* Specific Columns for Items */}
-                    {activeTab === 'items' && (
-                    <>
-                        <td className="px-6 py-3 text-gray-500 align-top">{row.thirdId || '-'}</td>
-                        <td className="px-6 py-3 text-gray-800 align-top">{row.name}</td>
-                        <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.description2 || '-'}</td>
-                        <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.fullName || '-'}</td>
-                        <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.category || '-'}</td>
-                        <td className="px-6 py-3 text-gray-500 align-top">{row.brand || '-'}</td>
-                        <td className="px-6 py-3 text-gray-500 align-top">{row.oem || '-'}</td>
-                        <td className="px-6 py-3 text-gray-500 font-mono text-xs align-top">{row.partNumber || '-'}</td>
-                        <td className="px-6 py-3 text-gray-500 align-top">{row.unit}</td>
-                    </>
-                    )}
-
-                    {activeTab !== 'items' && (
-                    <td className="px-6 py-3 align-top">{row.name}</td>
-                    )}
-                    
-                    {activeTab === 'machines' && (
-                    <>
-                        <td className="px-6 py-3 text-gray-500 align-top">{row.model}</td>
-                         <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.mainGroup || '-'}</td>
-                         <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.subGroup || '-'}</td>
-                         <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.category || '-'}</td>
-                         <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.brand || '-'}</td>
-                        <td className="px-6 py-3 text-gray-500 align-top">
-                        {divisions.find(d => d.id === row.divisionId)?.name || '-'}
-                        </td>
-                    </>
-                    )}
-                    {activeTab === 'divisions' && (
-                    <td className="px-6 py-3 text-gray-500 align-top">
-                        {sectors.find(s => s.id === row.sectorId)?.name || '-'}
-                    </td>
-                    )}
-                    {activeTab === 'locations' && (
-                    <td className="px-6 py-3 text-gray-500 font-mono text-xs align-top">
-                        {row.email || <span className="text-gray-300 italic">No email set</span>}
-                    </td>
-                    )}
-                    {activeTab === 'users' && (
-                    <>
-                        <td className="px-6 py-3 align-top">
-                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                                row.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                                row.role.includes('manager') ? 'bg-orange-100 text-orange-700' :
-                                'bg-blue-100 text-blue-700'
-                            }`}>
-                                {row.role.replace('_', ' ').toUpperCase()}
-                            </span>
-                        </td>
-                        <td className="px-6 py-3 text-gray-500 text-xs align-top">
-                            {row.email}
-                        </td>
-                        <td className="px-6 py-3 text-gray-500 text-xs align-top max-w-[150px]">
-                           {row.role === 'admin' ? (
-                             <span className="text-green-600 font-bold">All Access</span>
-                           ) : (
-                             row.allowedLocationIds && row.allowedLocationIds.length > 0 ? (
-                               <div className="flex flex-wrap gap-1">
-                                 {row.allowedLocationIds.map((lid: string) => (
-                                   <span key={lid} className="px-1.5 py-0.5 bg-gray-100 rounded border border-gray-200">
-                                      {locations.find(l => l.id === lid)?.name || lid}
-                                   </span>
-                                 ))}
-                               </div>
-                             ) : (
-                               <span className="text-gray-400 italic">No restrictions</span>
-                             )
-                           )}
-                        </td>
-                    </>
-                    )}
+                    {visibleColumns.map(col => (
+                       <td key={col.key} className="px-6 py-3 align-top">
+                          {renderCellContent(col.key, row)}
+                       </td>
+                    ))}
 
                     <td className="px-6 py-3 align-top">
                        <div className="flex items-center gap-3">
@@ -1038,7 +835,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                 ))}
                 {data.length === 0 && (
                 <tr>
-                    <td colSpan={headers.length} className="px-6 py-8 text-center text-gray-400">
+                    <td colSpan={visibleColumns.length + 1} className="px-6 py-8 text-center text-gray-400">
                     No records found.
                     </td>
                 </tr>
@@ -1079,78 +876,4 @@ const MasterData: React.FC<MasterDataProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Hidden File Input for Imports */}
-      <input 
-        type="file" 
-        accept=".csv,.txt" 
-        ref={fileInputRef} 
-        onChange={handleFileChange} 
-        className="hidden" 
-      />
-
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-        <div className="flex flex-wrap gap-2 bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
-          {(['sectors', 'divisions', 'machines', 'items', 'locations', 'users'] as const).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-md text-sm font-medium capitalize transition-all ${
-                activeTab === tab 
-                  ? 'bg-blue-100 text-blue-700 shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-        
-        <div className="flex gap-2">
-           <button
-             onClick={handleImportClick}
-             className="flex items-center px-4 py-2 bg-orange-100 text-orange-800 border border-orange-200 rounded-lg hover:bg-orange-200 shadow-sm transition"
-           >
-             <span className="mr-2 text-xl">📂</span>
-             Import Excel/CSV
-           </button>
-
-           <button
-             onClick={handleExportDataToExcel}
-             className="flex items-center px-4 py-2 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-200 shadow-sm transition"
-           >
-             <span className="mr-2 text-xl">📥</span>
-             Export Excel
-           </button>
-
-           <button
-               onClick={() => setShowSyncModal(true)}
-               className={`flex items-center px-4 py-2 bg-white border rounded-lg shadow-sm transition ${
-                 activeTab === 'items' 
-                   ? 'text-green-700 border-green-200 hover:bg-green-50' 
-                   : 'text-gray-700 border-gray-200 hover:bg-gray-50'
-               }`}
-           >
-             <span className="mr-2">
-               {activeTab === 'items' ? '📊' : '⚙️'}
-             </span> 
-             {activeTab === 'items' ? 'Sync Items' : 'Cloud Config'}
-           </button>
-
-           <button
-             onClick={handleAddNew}
-             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition"
-           >
-             <span className="mr-2 text-xl">+</span> Add {activeTab.slice(0, -1)}
-           </button>
-        </div>
-      </div>
-
-      {renderTable()}
-      {renderForm()}
-      {renderSyncModal()}
-    </div>
-  );
-};
-
-export default MasterData;
+    
