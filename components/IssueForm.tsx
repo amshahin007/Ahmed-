@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { IssueRecord, Item, Location, Machine, Sector, Division, User } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
 import { sendIssueToSheet } from '../services/googleSheetsService';
@@ -53,6 +53,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const [lastSubmittedBatch, setLastSubmittedBatch] = useState<IssueRecord[] | null>(null);
   const [emailStatus, setEmailStatus] = useState<string>('');
 
+  // --- Refs for Scanner Navigation ---
+  const itemInputRef = useRef<HTMLInputElement>(null);
+  const qtyInputRef = useRef<HTMLInputElement>(null);
+
   // Auto-lookup Item Name for current input (Maintains the string for Line Item creation)
   useEffect(() => {
     const item = items.find(i => i.id === currentItemId);
@@ -81,6 +85,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
     } else {
       setRequesterEmail('');
     }
+    // When location changes, focus item input if it's not the first load
+    if (locationId) {
+        setTimeout(() => itemInputRef.current?.focus(), 100);
+    }
   }, [locationId, locations]);
 
 
@@ -95,10 +103,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
     setLineItems([...lineItems, newItem]);
     
-    // Reset item input fields
+    // Reset item input fields and focus back to item for next scan
     setCurrentItemId('');
     setCurrentItemName('');
     setCurrentQuantity('');
+    setTimeout(() => itemInputRef.current?.focus(), 50);
   };
 
   const handleRemoveLineItem = (index: number) => {
@@ -165,7 +174,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // 1. Trigger AI Email Generation (Simulation of sending)
-    // Note: This is client-side simulation + Gemini call
     const emailData = await generateIssueEmail(newRecords);
     console.log(`[System] Email sent to ${warehouseEmail} with subject: ${emailData.subject}`);
     
@@ -182,16 +190,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
     setLastSubmittedBatch(newRecords);
     setEmailStatus(`Sent to: ${warehouseEmail}`);
     
-    // 4. Reset Form logic
-    setLocationId('');
-    setSectorId('');
-    setDivisionId('');
+    // 4. Reset Form logic (Keep Location as it might be same)
+    // setLocationId(''); 
     setMachineId('');
-    setFilterMainGroup('');
-    setFilterSubGroup('');
-    setFilterCategory('');
-    setFilterBrand('');
-    setFilterModel('');
     setLineItems([]);
     
     setIsSubmitting(false);
@@ -232,6 +233,29 @@ const IssueForm: React.FC<IssueFormProps> = ({
     link.click();
     document.body.removeChild(link);
   };
+
+  // --- Scanner Handlers ---
+  const handleItemKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+        // Prevent form submit
+        e.preventDefault();
+        // If an item is selected (handled by SearchableSelect Enter logic), move focus
+        // We use a timeout to let state update
+        setTimeout(() => {
+            if (currentItemId) {
+                qtyInputRef.current?.focus();
+            }
+        }, 100);
+    }
+  };
+
+  const handleQtyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        handleAddLineItem();
+    }
+  };
+
 
   // --- Filtering & Logic ---
 
@@ -325,7 +349,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
   };
 
   // --- Calculate Options ---
-  // The logic here is to show options that are VALID given the upstream selection.
   
   const mainGroupOptions = useMemo(() => {
     const groups = new Set<string>();
@@ -390,20 +413,14 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
   // --- Permission Logic for Locations ---
   const allowedLocations = useMemo(() => {
-    // Admin sees all
     if (currentUser.role === 'admin') return locations;
-    
-    // If user has specific allowed locations, filter the list
     if (currentUser.allowedLocationIds && currentUser.allowedLocationIds.length > 0) {
       return locations.filter(loc => currentUser.allowedLocationIds!.includes(loc.id));
     }
-
-    // Default: If no restrictions set, allow all
     return locations;
   }, [locations, currentUser]);
 
 
-  // --- Options Generation ---
   const locationOptions: Option[] = allowedLocations.map(l => ({ id: l.id, label: l.name }));
   const sectorOptions: Option[] = sectors.map(s => ({ id: s.id, label: s.name }));
   const divisionOptions: Option[] = availableDivisions.map(d => ({ id: d.id, label: d.name }));
@@ -413,14 +430,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
     return { id: m.id, label: m.name, subLabel: sub };
   });
   
-  // Option 1: Search by ID (Label = ID, SubLabel = Name)
   const itemOptions: Option[] = items.map(i => ({ id: i.id, label: i.id, subLabel: i.name }));
-  
-  // Option 2: Search by Name (Label = Name, SubLabel = ID + optional PartNo/OEM info)
   const itemNameOptions: Option[] = items.map(i => {
     let sub = i.id;
     if (i.partNumber) sub += ` | PN: ${i.partNumber}`;
-    if (i.oem) sub += ` | OEM: ${i.oem}`;
     return { id: i.id, label: i.name, subLabel: sub };
   });
 
@@ -431,8 +444,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
       {lastSubmittedBatch && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-fade-in-up">
-             
-             {/* Header */}
              <div className="bg-blue-600 p-6 text-white text-center">
                <div className="mx-auto w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-4">
                  <span className="text-3xl">📧</span>
@@ -441,7 +452,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
                <p className="opacity-90 mt-1">Notification sent to {lastSubmittedBatch[0].warehouseEmail}</p>
              </div>
              
-             {/* Actions Body */}
              <div className="p-8 space-y-4">
                 <div className="text-center text-sm bg-gray-50 p-3 rounded-lg border border-gray-100 mb-6">
                    <p className="font-medium text-gray-700">Request IDs generated:</p>
@@ -457,7 +467,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 </button>
              </div>
 
-             {/* Footer */}
              <div className="bg-gray-50 p-4 border-t border-gray-100 text-center">
                 <button onClick={() => setLastSubmittedBatch(null)} className="text-gray-500 hover:text-gray-800 font-medium px-6 py-2">
                    Start New Request
@@ -465,7 +474,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
              </div>
           </div>
           
-          {/* PRINT VIEW (Hidden on screen, Visible on Print) */}
           <div className="hidden print:block fixed inset-0 bg-white z-[100] p-10 h-screen w-screen overflow-auto">
             <div className="flex justify-between items-end border-b-2 border-black pb-4 mb-8">
                <h1 className="text-3xl font-bold uppercase tracking-widest">Material Request</h1>
@@ -478,23 +486,16 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 <div>
                    <p><span className="font-bold">Date:</span> {new Date(lastSubmittedBatch[0].timestamp).toLocaleString()}</p>
                    <p><span className="font-bold">Location:</span> {lastSubmittedBatch[0].locationId}</p>
-                   <p><span className="font-bold">Sent To:</span> {lastSubmittedBatch[0].warehouseEmail}</p>
-                   {lastSubmittedBatch[0].sectorName && <p><span className="font-bold">Sector:</span> {lastSubmittedBatch[0].sectorName}</p>}
                 </div>
                 <div>
                    <p><span className="font-bold">Machine:</span> {lastSubmittedBatch[0].machineName}</p>
-                   {lastSubmittedBatch[0].divisionName && <p><span className="font-bold">Division:</span> {lastSubmittedBatch[0].divisionName}</p>}
                    <p><span className="font-bold">Machine ID:</span> {lastSubmittedBatch[0].machineId}</p>
-                   {lastSubmittedBatch[0].requesterEmail && (
-                       <p><span className="font-bold">Site Email:</span> {lastSubmittedBatch[0].requesterEmail}</p>
-                   )}
                 </div>
             </div>
 
             <table className="w-full text-left border-collapse border border-black mb-8">
                 <thead>
                     <tr className="bg-gray-100">
-                         <th className="border border-black p-2">Request ID</th>
                          <th className="border border-black p-2">Item Number</th>
                          <th className="border border-black p-2">Item Name</th>
                          <th className="border border-black p-2 text-right">Qty</th>
@@ -503,7 +504,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 <tbody>
                     {lastSubmittedBatch.map(item => (
                         <tr key={item.id}>
-                            <td className="border border-black p-2">{item.id}</td>
                             <td className="border border-black p-2">{item.itemId}</td>
                             <td className="border border-black p-2">{item.itemName}</td>
                             <td className="border border-black p-2 text-right font-bold">{item.quantity}</td>
@@ -511,15 +511,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
                     ))}
                 </tbody>
             </table>
-            
-            <div className="flex justify-between px-10 mt-20">
-                <div className="text-center">
-                    <div className="border-t border-black w-64 pt-2">Requester Signature</div>
-                </div>
-                <div className="text-center">
-                    <div className="border-t border-black w-64 pt-2">Store Keeper Approval</div>
-                </div>
-            </div>
           </div>
         </div>
       )}
@@ -533,89 +524,64 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8">
           
-          {/* Section 1: HEADER */}
-          <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200">
-             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">1. Location & Machine</h3>
-             
-             {/* Main Location Select */}
-             <div className="mb-4">
+          {/* Section 1: HEADER (LOCATION ONLY) */}
+          <div className="bg-blue-50 p-4 md:p-5 rounded-lg border border-blue-100">
+             <div className="mb-2">
                  <SearchableSelect 
-                  label="Warehouse Location" 
+                  label="1. Select Warehouse Location" 
                   required 
                   options={locationOptions} 
                   value={locationId} 
                   onChange={setLocationId} 
-                  placeholder={allowedLocations.length === 0 ? "No access to locations" : "Search warehouse zone..."}
+                  placeholder={allowedLocations.length === 0 ? "No access to locations" : "Start typing to search zone..."}
                   disabled={allowedLocations.length === 0}
                 />
              </div>
-
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                
-                {/* Org Filters */}
-                <div className="bg-white p-3 rounded border border-gray-200 shadow-sm">
-                   <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Organizational Filter</h4>
-                   <div className="space-y-3">
-                      <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." />
-                      <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
-                   </div>
-                </div>
-
-                {/* Tech Filters (New) */}
-                <div className="bg-white p-3 rounded border border-gray-200 shadow-sm">
-                   <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Technical Filter</h4>
-                   <div className="space-y-3">
-                      <SearchableSelect label="Main Group" options={mainGroupOptions} value={filterMainGroup} onChange={handleMainGroupChange} placeholder="Filter by Group..." />
-                      <SearchableSelect label="Sub Group" disabled={!filterMainGroup && !filterSubGroup} options={subGroupOptions} value={filterSubGroup} onChange={handleSubGroupChange} placeholder="Filter by Sub Group..." />
-                      <SearchableSelect label="Category" disabled={!filterSubGroup && !filterCategory} options={categoryOptions} value={filterCategory} onChange={handleCategoryChange} placeholder="Filter by Category..." />
-                      <SearchableSelect label="Brand / Manufacturer" options={brandOptions} value={filterBrand} onChange={handleBrandChange} placeholder="Filter by Brand..." />
-                      <SearchableSelect label="Model" options={modelOptions} value={filterModel} onChange={handleModelChange} placeholder="Filter by Model..." />
-                   </div>
-                </div>
-                
-                {/* Machine Select - Spans full width on mobile, col-span-2 on desktop */}
-                <div className="md:col-span-2">
-                    <SearchableSelect 
-                       label="Machine Selection" 
-                       required 
-                       options={machineOptions} 
-                       value={machineId} 
-                       onChange={handleMachineChange} 
-                       placeholder={availableMachines.length === 0 ? "No machines found match filters" : "Select Specific Equipment / Machine..."} 
-                    />
-                    <p className="text-xs text-gray-400 mt-1">
-                       {availableMachines.length} machines available based on current filters.
-                    </p>
-                </div>
-             </div>
-
              {allowedLocations.length === 0 && (
-               <p className="text-xs text-red-500 mt-2">You do not have permission to create issues for any locations. Please contact your administrator.</p>
+               <p className="text-xs text-red-500">You do not have permission to create issues for any locations.</p>
              )}
           </div>
 
-          {/* Section 2: LINES */}
-          <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200">
-            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">2. Add Items</h3>
+          {/* Section 2: LINES (Primary Action) */}
+          <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200 shadow-sm relative">
+            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4 border-b pb-2 flex justify-between items-center">
+                <span>2. Scan / Enter Items</span>
+                <span className="text-xs font-normal text-gray-500 normal-case bg-white px-2 py-1 rounded border">Press 'Enter' to Add</span>
+            </h3>
             
             <div className="flex flex-col md:flex-row gap-4 items-end mb-4">
-               <div className="flex-1 w-full">
-                 {/* Option 1: Search by ID */}
-                 <SearchableSelect label="Item Number" options={itemOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Scan or select Item No..." />
+               <div className="flex-[2] w-full">
+                 <SearchableSelect 
+                    label="Item Number (Scan Here)" 
+                    options={itemOptions} 
+                    value={currentItemId} 
+                    onChange={setCurrentItemId} 
+                    placeholder="Scan or type Item No..." 
+                    inputRef={itemInputRef}
+                    onKeyDown={handleItemKeyDown}
+                 />
                </div>
-               <div className="flex-1 w-full">
-                 {/* Option 2: Search by Name - Binds to the SAME ID state to sync */}
+               <div className="flex-[2] w-full">
+                 {/* Read-only name display or Alternative Search */}
                  <SearchableSelect 
                     label="Item Name" 
                     options={itemNameOptions} 
                     value={currentItemId} 
                     onChange={setCurrentItemId} 
-                    placeholder="Search Item Name..." 
+                    placeholder="Search by name..." 
                  />
                </div>
-               <div className="w-full md:w-32">
+               <div className="w-full md:w-24">
                  <label className="block text-sm font-medium text-gray-700 mb-1">Qty</label>
-                 <input type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(Number(e.target.value))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                 <input 
+                    ref={qtyInputRef}
+                    type="number" 
+                    min="1" 
+                    value={currentQuantity} 
+                    onChange={(e) => setCurrentQuantity(Number(e.target.value))} 
+                    onKeyDown={handleQtyKeyDown}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold text-center" 
+                 />
                </div>
                <button 
                  type="button" 
@@ -642,9 +608,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         <tbody className="divide-y divide-gray-100">
                             {lineItems.map((line, idx) => (
                                 <tr key={idx} className="hover:bg-gray-50">
-                                    <td className="px-4 py-2 font-mono text-gray-600">{line.itemId}</td>
+                                    <td className="px-4 py-2 font-mono text-gray-600 font-bold">{line.itemId}</td>
                                     <td className="px-4 py-2">{line.itemName}</td>
-                                    <td className="px-4 py-2 text-center font-bold">{line.quantity}</td>
+                                    <td className="px-4 py-2 text-center font-bold text-lg">{line.quantity}</td>
                                     <td className="px-4 py-2 text-center">
                                         <button type="button" onClick={() => handleRemoveLineItem(idx)} className="text-red-500 hover:text-red-700 font-medium">Remove</button>
                                     </td>
@@ -654,15 +620,52 @@ const IssueForm: React.FC<IssueFormProps> = ({
                     </table>
                 </div>
             ) : (
-                <div className="text-center py-6 text-gray-400 border-2 border-dashed border-gray-300 rounded-lg">
-                    No items added yet. Search and add items above.
+                <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                    <div className="text-2xl mb-2">📦</div>
+                    List is empty. Scan an item to begin.
                 </div>
             )}
           </div>
 
-          {/* Section 3: Notification Details */}
-          <div className="bg-blue-50 p-4 md:p-5 rounded-lg border border-blue-100">
-             <h3 className="text-sm font-bold text-blue-800 uppercase tracking-wider mb-4 border-b border-blue-200 pb-2">3. Notification Details</h3>
+          {/* Section 3: Machine Allocation */}
+          <div className="bg-white p-4 md:p-5 rounded-lg border border-gray-200">
+             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">3. Allocation Details (Machine)</h3>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                
+                {/* Org Filters */}
+                <div className="space-y-3">
+                   <h4 className="text-xs font-bold text-gray-400 uppercase">Organizational Filter</h4>
+                   <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." />
+                   <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
+                </div>
+
+                {/* Tech Filters */}
+                <div className="space-y-3">
+                   <h4 className="text-xs font-bold text-gray-400 uppercase">Technical Filter</h4>
+                   <SearchableSelect label="Main Group" options={mainGroupOptions} value={filterMainGroup} onChange={handleMainGroupChange} placeholder="Filter by Group..." />
+                   <div className="grid grid-cols-2 gap-2">
+                     <SearchableSelect label="Category" disabled={!filterMainGroup} options={categoryOptions} value={filterCategory} onChange={handleCategoryChange} placeholder="Cat..." />
+                     <SearchableSelect label="Brand" options={brandOptions} value={filterBrand} onChange={handleBrandChange} placeholder="Brand..." />
+                   </div>
+                </div>
+                
+                {/* Machine Select */}
+                <div className="md:col-span-2">
+                    <SearchableSelect 
+                       label="Machine Selection" 
+                       required 
+                       options={machineOptions} 
+                       value={machineId} 
+                       onChange={handleMachineChange} 
+                       placeholder={availableMachines.length === 0 ? "No machines found match filters" : "Select Specific Equipment / Machine..."} 
+                    />
+                </div>
+             </div>
+          </div>
+
+          {/* Section 4: Notification Details */}
+          <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200 opacity-80 hover:opacity-100 transition">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse Email (To)</label>
@@ -676,12 +679,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
                  </div>
                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Site/Requester Email (CC)</label>
-                    <div className="flex items-center px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 overflow-hidden text-ellipsis">
-                       {requesterEmail ? (
-                          <span className="font-medium text-gray-800 truncate">{requesterEmail}</span>
-                       ) : (
-                          <span className="text-gray-400 italic">Select Location</span>
-                       )}
+                    <div className="flex items-center px-4 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 overflow-hidden text-ellipsis">
+                       {requesterEmail || "Select Location first"}
                     </div>
                  </div>
              </div>

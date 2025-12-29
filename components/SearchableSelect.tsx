@@ -14,10 +14,12 @@ interface SearchableSelectProps {
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
+  inputRef?: React.RefObject<HTMLInputElement>;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
 const SearchableSelect: React.FC<SearchableSelectProps> = ({ 
-  label, options, value, onChange, placeholder, required, disabled 
+  label, options, value, onChange, placeholder, required, disabled, inputRef, onKeyDown 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,8 +40,6 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     function handleClickOutside(event: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         setIsOpen(false);
-        // If the current search term doesn't match a valid option label exactly, reset it to the selected value's label
-        // or clear it if nothing is selected (enforcing selection from list)
         const selectedOption = options.find(o => o.id === value);
          if (selectedOption) {
            setSearchTerm(selectedOption.label);
@@ -63,6 +63,25 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     setIsOpen(false);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && isOpen) {
+       // Auto-select logic for scanners
+       const exactMatch = filteredOptions.find(o => o.label.toLowerCase() === searchTerm.toLowerCase());
+       if (exactMatch) {
+          handleSelect(exactMatch);
+          // Allow event to propagate to parent so they can switch focus
+       } else if (filteredOptions.length === 1) {
+          handleSelect(filteredOptions[0]);
+       } else if (filteredOptions.length > 0) {
+          // Optional: Select first item if nothing matches exactly? 
+          // For safety, let's only do exact or single match, or strict prefix
+          handleSelect(filteredOptions[0]);
+       }
+    }
+    
+    if (onKeyDown) onKeyDown(e);
+  };
+
   return (
     <div className="relative" ref={wrapperRef}>
       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -70,6 +89,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
       </label>
       <div className="relative">
         <input
+          ref={inputRef}
           type="text"
           disabled={disabled}
           className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
@@ -81,6 +101,8 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
             if (value) onChange(''); // Clear value while typing new search
           }}
           onFocus={() => !disabled && setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          autoComplete="off"
         />
         {/* Chevron icon */}
         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
