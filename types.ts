@@ -10,6 +10,7 @@ export interface Item {
   thirdId?: string;        // "3rd Item Number"
   description2?: string;   // "Description Line 2"
   fullName?: string;       // "Full Name"
+  brand?: string;          // "Brand"
   oem?: string;            // "OEM"
   partNumber?: string;     // "Part No"
 }
@@ -30,6 +31,11 @@ export interface Machine {
   name: string;
   model: string;
   divisionId?: string; // Optional for backward compatibility, but used for filtering
+  
+  // New Classification Fields
+  mainGroup?: string;
+  subGroup?: string;
+  brand?: string;
 }
 
 export interface Location {

@@ -29,6 +29,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const [divisionId, setDivisionId] = useState('');
   const [machineId, setMachineId] = useState('');
 
+  // --- Machine Filters ---
+  const [filterMainGroup, setFilterMainGroup] = useState('');
+  const [filterSubGroup, setFilterSubGroup] = useState('');
+  const [filterBrand, setFilterBrand] = useState('');
+
   // --- Email/Notification State ---
   const [warehouseEmail, setWarehouseEmail] = useState('warehouse@company.com');
   const [requesterEmail, setRequesterEmail] = useState('');
@@ -65,6 +70,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
   useEffect(() => {
     setMachineId('');
   }, [divisionId]);
+
+  // Reset downstream Machine filters when upstream changes
+  useEffect(() => { setFilterSubGroup(''); setFilterBrand(''); setMachineId(''); }, [filterMainGroup]);
+  useEffect(() => { setFilterBrand(''); setMachineId(''); }, [filterSubGroup]);
+  useEffect(() => { setMachineId(''); }, [filterBrand]);
 
   // Auto-fill Requester (Site) Email based on Location
   useEffect(() => {
@@ -180,6 +190,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
     setSectorId('');
     setDivisionId('');
     setMachineId('');
+    setFilterMainGroup('');
+    setFilterSubGroup('');
+    setFilterBrand('');
     setLineItems([]);
     
     setIsSubmitting(false);
@@ -223,7 +236,45 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
   // --- Filtering Logic for Cascade ---
   const availableDivisions = sectorId ? divisions.filter(d => d.sectorId === sectorId) : [];
-  const availableMachines = divisionId ? machines.filter(m => m.divisionId === divisionId) : [];
+  
+  // Calculate Filter Options derived from ALL machines (or filtered subset)
+  const mainGroupOptions = useMemo(() => {
+    const groups = new Set<string>();
+    machines.forEach(m => { if(m.mainGroup) groups.add(m.mainGroup) });
+    return Array.from(groups).map(g => ({ id: g, label: g }));
+  }, [machines]);
+
+  const subGroupOptions = useMemo(() => {
+    const subs = new Set<string>();
+    machines.forEach(m => {
+       if (filterMainGroup && m.mainGroup !== filterMainGroup) return; // Filter by parent
+       if (m.subGroup) subs.add(m.subGroup);
+    });
+    return Array.from(subs).map(g => ({ id: g, label: g }));
+  }, [machines, filterMainGroup]);
+
+  const brandOptions = useMemo(() => {
+    const brands = new Set<string>();
+    machines.forEach(m => {
+       if (filterMainGroup && m.mainGroup !== filterMainGroup) return;
+       if (filterSubGroup && m.subGroup !== filterSubGroup) return;
+       if (m.brand) brands.add(m.brand);
+    });
+    return Array.from(brands).map(b => ({ id: b, label: b }));
+  }, [machines, filterMainGroup, filterSubGroup]);
+
+  // Final Machine List logic
+  const availableMachines = machines.filter(m => {
+    // 1. Division Logic (Existing)
+    if (divisionId && m.divisionId !== divisionId) return false;
+    
+    // 2. New Classification Filters
+    if (filterMainGroup && m.mainGroup !== filterMainGroup) return false;
+    if (filterSubGroup && m.subGroup !== filterSubGroup) return false;
+    if (filterBrand && m.brand !== filterBrand) return false;
+
+    return true;
+  });
 
   // --- Permission Logic for Locations ---
   const allowedLocations = useMemo(() => {
@@ -244,7 +295,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const locationOptions: Option[] = allowedLocations.map(l => ({ id: l.id, label: l.name }));
   const sectorOptions: Option[] = sectors.map(s => ({ id: s.id, label: s.name }));
   const divisionOptions: Option[] = availableDivisions.map(d => ({ id: d.id, label: d.name }));
-  const machineOptions: Option[] = availableMachines.map(m => ({ id: m.id, label: m.name, subLabel: `${m.model} (${m.id})` }));
+  const machineOptions: Option[] = availableMachines.map(m => {
+    let sub = `${m.model} (${m.id})`;
+    if (m.brand) sub += ` - ${m.brand}`;
+    return { id: m.id, label: m.name, subLabel: sub };
+  });
   
   // Option 1: Search by ID (Label = ID, SubLabel = Name)
   const itemOptions: Option[] = items.map(i => ({ id: i.id, label: i.id, subLabel: i.name }));
@@ -370,8 +425,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
           <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200">
              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">1. Location & Machine</h3>
              
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <SearchableSelect 
+             {/* Main Location Select */}
+             <div className="mb-4">
+                 <SearchableSelect 
                   label="Warehouse Location" 
                   required 
                   options={locationOptions} 
@@ -380,13 +436,45 @@ const IssueForm: React.FC<IssueFormProps> = ({
                   placeholder={allowedLocations.length === 0 ? "No access to locations" : "Search warehouse zone..."}
                   disabled={allowedLocations.length === 0}
                 />
-                
-                <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." />
-                
-                <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
-                
-                <SearchableSelect label="Machine" required disabled={!divisionId} options={machineOptions} value={machineId} onChange={setMachineId} placeholder="Select Machine..." />
              </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                
+                {/* Org Filters */}
+                <div className="bg-white p-3 rounded border border-gray-200 shadow-sm">
+                   <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Organizational Filter</h4>
+                   <div className="space-y-3">
+                      <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." />
+                      <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
+                   </div>
+                </div>
+
+                {/* Tech Filters (New) */}
+                <div className="bg-white p-3 rounded border border-gray-200 shadow-sm">
+                   <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Technical Filter</h4>
+                   <div className="space-y-3">
+                      <SearchableSelect label="Main Group" options={mainGroupOptions} value={filterMainGroup} onChange={setFilterMainGroup} placeholder="Filter by Group..." />
+                      <SearchableSelect label="Sub Group" disabled={!filterMainGroup} options={subGroupOptions} value={filterSubGroup} onChange={setFilterSubGroup} placeholder="Filter by Sub Group..." />
+                      <SearchableSelect label="Brand" options={brandOptions} value={filterBrand} onChange={setFilterBrand} placeholder="Filter by Brand..." />
+                   </div>
+                </div>
+                
+                {/* Machine Select - Spans full width on mobile, col-span-2 on desktop */}
+                <div className="md:col-span-2">
+                    <SearchableSelect 
+                       label="Machine Selection" 
+                       required 
+                       options={machineOptions} 
+                       value={machineId} 
+                       onChange={setMachineId} 
+                       placeholder={availableMachines.length === 0 ? "No machines found match filters" : "Select Specific Equipment / Machine..."} 
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                       {availableMachines.length} machines available based on current filters.
+                    </p>
+                </div>
+             </div>
+
              {allowedLocations.length === 0 && (
                <p className="text-xs text-red-500 mt-2">You do not have permission to create issues for any locations. Please contact your administrator.</p>
              )}

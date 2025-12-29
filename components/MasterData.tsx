@@ -181,6 +181,7 @@ const MasterData: React.FC<MasterDataProps> = ({
         thirdId: formData.thirdId,
         description2: formData.description2,
         fullName: formData.fullName,
+        brand: formData.brand,
         oem: formData.oem,
         partNumber: formData.partNumber,
       };
@@ -191,7 +192,10 @@ const MasterData: React.FC<MasterDataProps> = ({
         id: formData.id || `M-${timestamp}`,
         name: formData.name,
         model: formData.model,
-        divisionId: formData.divisionId
+        divisionId: formData.divisionId,
+        mainGroup: formData.mainGroup,
+        subGroup: formData.subGroup,
+        brand: formData.brand
       };
       isEditing ? onUpdateMachine(payload) : onAddMachine(payload);
 
@@ -437,6 +441,14 @@ const MasterData: React.FC<MasterDataProps> = ({
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700">Brand</label>
+                  <input 
+                    className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                    value={formData.brand || ''}
+                    onChange={e => setFormData({...formData, brand: e.target.value})}
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700">OEM</label>
                   <input 
                     className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
@@ -473,6 +485,35 @@ const MasterData: React.FC<MasterDataProps> = ({
                     value={formData.model || ''}
                     onChange={e => setFormData({...formData, model: e.target.value})}
                   />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                   <div>
+                      <label className="block text-sm font-medium text-gray-700">Main Group</label>
+                      <input 
+                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={formData.mainGroup || ''}
+                        onChange={e => setFormData({...formData, mainGroup: e.target.value})}
+                        placeholder="e.g. Generators"
+                      />
+                   </div>
+                   <div>
+                      <label className="block text-sm font-medium text-gray-700">Sub Group</label>
+                      <input 
+                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={formData.subGroup || ''}
+                        onChange={e => setFormData({...formData, subGroup: e.target.value})}
+                        placeholder="e.g. Diesel"
+                      />
+                   </div>
+                   <div>
+                      <label className="block text-sm font-medium text-gray-700">Brand</label>
+                      <input 
+                        className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={formData.brand || ''}
+                        onChange={e => setFormData({...formData, brand: e.target.value})}
+                        placeholder="e.g. Caterpillar"
+                      />
+                   </div>
                 </div>
                 <div className="mt-2">
                   <SearchableSelect
@@ -607,11 +648,11 @@ const MasterData: React.FC<MasterDataProps> = ({
     switch (activeTab) {
       case 'items':
         // Updated columns based on user request
-        headers = ['Item Number', '3rd Item No', 'Description', 'Desc Line 2', 'Full Name', 'OEM', 'Part No', 'UM', 'Actions'];
+        headers = ['Item Number', '3rd Item No', 'Description', 'Desc Line 2', 'Full Name', 'Brand', 'OEM', 'Part No', 'UM', 'Actions'];
         data = items;
         break;
       case 'machines':
-        headers = ['ID', 'Name', 'Model', 'Division', 'Actions'];
+        headers = ['ID', 'Name', 'Model', 'Main Group', 'Sub Group', 'Brand', 'Division', 'Actions'];
         data = machines;
         break;
       case 'locations':
@@ -659,6 +700,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                         <td className="px-6 py-3 text-gray-800 align-top">{row.name}</td>
                         <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.description2 || '-'}</td>
                         <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.fullName || '-'}</td>
+                        <td className="px-6 py-3 text-gray-500 align-top">{row.brand || '-'}</td>
                         <td className="px-6 py-3 text-gray-500 align-top">{row.oem || '-'}</td>
                         <td className="px-6 py-3 text-gray-500 font-mono text-xs align-top">{row.partNumber || '-'}</td>
                         <td className="px-6 py-3 text-gray-500 align-top">{row.unit}</td>
@@ -672,6 +714,9 @@ const MasterData: React.FC<MasterDataProps> = ({
                     {activeTab === 'machines' && (
                     <>
                         <td className="px-6 py-3 text-gray-500 align-top">{row.model}</td>
+                         <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.mainGroup || '-'}</td>
+                         <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.subGroup || '-'}</td>
+                         <td className="px-6 py-3 text-gray-500 align-top text-xs">{row.brand || '-'}</td>
                         <td className="px-6 py-3 text-gray-500 align-top">
                         {divisions.find(d => d.id === row.divisionId)?.name || '-'}
                         </td>
