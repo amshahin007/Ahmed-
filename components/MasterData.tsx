@@ -62,6 +62,7 @@ const COLUMNS_CONFIG: Record<TabType, { key: string, label: string }[]> = {
   ],
   machines: [
     { key: 'id', label: 'ID' },
+    { key: 'machineLocalNo', label: 'Machine Local No' },
     { key: 'name', label: 'Name' },
     { key: 'model', label: 'Model Name' },
     { key: 'modelNo', label: 'Model No (طراز)' },
@@ -345,9 +346,9 @@ const MasterData: React.FC<MasterDataProps> = ({
         ]);
         break;
       case 'machines':
-        headers = ['ID', 'Name', 'Model Name', 'Model No', 'Main Group', 'Sub Group', 'إسم المعدة', 'Brand', 'Division ID'];
+        headers = ['ID', 'Machine Local No', 'Name', 'Model Name', 'Model No', 'Main Group', 'Sub Group', 'إسم المعدة', 'Brand', 'Division ID'];
         rows = machines.map(m => [
-            m.id, m.name, m.model, m.modelNo,
+            m.id, m.machineLocalNo || '', m.name, m.model, m.modelNo,
             m.mainGroup, m.subGroup, m.category, m.brand, m.divisionId
         ]);
         break;
@@ -484,6 +485,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     } else if (activeTab === 'machines') {
         fieldMap = {
             id: ['id', 'machine id', 'code'],
+            machineLocalNo: ['local no', 'local number', 'local id', 'machine local no', 'asset no'],
             name: ['name', 'machine name', 'machine'],
             model: ['model', 'model name'],
             modelNo: ['model no', 'model number', 'طراز', 'type'],
@@ -657,6 +659,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     } else if (activeTab === 'machines') {
       const payload: Machine = {
         id: formData.id || `M-${timestamp}`,
+        machineLocalNo: formData.machineLocalNo,
         name: formData.name,
         model: formData.model,
         modelNo: formData.modelNo,
@@ -1192,6 +1195,10 @@ const MasterData: React.FC<MasterDataProps> = ({
             {/* MACHINES */}
             {activeTab === 'machines' && (
               <>
+                <div>
+                   <label className={labelClass}>Machine Local No</label>
+                   <input className={commonInputClass} value={formData.machineLocalNo || ''} onChange={e => setFormData({...formData, machineLocalNo: e.target.value})} />
+                </div>
                 <div>
                    <label className={labelClass}>Machine Name</label>
                    <input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />

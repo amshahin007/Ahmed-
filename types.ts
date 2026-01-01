@@ -28,6 +28,7 @@ export interface Division {
 
 export interface Machine {
   id: string;
+  machineLocalNo?: string; // New Field: Machine Local Number
   name: string;
   model: string;       // Used as Model Name or Legacy Model
   modelNo?: string;    // New Field: "Model No (طراز المعده)"
@@ -62,7 +63,7 @@ export interface IssueRecord {
   machineName: string;
   sectorName?: string;
   divisionName?: string;
-  maintenancePlan?: string; // New Field: The selected maintenance plan name
+  maintenancePlan?: string; // The selected maintenance plan name
   status: 'Pending' | 'Approved' | 'Completed' | 'Rejected';
   notes?: string; // For rejection reasons or approval comments
   warehouseEmail?: string;
