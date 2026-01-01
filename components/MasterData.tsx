@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
@@ -115,21 +114,23 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   // Column Management State
   const [columnSettings, setColumnSettings] = useState<Record<TabType, { key: string; label: string; visible: boolean }[]>>(() => {
+    // 1. Generate fresh defaults from config
+    const defaults: Record<string, any> = {};
+    (Object.keys(COLUMNS_CONFIG) as TabType[]).forEach(tab => {
+      defaults[tab] = COLUMNS_CONFIG[tab].map(c => ({ ...c, visible: true }));
+    });
+
     const saved = localStorage.getItem('wf_column_settings');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Basic validation to ensure keys exist
-        if (parsed.items && parsed.machines) return parsed;
+        // 2. Merge saved settings with defaults to ensure new tabs (like 'plans') are present
+        // { ...defaults, ...parsed } ensures that if 'plans' is missing in 'parsed', it is taken from 'defaults'.
+        return { ...defaults, ...parsed };
       } catch (e) {
         console.error("Failed to load column settings", e);
       }
     }
-    // Default Initialization
-    const defaults: any = {};
-    (Object.keys(COLUMNS_CONFIG) as TabType[]).forEach(tab => {
-      defaults[tab] = COLUMNS_CONFIG[tab].map(c => ({ ...c, visible: true }));
-    });
     return defaults;
   });
 
@@ -790,7 +791,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     const endIndex = startIndex + ITEMS_PER_PAGE;
     const paginatedData = data.slice(startIndex, endIndex);
 
-    const visibleColumns = columnSettings[activeTab].filter(c => c.visible);
+    const visibleColumns = (columnSettings[activeTab] || []).filter(c => c.visible);
 
     return (
       <div className="flex flex-col space-y-4 relative">
@@ -802,7 +803,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                  <button onClick={() => setShowColumnMenu(false)} className="text-gray-400 hover:text-gray-600">&times;</button>
               </div>
               <div className="space-y-2">
-                 {columnSettings[activeTab].map(col => (
+                 {(columnSettings[activeTab] || []).map(col => (
                     <label key={col.key} className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded select-none">
                        <input 
                          type="checkbox" 
