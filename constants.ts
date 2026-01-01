@@ -1,4 +1,5 @@
-import { Item, Machine, Location, IssueRecord, Sector, Division, User } from './types';
+
+import { Item, Machine, Location, IssueRecord, Sector, Division, User, MaintenancePlan } from './types';
 
 export const USERS: User[] = [
   { 
@@ -65,6 +66,16 @@ export const DIVISIONS: Division[] = [
   { id: 'DIV-004', name: 'Power Plant', sectorId: 'SEC-003' },
 ];
 
+export const MAINTENANCE_PLANS: MaintenancePlan[] = [
+  { id: 'MP-001', name: 'Periodic Maintenance (صيانة دورية)' },
+  { id: 'MP-002', name: 'Preventive Maintenance (صيانة وقائية)' },
+  { id: 'MP-003', name: 'Sudden Breakdown (صيانة اعطال فجائية)' },
+  { id: 'MP-004', name: 'Repair Maintenance (صيانة اصلاح)' },
+  { id: 'MP-005', name: 'Overhauls (عمرات)' },
+  { id: 'MP-006', name: 'Annual Maintenance (صيانة سنوية)' },
+  { id: 'MP-007', name: 'Investment Project (مشروع استثماري)' },
+];
+
 export const MACHINES: Machine[] = [
   { id: 'M-101', name: 'Conveyor Belt Alpha', model: 'CV-2000', divisionId: 'DIV-001' },
   { id: 'M-102', name: 'Robotic Arm Bravo', model: 'KUKA-KR6', divisionId: 'DIV-002' },
@@ -95,6 +106,7 @@ export const INITIAL_HISTORY: IssueRecord[] = [
     quantity: 4,
     machineId: 'M-101',
     machineName: 'Conveyor Belt Alpha',
+    maintenancePlan: 'Periodic Maintenance (صيانة دورية)',
     status: 'Completed'
   },
   {
@@ -106,6 +118,7 @@ export const INITIAL_HISTORY: IssueRecord[] = [
     quantity: 2,
     machineId: 'M-104',
     machineName: 'CNC Lathe Delta',
+    maintenancePlan: 'Preventive Maintenance (صيانة وقائية)',
     status: 'Approved'
   },
   {
@@ -117,6 +130,7 @@ export const INITIAL_HISTORY: IssueRecord[] = [
     quantity: 1,
     machineId: 'M-105',
     machineName: 'Hydraulic Press Echo',
+    maintenancePlan: 'Sudden Breakdown (صيانة اعطال فجائية)',
     status: 'Pending'
   },
 ];

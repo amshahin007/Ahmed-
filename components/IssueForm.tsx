@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { IssueRecord, Item, Location, Machine, Sector, Division, User } from '../types';
+import { IssueRecord, Item, Location, Machine, Sector, Division, User, MaintenancePlan } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
 import { sendIssueToSheet } from '../services/googleSheetsService';
 import SearchableSelect, { Option } from './SearchableSelect';
@@ -11,6 +12,7 @@ interface IssueFormProps {
   machines: Machine[];
   sectors: Sector[];
   divisions: Division[];
+  maintenancePlans: MaintenancePlan[];
   currentUser: User;
 }
 
@@ -21,13 +23,16 @@ interface LineItem {
 }
 
 const IssueForm: React.FC<IssueFormProps> = ({ 
-  onAddIssue, items, locations, machines, sectors, divisions, currentUser 
+  onAddIssue, items, locations, machines, sectors, divisions, maintenancePlans, currentUser 
 }) => {
   // --- Header State (Context) ---
   const [locationId, setLocationId] = useState('');
   const [sectorId, setSectorId] = useState('');
   const [divisionId, setDivisionId] = useState('');
   const [machineId, setMachineId] = useState('');
+  
+  // --- Maintenance Plan State ---
+  const [selectedPlanId, setSelectedPlanId] = useState('');
 
   // --- Machine Filters ---
   const [filterMainGroup, setFilterMainGroup] = useState('');
@@ -132,6 +137,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
         alert("Please add at least one item to the list before submitting.");
         return;
     }
+    if (!selectedPlanId) {
+        alert("Please check a 'Maintenance Plan' before submitting.");
+        return;
+    }
     if (!warehouseEmail) {
         alert("Please provide a Warehouse Email address.");
         return;
@@ -143,6 +152,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     const machine = machines.find(m => m.id === machineId);
     const sector = sectors.find(s => s.id === sectorId);
     const division = divisions.find(d => d.id === divisionId);
+    const plan = maintenancePlans.find(p => p.id === selectedPlanId);
 
     const timestamp = new Date().toISOString();
     const batchIdBase = Date.now().toString().slice(-6);
@@ -163,6 +173,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
         machineName: machine ? machine.name : 'Unknown Machine',
         sectorName: sector ? sector.name : '',
         divisionName: division ? division.name : '',
+        maintenancePlan: plan ? plan.name : '',
         status: 'Pending',
         warehouseEmail,
         requesterEmail
@@ -194,6 +205,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     // setLocationId(''); 
     setMachineId('');
     setLineItems([]);
+    setSelectedPlanId('');
     
     setIsSubmitting(false);
   };
@@ -205,7 +217,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const handleExportExcel = () => {
     if (!lastSubmittedBatch || lastSubmittedBatch.length === 0) return;
 
-    const headers = ["Request ID", "Date", "Location", "Sector", "Division", "Machine", "Item Number", "Item Name", "Quantity", "Warehouse Email", "Site Email"];
+    const headers = ["Request ID", "Date", "Location", "Sector", "Division", "Machine", "Maint. Plan", "Item Number", "Item Name", "Quantity", "Warehouse Email", "Site Email"];
     const rows = lastSubmittedBatch.map(item => [
         item.id,
         new Date(item.timestamp).toLocaleString(),
@@ -213,6 +225,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
         item.sectorName || '',
         item.divisionName || '',
         item.machineName,
+        item.maintenancePlan || '',
         item.itemId,
         item.itemName,
         item.quantity,
@@ -486,6 +499,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 <div>
                    <p><span className="font-bold">Date:</span> {new Date(lastSubmittedBatch[0].timestamp).toLocaleString()}</p>
                    <p><span className="font-bold">Location:</span> {lastSubmittedBatch[0].locationId}</p>
+                   <p><span className="font-bold">Maint. Plan:</span> {lastSubmittedBatch[0].maintenancePlan}</p>
                 </div>
                 <div>
                    <p><span className="font-bold">Machine:</span> {lastSubmittedBatch[0].machineName}</p>
@@ -663,8 +677,38 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 </div>
              </div>
           </div>
+          
+          {/* Section 4: Maintenance Plan Selection */}
+          <div className="bg-orange-50 p-4 md:p-5 rounded-lg border border-orange-200">
+             <h3 className="text-sm font-bold text-orange-800 uppercase tracking-wider mb-4 border-b border-orange-200 pb-2">4. Maintenance Plan (Mandatory)</h3>
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {maintenancePlans.map((plan) => (
+                    <label 
+                        key={plan.id} 
+                        className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                            selectedPlanId === plan.id 
+                                ? 'bg-orange-100 border-orange-500 ring-1 ring-orange-500' 
+                                : 'bg-white border-gray-200 hover:bg-gray-50'
+                        }`}
+                    >
+                        <input 
+                            type="radio" 
+                            name="maintenance_plan"
+                            value={plan.id}
+                            checked={selectedPlanId === plan.id}
+                            onChange={(e) => setSelectedPlanId(e.target.value)}
+                            className="form-radio h-5 w-5 text-orange-600 focus:ring-orange-500"
+                        />
+                        <span className={`text-sm font-medium ${selectedPlanId === plan.id ? 'text-orange-900' : 'text-gray-700'}`}>
+                            {plan.name}
+                        </span>
+                    </label>
+                ))}
+             </div>
+             {!selectedPlanId && <p className="text-xs text-red-500 mt-2">* You must select a maintenance plan.</p>}
+          </div>
 
-          {/* Section 4: Notification Details */}
+          {/* Section 5: Notification Details */}
           <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200 opacity-80 hover:opacity-100 transition">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                  <div>

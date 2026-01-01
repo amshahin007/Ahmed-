@@ -1,4 +1,5 @@
 
+
 import { Item, IssueRecord } from '../types';
 
 // Updated Default ID and GID based on user request
@@ -194,6 +195,7 @@ function doPost(e) {
         "Sector", 
         "Division", 
         "Machine", 
+        "Maint. Plan",
         "Item ID", 
         "Item Name", 
         "Quantity", 
@@ -215,6 +217,7 @@ function doPost(e) {
       data.sectorName || "",
       data.divisionName || "",
       data.machineName,
+      data.maintenancePlan || "",
       data.itemId,
       data.itemName,
       data.quantity,

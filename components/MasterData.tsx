@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { Item, Machine, Location, Sector, Division, User, IssueRecord } from '../types';
+import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
 import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet, parseCSVLine } from '../services/googleSheetsService';
 
@@ -10,6 +11,7 @@ interface MasterDataProps {
   locations: Location[];
   sectors: Sector[];
   divisions: Division[];
+  plans: MaintenancePlan[];
   users: User[];
   
   onAddItem: (item: Item) => void;
@@ -17,6 +19,7 @@ interface MasterDataProps {
   onAddLocation: (location: Location) => void;
   onAddSector: (sector: Sector) => void;
   onAddDivision: (division: Division) => void;
+  onAddPlan: (plan: MaintenancePlan) => void;
   onAddUser: (user: User) => void;
 
   onUpdateItem: (item: Item) => void;
@@ -24,12 +27,13 @@ interface MasterDataProps {
   onUpdateLocation: (location: Location) => void;
   onUpdateSector: (sector: Sector) => void;
   onUpdateDivision: (division: Division) => void;
+  onUpdatePlan: (plan: MaintenancePlan) => void;
   onUpdateUser: (user: User) => void;
 
   onDeleteItem: (itemId: string) => void;
 }
 
-type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions' | 'users';
+type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions' | 'users' | 'plans';
 
 const ITEMS_PER_PAGE = 80;
 
@@ -71,6 +75,10 @@ const COLUMNS_CONFIG: Record<TabType, { key: string, label: string }[]> = {
     { key: 'name', label: 'Name' },
     { key: 'sectorId', label: 'Parent Sector' }
   ],
+  plans: [
+    { key: 'id', label: 'ID' },
+    { key: 'name', label: 'Plan Name' }
+  ],
   users: [
     { key: 'username', label: 'Username' },
     { key: 'name', label: 'Name' },
@@ -81,9 +89,9 @@ const COLUMNS_CONFIG: Record<TabType, { key: string, label: string }[]> = {
 };
 
 const MasterData: React.FC<MasterDataProps> = ({ 
-  history, items, machines, locations, sectors, divisions, users,
-  onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision, onAddUser,
-  onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision, onUpdateUser,
+  history, items, machines, locations, sectors, divisions, plans, users,
+  onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision, onAddPlan, onAddUser,
+  onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision, onUpdatePlan, onUpdateUser,
   onDeleteItem
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('items');
@@ -286,6 +294,10 @@ const MasterData: React.FC<MasterDataProps> = ({
         headers = ['ID', 'Name', 'Sector ID'];
         rows = divisions.map(d => [d.id, d.name, d.sectorId].map(escapeCsv));
         break;
+      case 'plans':
+        headers = ['ID', 'Plan Name'];
+        rows = plans.map(p => [p.id, p.name].map(escapeCsv));
+        break;
       case 'users':
         headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations'];
         rows = users.map(u => [
@@ -392,6 +404,11 @@ const MasterData: React.FC<MasterDataProps> = ({
             name: ['Name'],
             sectorId: ['Sector ID', 'Sector']
         };
+    } else if (activeTab === 'plans') {
+        fieldMap = {
+            id: ['ID'],
+            name: ['Name', 'Plan Name']
+        };
     } else if (activeTab === 'users') {
         fieldMap = {
             username: ['Username', 'User'],
@@ -442,7 +459,8 @@ const MasterData: React.FC<MasterDataProps> = ({
                      activeTab === 'machines' ? machines :
                      activeTab === 'locations' ? locations :
                      activeTab === 'sectors' ? sectors :
-                     activeTab === 'divisions' ? divisions : users;
+                     activeTab === 'divisions' ? divisions :
+                     activeTab === 'plans' ? plans : users;
         
         // @ts-ignore - dynamic access
         const exists = list.find((item: any) => item[idKey] === idVal);
@@ -455,6 +473,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             else if (activeTab === 'locations') onUpdateLocation(merged);
             else if (activeTab === 'sectors') onUpdateSector(merged);
             else if (activeTab === 'divisions') onUpdateDivision(merged);
+            else if (activeTab === 'plans') onUpdatePlan(merged);
             else if (activeTab === 'users') onUpdateUser(merged);
             updated++;
         } else {
@@ -464,6 +483,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             else if (activeTab === 'locations') onAddLocation(payload);
             else if (activeTab === 'sectors') onAddSector(payload);
             else if (activeTab === 'divisions') onAddDivision(payload);
+            else if (activeTab === 'plans') onAddPlan(payload);
             else if (activeTab === 'users') onAddUser(payload);
             added++;
         }
@@ -549,6 +569,13 @@ const MasterData: React.FC<MasterDataProps> = ({
         sectorId: formData.sectorId
       };
       isEditing ? onUpdateDivision(payload) : onAddDivision(payload);
+
+    } else if (activeTab === 'plans') {
+        const payload: MaintenancePlan = {
+            id: formData.id || `MP-${timestamp}`,
+            name: formData.name
+        };
+        isEditing ? onUpdatePlan(payload) : onAddPlan(payload);
 
     } else if (activeTab === 'users') {
       const payload: User = {
@@ -753,6 +780,7 @@ const MasterData: React.FC<MasterDataProps> = ({
       case 'locations': data = locations; break;
       case 'sectors': data = sectors; break;
       case 'divisions': data = divisions; break;
+      case 'plans': data = plans; break;
       case 'users': data = users; break;
     }
 
@@ -1066,6 +1094,16 @@ const MasterData: React.FC<MasterDataProps> = ({
               </>
             )}
 
+            {/* PLANS */}
+            {activeTab === 'plans' && (
+              <>
+                 <div>
+                    <label className={labelClass}>Maintenance Plan Name</label>
+                    <input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                 </div>
+              </>
+            )}
+
             {/* USERS */}
             {activeTab === 'users' && (
               <>
@@ -1176,7 +1214,7 @@ const MasterData: React.FC<MasterDataProps> = ({
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
         <div className="flex flex-wrap gap-2 bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
-          {(['sectors', 'divisions', 'machines', 'items', 'locations', 'users'] as const).map(tab => (
+          {(['sectors', 'divisions', 'machines', 'items', 'plans', 'locations', 'users'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}

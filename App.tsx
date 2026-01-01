@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -14,9 +15,10 @@ import {
   LOCATIONS as INIT_LOCATIONS,
   SECTORS as INIT_SECTORS,
   DIVISIONS as INIT_DIVISIONS,
-  USERS as INIT_USERS
+  USERS as INIT_USERS,
+  MAINTENANCE_PLANS as INIT_PLANS
 } from './constants';
-import { IssueRecord, Item, Machine, Location, Sector, Division, User } from './types';
+import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan } from './types';
 
 // Helper to load from LocalStorage safely
 const loadFromStorage = <T,>(key: string, fallback: T): T => {
@@ -44,6 +46,7 @@ const App: React.FC = () => {
   const [locations, setLocations] = useState<Location[]>(() => loadFromStorage('wf_locations', INIT_LOCATIONS));
   const [sectors, setSectors] = useState<Sector[]>(() => loadFromStorage('wf_sectors', INIT_SECTORS));
   const [divisions, setDivisions] = useState<Division[]>(() => loadFromStorage('wf_divisions', INIT_DIVISIONS));
+  const [plans, setPlans] = useState<MaintenancePlan[]>(() => loadFromStorage('wf_plans', INIT_PLANS));
   const [usersList, setUsersList] = useState<User[]>(() => loadFromStorage('wf_users', INIT_USERS));
 
   // Persistence Effects
@@ -54,6 +57,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('wf_locations', JSON.stringify(locations)); }, [locations]);
   useEffect(() => { localStorage.setItem('wf_sectors', JSON.stringify(sectors)); }, [sectors]);
   useEffect(() => { localStorage.setItem('wf_divisions', JSON.stringify(divisions)); }, [divisions]);
+  useEffect(() => { localStorage.setItem('wf_plans', JSON.stringify(plans)); }, [plans]);
   useEffect(() => { localStorage.setItem('wf_users', JSON.stringify(usersList)); }, [usersList]);
 
   // Auth Handlers
@@ -81,7 +85,7 @@ const App: React.FC = () => {
   const handleAddLocation = (location: Location) => setLocations(prev => [...prev, location]);
   const handleAddSector = (sector: Sector) => setSectors(prev => [...prev, sector]);
   const handleAddDivision = (division: Division) => setDivisions(prev => [...prev, division]);
-  
+  const handleAddPlan = (plan: MaintenancePlan) => setPlans(prev => [...prev, plan]);
   const handleAddUser = (newUser: User) => setUsersList(prev => [...prev, newUser]);
   
   const handleUpdateItem = (updatedItem: Item) => {
@@ -98,6 +102,9 @@ const App: React.FC = () => {
   };
   const handleUpdateDivision = (updatedDivision: Division) => {
     setDivisions(prev => prev.map(div => div.id === updatedDivision.id ? updatedDivision : div));
+  };
+  const handleUpdatePlan = (updatedPlan: MaintenancePlan) => {
+    setPlans(prev => prev.map(p => p.id === updatedPlan.id ? updatedPlan : p));
   };
   const handleUpdateUser = (updatedUser: User) => {
     setUsersList(prev => prev.map(u => u.username === updatedUser.username ? updatedUser : u));
@@ -126,6 +133,7 @@ const App: React.FC = () => {
             locations={locations}
             sectors={sectors}
             divisions={divisions}
+            maintenancePlans={plans}
             currentUser={user}
           />
         );
@@ -152,18 +160,21 @@ const App: React.FC = () => {
             locations={locations}
             sectors={sectors}
             divisions={divisions}
+            plans={plans}
             users={usersList}
             onAddItem={handleAddItem}
             onAddMachine={handleAddMachine}
             onAddLocation={handleAddLocation}
             onAddSector={handleAddSector}
             onAddDivision={handleAddDivision}
+            onAddPlan={handleAddPlan}
             onAddUser={handleAddUser}
             onUpdateItem={handleUpdateItem}
             onUpdateMachine={handleUpdateMachine}
             onUpdateLocation={handleUpdateLocation}
             onUpdateSector={handleUpdateSector}
             onUpdateDivision={handleUpdateDivision}
+            onUpdatePlan={handleUpdatePlan}
             onUpdateUser={handleUpdateUser}
             onDeleteItem={handleDeleteItem}
           />

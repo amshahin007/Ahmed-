@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { IssueRecord, Location } from '../types';
 
@@ -15,6 +16,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
       record.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (record.maintenancePlan || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.locationId.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesLocation = selectedLocation ? record.locationId === selectedLocation : true;
@@ -32,6 +34,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
       "Sector", 
       "Division", 
       "Machine", 
+      "Maint. Plan",
       "Item Number", 
       "Item Name", 
       "Quantity", 
@@ -47,6 +50,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
         h.sectorName || '',
         h.divisionName || '',
         h.machineName,
+        h.maintenancePlan || '',
         h.itemId,
         h.itemName,
         h.quantity,
@@ -113,11 +117,9 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
                         <th className="px-6 py-4 whitespace-nowrap">Issue ID</th>
                         <th className="px-6 py-4 whitespace-nowrap">Date</th>
                         <th className="px-6 py-4 whitespace-nowrap">Location (Site)</th>
-                        <th className="px-6 py-4 whitespace-nowrap">Sector</th>
-                        <th className="px-6 py-4 whitespace-nowrap">Division</th>
+                        <th className="px-6 py-4 whitespace-nowrap">Sector/Div</th>
                         <th className="px-6 py-4 whitespace-nowrap">Machine</th>
-                        <th className="px-6 py-4 whitespace-nowrap">Item Number</th>
-                        <th className="px-6 py-4 whitespace-nowrap">Item Name</th>
+                        <th className="px-6 py-4 whitespace-nowrap">Item Details</th>
                         <th className="px-6 py-4 whitespace-nowrap">Qty</th>
                         <th className="px-6 py-4 whitespace-nowrap">Status</th>
                     </tr>
@@ -145,30 +147,26 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
                                     )}
                                 </td>
 
-                                {/* Sector */}
+                                {/* Sector / Div */}
                                 <td className="px-6 py-4 align-top min-w-[120px]">
-                                    {record.sectorName || <span className="text-gray-300">-</span>}
-                                </td>
-
-                                {/* Division */}
-                                <td className="px-6 py-4 align-top min-w-[120px]">
-                                    {record.divisionName || <span className="text-gray-300">-</span>}
+                                    <div className="text-xs text-gray-500">{record.sectorName || '-'}</div>
+                                    <div className="text-xs text-gray-400">{record.divisionName || '-'}</div>
                                 </td>
                                 
-                                {/* Machine */}
-                                <td className="px-6 py-4 align-top min-w-[150px]">
+                                {/* Machine & Plan */}
+                                <td className="px-6 py-4 align-top min-w-[180px]">
                                     <div className="text-gray-900 font-medium">{record.machineName}</div>
-                                    <div className="text-xs text-gray-400 font-mono mt-0.5">{record.machineId}</div>
+                                    {record.maintenancePlan && (
+                                      <div className="mt-1 inline-block px-2 py-0.5 bg-orange-50 text-orange-700 text-[10px] rounded border border-orange-100">
+                                        {record.maintenancePlan}
+                                      </div>
+                                    )}
                                 </td>
 
-                                {/* Item Number */}
-                                <td className="px-6 py-4 align-top font-mono text-gray-600">
-                                    {record.itemId}
-                                </td>
-
-                                {/* Item Name */}
-                                <td className="px-6 py-4 align-top text-gray-900 font-medium">
-                                    {record.itemName}
+                                {/* Item Details */}
+                                <td className="px-6 py-4 align-top min-w-[180px]">
+                                    <div className="text-gray-900 font-medium">{record.itemName}</div>
+                                    <div className="text-xs text-gray-500 font-mono">{record.itemId}</div>
                                 </td>
                                 
                                 {/* Qty */}

@@ -45,6 +45,11 @@ export interface Location {
   email?: string; // Contact email for this location/site
 }
 
+export interface MaintenancePlan {
+  id: string;
+  name: string; // e.g., "Preventive Maintenance", "Periodic Maintenance"
+}
+
 export interface IssueRecord {
   id: string;
   timestamp: string; // ISO string
@@ -56,6 +61,7 @@ export interface IssueRecord {
   machineName: string;
   sectorName?: string;
   divisionName?: string;
+  maintenancePlan?: string; // New Field: The selected maintenance plan name
   status: 'Pending' | 'Approved' | 'Completed' | 'Rejected';
   notes?: string; // For rejection reasons or approval comments
   warehouseEmail?: string;
