@@ -77,11 +77,11 @@ export const MAINTENANCE_PLANS: MaintenancePlan[] = [
 ];
 
 export const MACHINES: Machine[] = [
-  { id: 'M-101', name: 'Conveyor Belt Alpha', model: 'CV-2000', divisionId: 'DIV-001' },
-  { id: 'M-102', name: 'Robotic Arm Bravo', model: 'KUKA-KR6', divisionId: 'DIV-002' },
-  { id: 'M-103', name: 'Packaging Unit Charlie', model: 'PAC-X1', divisionId: 'DIV-003' },
-  { id: 'M-104', name: 'CNC Lathe Delta', model: 'Mazak-500', divisionId: 'DIV-001' },
-  { id: 'M-105', name: 'Hydraulic Press Echo', model: 'HP-50T', divisionId: 'DIV-002' },
+  { id: 'M-101', category: 'Conveyor Belt Alpha', status: 'Working', chaseNo: 'CV-2000', divisionId: 'DIV-001' },
+  { id: 'M-102', category: 'Robotic Arm Bravo', status: 'Working', chaseNo: 'KUKA-KR6', divisionId: 'DIV-002' },
+  { id: 'M-103', category: 'Packaging Unit Charlie', status: 'Not Working', chaseNo: 'PAC-X1', divisionId: 'DIV-003' },
+  { id: 'M-104', category: 'CNC Lathe Delta', status: 'Outside Maintenance', chaseNo: 'Mazak-500', divisionId: 'DIV-001' },
+  { id: 'M-105', category: 'Hydraulic Press Echo', status: 'Working', chaseNo: 'HP-50T', divisionId: 'DIV-002' },
 ];
 
 export const ITEMS: Item[] = [

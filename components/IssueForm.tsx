@@ -40,7 +40,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const [filterSubGroup, setFilterSubGroup] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterBrand, setFilterBrand] = useState('');
-  // "Model" usually refers to Name, but we have a specific Model No field now
+  const [filterChaseNo, setFilterChaseNo] = useState(''); // Was Model
   const [filterModelNo, setFilterModelNo] = useState(''); 
 
   // --- Email/Notification State ---
@@ -162,6 +162,12 @@ const IssueForm: React.FC<IssueFormProps> = ({
         
         const newRecords: IssueRecord[] = [];
 
+        // Determine machine name display. 
+        // Previously machine.name, now machine.category is the main name, and machine.status is just state.
+        const machineDisplayName = machine 
+            ? (machine.category ? machine.category : `Machine ${machine.id}`) 
+            : 'Unknown Machine';
+
         // Create a record for each line item
         for (let i = 0; i < lineItems.length; i++) {
         const line = lineItems[i];
@@ -173,7 +179,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
             itemName: line.itemName,
             quantity: line.quantity,
             machineId,
-            machineName: machine ? machine.name : 'Unknown Machine',
+            machineName: machineDisplayName,
             sectorName: sector ? sector.name : '',
             divisionName: division ? division.name : '',
             maintenancePlan: plan ? plan.name : '',
@@ -283,6 +289,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
      currentSub: string, 
      currentCat: string, 
      currentBrand: string,
+     currentChaseNo: string,
      currentModelNo: string
   ) => {
     // Safety check for machines
@@ -294,6 +301,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
         if (currentSub && m.subGroup !== currentSub) return false;
         if (currentCat && m.category !== currentCat) return false;
         if (currentBrand && m.brand !== currentBrand) return false;
+        if (currentChaseNo && m.chaseNo !== currentChaseNo) return false;
         if (currentModelNo && m.modelNo !== currentModelNo) return false;
         return true;
     });
@@ -305,6 +313,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     const uniqueSubs = Array.from(new Set(matchingMachines.map(m => m.subGroup).filter(Boolean)));
     const uniqueCats = Array.from(new Set(matchingMachines.map(m => m.category).filter(Boolean)));
     const uniqueBrands = Array.from(new Set(matchingMachines.map(m => m.brand).filter(Boolean)));
+    const uniqueChaseNos = Array.from(new Set(matchingMachines.map(m => m.chaseNo).filter(Boolean)));
     const uniqueModelNos = Array.from(new Set(matchingMachines.map(m => m.modelNo).filter(Boolean)));
 
     // Auto-fill if there's exactly one possibility and it's not already set
@@ -312,6 +321,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     if (uniqueSubs.length === 1 && !currentSub) setFilterSubGroup(uniqueSubs[0] as string);
     if (uniqueCats.length === 1 && !currentCat) setFilterCategory(uniqueCats[0] as string);
     if (uniqueBrands.length === 1 && !currentBrand) setFilterBrand(uniqueBrands[0] as string);
+    if (uniqueChaseNos.length === 1 && !currentChaseNo) setFilterChaseNo(uniqueChaseNos[0] as string);
     if (uniqueModelNos.length === 1 && !currentModelNo) setFilterModelNo(uniqueModelNos[0] as string);
   };
 
@@ -321,39 +331,50 @@ const IssueForm: React.FC<IssueFormProps> = ({
     setFilterSubGroup('');
     setFilterCategory('');
     setFilterBrand('');
+    setFilterChaseNo('');
     setFilterModelNo('');
     setMachineId('');
-    inferUpstreamFilters(val, '', '', '', '');
+    inferUpstreamFilters(val, '', '', '', '', '');
   };
 
   const handleSubGroupChange = (val: string) => {
     setFilterSubGroup(val);
     setFilterCategory('');
     setFilterBrand('');
+    setFilterChaseNo('');
     setFilterModelNo('');
     setMachineId('');
-    inferUpstreamFilters(filterMainGroup, val, '', '', '');
+    inferUpstreamFilters(filterMainGroup, val, '', '', '', '');
   };
 
   const handleCategoryChange = (val: string) => {
     setFilterCategory(val);
     setFilterBrand('');
+    setFilterChaseNo('');
     setFilterModelNo('');
     setMachineId('');
-    inferUpstreamFilters(filterMainGroup, filterSubGroup, val, '', '');
+    inferUpstreamFilters(filterMainGroup, filterSubGroup, val, '', '', '');
   };
 
   const handleBrandChange = (val: string) => {
     setFilterBrand(val);
+    setFilterChaseNo('');
     setFilterModelNo('');
     setMachineId('');
-    inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, val, '');
+    inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, val, '', '');
+  };
+
+  const handleChaseNoChange = (val: string) => {
+    setFilterChaseNo(val);
+    setFilterModelNo('');
+    setMachineId('');
+    inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, filterBrand, val, '');
   };
 
   const handleModelNoChange = (val: string) => {
     setFilterModelNo(val);
     setMachineId('');
-    inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, filterBrand, val);
+    inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, filterBrand, filterChaseNo, val);
   };
 
   const handleMachineChange = (val: string) => {
@@ -365,6 +386,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
         if (m.subGroup) setFilterSubGroup(m.subGroup);
         if (m.category) setFilterCategory(m.category);
         if (m.brand) setFilterBrand(m.brand);
+        if (m.chaseNo) setFilterChaseNo(m.chaseNo);
         if (m.modelNo) setFilterModelNo(m.modelNo);
     }
   };
@@ -407,6 +429,18 @@ const IssueForm: React.FC<IssueFormProps> = ({
     return Array.from(brands).map(b => ({ id: b, label: b }));
   }, [machines, filterMainGroup, filterSubGroup, filterCategory]);
 
+  const chaseNoOptions = useMemo(() => {
+    const chases = new Set<string>();
+    machines.forEach(m => {
+       if (filterMainGroup && m.mainGroup !== filterMainGroup) return;
+       if (filterSubGroup && m.subGroup !== filterSubGroup) return;
+       if (filterCategory && m.category !== filterCategory) return;
+       if (filterBrand && m.brand !== filterBrand) return;
+       if (m.chaseNo) chases.add(m.chaseNo);
+    });
+    return Array.from(chases).map(c => ({ id: c, label: c }));
+  }, [machines, filterMainGroup, filterSubGroup, filterCategory, filterBrand]);
+
   const modelNoOptions = useMemo(() => {
     const models = new Set<string>();
     machines.forEach(m => {
@@ -414,10 +448,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
        if (filterSubGroup && m.subGroup !== filterSubGroup) return;
        if (filterCategory && m.category !== filterCategory) return;
        if (filterBrand && m.brand !== filterBrand) return;
+       if (filterChaseNo && m.chaseNo !== filterChaseNo) return;
        if (m.modelNo) models.add(m.modelNo);
     });
     return Array.from(models).map(mod => ({ id: mod, label: mod }));
-  }, [machines, filterMainGroup, filterSubGroup, filterCategory, filterBrand]);
+  }, [machines, filterMainGroup, filterSubGroup, filterCategory, filterBrand, filterChaseNo]);
 
   
   // --- Permission Logic for Locations, Sectors, Divisions ---
@@ -479,10 +514,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
         if (filterSubGroup && m.subGroup !== filterSubGroup) return false;
         if (filterCategory && m.category !== filterCategory) return false;
         if (filterBrand && m.brand !== filterBrand) return false;
+        if (filterChaseNo && m.chaseNo !== filterChaseNo) return false;
         if (filterModelNo && m.modelNo !== filterModelNo) return false;
         return true;
     });
-  }, [machines, divisionId, filterMainGroup, filterSubGroup, filterCategory, filterBrand, filterModelNo]);
+  }, [machines, divisionId, filterMainGroup, filterSubGroup, filterCategory, filterBrand, filterChaseNo, filterModelNo]);
 
   // Memoize large lists to avoid unnecessary re-creation on render
   const locationOptions: Option[] = useMemo(() => 
@@ -502,9 +538,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
   
   const machineOptions: Option[] = useMemo(() => 
     availableMachines.map(m => {
-      let sub = `${m.model} (${m.id})`;
-      if (m.brand) sub += ` - ${m.brand}`;
-      return { id: m.id, label: m.name, subLabel: sub };
+      // Use category (Equipment Name) as the primary name, since m.name is now m.status
+      let label = m.category || `Machine ${m.id}`;
+      let sub = `Chase No: ${m.chaseNo}`;
+      if (m.brand) sub += ` | Brand: ${m.brand}`;
+      return { id: m.id, label: label, subLabel: sub };
     }), 
     [availableMachines]
   );
@@ -653,8 +691,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
                    </div>
                    <div className="grid grid-cols-2 gap-2">
                       <SearchableSelect label="Brand" options={brandOptions} value={filterBrand} onChange={handleBrandChange} placeholder="Brand..." />
-                      <SearchableSelect label="Model No (طراز المعده)" options={modelNoOptions} value={filterModelNo} onChange={handleModelNoChange} placeholder="Model No..." />
+                      <SearchableSelect label="Chase No (Model)" options={chaseNoOptions} value={filterChaseNo} onChange={handleChaseNoChange} placeholder="Chase No..." />
                    </div>
+                   <SearchableSelect label="Model No (طراز المعده)" options={modelNoOptions} value={filterModelNo} onChange={handleModelNoChange} placeholder="Model No..." />
                 </div>
                 
                 {/* Machine Select */}

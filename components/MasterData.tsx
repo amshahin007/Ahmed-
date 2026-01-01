@@ -63,12 +63,12 @@ const COLUMNS_CONFIG: Record<TabType, { key: string, label: string }[]> = {
   machines: [
     { key: 'id', label: 'ID' },
     { key: 'machineLocalNo', label: 'Machine Local No' },
-    { key: 'name', label: 'Name' },
-    { key: 'model', label: 'Model Name' },
+    { key: 'status', label: 'Status' }, // Replaced Name
+    { key: 'chaseNo', label: 'Chase No' }, // Replaced Model
     { key: 'modelNo', label: 'Model No (طراز)' },
+    { key: 'category', label: 'إسم المعدة' },
     { key: 'mainGroup', label: 'Main Group' },
     { key: 'subGroup', label: 'Sub Group' },
-    { key: 'category', label: 'إسم المعدة' },
     { key: 'brand', label: 'Brand / Manufacturer' },
     { key: 'divisionId', label: 'Division' }
   ],
@@ -346,9 +346,9 @@ const MasterData: React.FC<MasterDataProps> = ({
         ]);
         break;
       case 'machines':
-        headers = ['ID', 'Machine Local No', 'Name', 'Model Name', 'Model No', 'Main Group', 'Sub Group', 'إسم المعدة', 'Brand', 'Division ID'];
+        headers = ['ID', 'Machine Local No', 'Status', 'Chase No', 'Model No', 'Main Group', 'Sub Group', 'إسم المعدة', 'Brand', 'Division ID'];
         rows = machines.map(m => [
-            m.id, m.machineLocalNo || '', m.name, m.model, m.modelNo,
+            m.id, m.machineLocalNo || '', m.status, m.chaseNo, m.modelNo,
             m.mainGroup, m.subGroup, m.category, m.brand, m.divisionId
         ]);
         break;
@@ -486,8 +486,8 @@ const MasterData: React.FC<MasterDataProps> = ({
         fieldMap = {
             id: ['id', 'machine id', 'code'],
             machineLocalNo: ['local no', 'local number', 'local id', 'machine local no', 'asset no'],
-            name: ['name', 'machine name', 'machine'],
-            model: ['model', 'model name'],
+            status: ['status', 'state', 'condition', 'name', 'machine name'], // Updated
+            chaseNo: ['chase no', 'chase number', 'model', 'model name'], // Updated
             modelNo: ['model no', 'model number', 'طراز', 'type'],
             mainGroup: ['main group', 'group'],
             subGroup: ['sub group', 'subgroup'],
@@ -570,6 +570,9 @@ const MasterData: React.FC<MasterDataProps> = ({
         if (activeTab === 'items') {
              if (!payload.category) payload.category = 'General';
              if (!payload.unit) payload.unit = 'pcs';
+        } else if (activeTab === 'machines') {
+             if (!payload.status) payload.status = 'Working';
+             if (!payload.chaseNo) payload.chaseNo = 'Unknown';
         } else if (activeTab === 'users') {
              if (!payload.password) payload.password = 'password';
              if (!payload.role) payload.role = 'user';
@@ -660,8 +663,8 @@ const MasterData: React.FC<MasterDataProps> = ({
       const payload: Machine = {
         id: formData.id || `M-${timestamp}`,
         machineLocalNo: formData.machineLocalNo,
-        name: formData.name,
-        model: formData.model,
+        status: formData.status || 'Working', // New field
+        chaseNo: formData.chaseNo, // New field
         modelNo: formData.modelNo,
         divisionId: formData.divisionId,
         mainGroup: formData.mainGroup,
@@ -856,6 +859,12 @@ const MasterData: React.FC<MasterDataProps> = ({
     // Special Renderers
     if (activeTab === 'machines' && key === 'divisionId') {
       return divisions.find(d => d.id === row.divisionId)?.name || '-';
+    }
+    if (activeTab === 'machines' && key === 'status') {
+      const color = row.status === 'Working' ? 'bg-green-100 text-green-800' : 
+                    row.status === 'Not Working' ? 'bg-red-100 text-red-800' : 
+                    'bg-yellow-100 text-yellow-800';
+      return <span className={`px-2 py-1 rounded-full text-xs font-bold ${color}`}>{row.status}</span>;
     }
     if (activeTab === 'divisions' && key === 'sectorId') {
       return sectors.find(s => s.id === row.sectorId)?.name || '-';
@@ -1200,12 +1209,20 @@ const MasterData: React.FC<MasterDataProps> = ({
                    <input className={commonInputClass} value={formData.machineLocalNo || ''} onChange={e => setFormData({...formData, machineLocalNo: e.target.value})} />
                 </div>
                 <div>
-                   <label className={labelClass}>Machine Name</label>
-                   <input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                   <label className={labelClass}>Status</label>
+                   <select 
+                      className={commonInputClass}
+                      value={formData.status || 'Working'}
+                      onChange={e => setFormData({...formData, status: e.target.value})}
+                   >
+                     <option value="Working">Working</option>
+                     <option value="Not Working">Not Working</option>
+                     <option value="Outside Maintenance">Outside Maintenance</option>
+                   </select>
                 </div>
                 <div>
-                   <label className={labelClass}>Model Name</label>
-                   <input className={commonInputClass} value={formData.model || ''} onChange={e => setFormData({...formData, model: e.target.value})} />
+                   <label className={labelClass}>Chase No (Model)</label>
+                   <input className={commonInputClass} value={formData.chaseNo || ''} onChange={e => setFormData({...formData, chaseNo: e.target.value})} />
                 </div>
                 <div>
                    <label className={labelClass}>Model No (طراز المعده)</label>

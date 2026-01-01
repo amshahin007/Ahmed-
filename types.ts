@@ -28,16 +28,16 @@ export interface Division {
 
 export interface Machine {
   id: string;
-  machineLocalNo?: string; // New Field: Machine Local Number
-  name: string;
-  model: string;       // Used as Model Name or Legacy Model
-  modelNo?: string;    // New Field: "Model No (طراز المعده)"
-  divisionId?: string; // Optional for backward compatibility, but used for filtering
+  machineLocalNo?: string; 
+  status: 'Working' | 'Not Working' | 'Outside Maintenance'; // Renamed from name
+  chaseNo: string;       // Renamed from model (Chase No)
+  modelNo?: string;    // "Model No (طراز المعده)"
+  divisionId?: string; 
   
   // New Classification Fields
   mainGroup?: string;
   subGroup?: string;
-  category?: string;   // New Field
+  category?: string;   // Maps to "إسم المعدة" (Equipment Name) - Effectively the Machine Name now
   brand?: string;
 }
 
