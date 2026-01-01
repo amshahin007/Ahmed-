@@ -939,6 +939,18 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     // Calculate selection state for header checkbox
     const allPageSelected = paginatedData.length > 0 && paginatedData.every(row => selectedIds.has(row.id || row.username));
+    
+    // Check if ALL data across ALL pages is selected
+    const allDataSelected = data.length > 0 && selectedIds.size === data.length;
+
+    const handleSelectAllData = () => {
+        const newSet = new Set(data.map(item => item.id || item.username));
+        setSelectedIds(newSet);
+    };
+
+    const handleClearSelection = () => {
+        setSelectedIds(new Set());
+    };
 
     return (
       <div className="flex flex-col space-y-4 relative flex-1">
@@ -978,6 +990,35 @@ const MasterData: React.FC<MasterDataProps> = ({
                 Drag headers in table to reorder.
               </div>
            </div>
+        )}
+
+        {/* --- SELECT ALL DATA BANNER --- */}
+        {(selectedIds.size > 0 && (allPageSelected || allDataSelected)) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center justify-center text-sm text-blue-800 animate-fade-in-up shadow-sm">
+                {allDataSelected ? (
+                    <span className="flex items-center gap-2">
+                        <span>✅ All <b>{data.length}</b> items in <b>{activeTab}</b> are selected.</span>
+                        <button 
+                            onClick={handleClearSelection} 
+                            className="font-semibold text-red-600 hover:text-red-800 hover:underline ml-2"
+                        >
+                            Clear Selection
+                        </button>
+                    </span>
+                ) : (
+                    <span className="flex items-center gap-1 flex-wrap justify-center">
+                        <span>All <b>{paginatedData.length}</b> items on this page are selected.</span>
+                        {data.length > paginatedData.length && (
+                            <button 
+                                onClick={handleSelectAllData}
+                                className="font-bold text-blue-700 underline hover:text-blue-900 ml-1"
+                            >
+                                Select all {data.length} items in {activeTab}
+                            </button>
+                        )}
+                    </span>
+                )}
+            </div>
         )}
 
         {/* 
