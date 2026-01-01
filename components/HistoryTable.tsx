@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { IssueRecord, Location } from '../types';
+import * as XLSX from 'xlsx';
 
 interface HistoryTableProps {
   history: IssueRecord[];
@@ -25,7 +26,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
   });
 
   const downloadExcel = () => {
-    // CSV Export implementation
+    // XLSX Export implementation
     const headers = [
       "ID", 
       "Date", 
@@ -58,17 +59,10 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
         h.notes || ''
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-        + headers.join(",") + "\n" 
-        + rows.map(e => e.join(",")).join("\n");
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `warehouse_issues_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    XLSX.utils.book_append_sheet(wb, ws, "History");
+    XLSX.writeFile(wb, `warehouse_issues_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   return (

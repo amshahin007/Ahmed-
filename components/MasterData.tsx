@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
 import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet, parseCSVLine } from '../services/googleSheetsService';
+import * as XLSX from 'xlsx';
 
 interface MasterDataProps {
   history: IssueRecord[];
@@ -260,17 +261,8 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   const handleExportDataToExcel = () => {
     let headers: string[] = [];
-    let rows: string[][] = [];
+    let rows: any[][] = [];
     const timestamp = new Date().toISOString().slice(0, 10);
-
-    const escapeCsv = (val: any) => {
-        if (val === null || val === undefined) return '';
-        const str = String(val);
-        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-            return `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-    };
 
     switch (activeTab) {
       case 'items':
@@ -278,30 +270,30 @@ const MasterData: React.FC<MasterDataProps> = ({
         rows = items.map(i => [
             i.id, i.name, i.category, i.unit, 
             i.thirdId, i.description2, i.fullName, i.brand, i.oem, i.partNumber
-        ].map(escapeCsv));
+        ]);
         break;
       case 'machines':
         headers = ['ID', 'Name', 'Model Name', 'Model No', 'Main Group', 'Sub Group', 'Category', 'Brand', 'Division ID'];
         rows = machines.map(m => [
             m.id, m.name, m.model, m.modelNo,
             m.mainGroup, m.subGroup, m.category, m.brand, m.divisionId
-        ].map(escapeCsv));
+        ]);
         break;
       case 'locations':
         headers = ['ID', 'Name', 'Email'];
-        rows = locations.map(l => [l.id, l.name, l.email].map(escapeCsv));
+        rows = locations.map(l => [l.id, l.name, l.email]);
         break;
       case 'sectors':
         headers = ['ID', 'Name'];
-        rows = sectors.map(s => [s.id, s.name].map(escapeCsv));
+        rows = sectors.map(s => [s.id, s.name]);
         break;
       case 'divisions':
         headers = ['ID', 'Name', 'Sector ID'];
-        rows = divisions.map(d => [d.id, d.name, d.sectorId].map(escapeCsv));
+        rows = divisions.map(d => [d.id, d.name, d.sectorId]);
         break;
       case 'plans':
         headers = ['ID', 'Plan Name'];
-        rows = plans.map(p => [p.id, p.name].map(escapeCsv));
+        rows = plans.map(p => [p.id, p.name]);
         break;
       case 'users':
         headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations', 'Allowed Sectors', 'Allowed Divisions'];
@@ -310,7 +302,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             (u.allowedLocationIds || []).join(';'),
             (u.allowedSectorIds || []).join(';'),
             (u.allowedDivisionIds || []).join(';')
-        ].map(escapeCsv));
+        ]);
         break;
     }
 
@@ -319,17 +311,11 @@ const MasterData: React.FC<MasterDataProps> = ({
         return;
     }
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-        + headers.join(",") + "\n" 
-        + rows.map(e => e.join(",")).join("\n");
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `WareFlow_${activeTab}_Master_${timestamp}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Generate Excel File
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    XLSX.utils.book_append_sheet(wb, ws, "MasterData");
+    XLSX.writeFile(wb, `WareFlow_${activeTab}_Master_${timestamp}.xlsx`);
   };
 
   // --- Import Logic ---

@@ -4,6 +4,7 @@ import { IssueRecord, Item, Location, Machine, Sector, Division, User, Maintenan
 import { generateIssueEmail } from '../services/geminiService';
 import { sendIssueToSheet } from '../services/googleSheetsService';
 import SearchableSelect, { Option } from './SearchableSelect';
+import * as XLSX from 'xlsx';
 
 interface IssueFormProps {
   onAddIssue: (issue: IssueRecord) => void;
@@ -218,6 +219,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const handleExportExcel = () => {
     if (!lastSubmittedBatch || lastSubmittedBatch.length === 0) return;
 
+    const batchId = lastSubmittedBatch[0].id.split('-')[1]; 
+
     const headers = ["Request ID", "Date", "Location", "Sector", "Division", "Machine", "Maint. Plan", "Item Number", "Item Name", "Quantity", "Warehouse Email", "Site Email"];
     const rows = lastSubmittedBatch.map(item => [
         item.id,
@@ -234,18 +237,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
         item.requesterEmail || ''
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-        + headers.join(",") + "\n" 
-        + rows.map(e => e.join(",")).join("\n");
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    const batchId = lastSubmittedBatch[0].id.split('-')[1]; 
-    link.setAttribute("download", `Request_Slip_${batchId}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    XLSX.utils.book_append_sheet(wb, ws, "RequestSlip");
+    XLSX.writeFile(wb, `Request_Slip_${batchId}.xlsx`);
   };
 
   // --- Scanner Handlers ---
