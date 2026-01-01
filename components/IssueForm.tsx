@@ -611,7 +611,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                    <SearchableSelect label="Main Group" options={mainGroupOptions} value={filterMainGroup} onChange={handleMainGroupChange} placeholder="Filter by Group..." />
                    <div className="grid grid-cols-2 gap-2">
                      <SearchableSelect label="Sub Group" options={subGroupOptions} value={filterSubGroup} onChange={handleSubGroupChange} placeholder="Sub Group..." />
-                     <SearchableSelect label="Category" options={categoryOptions} value={filterCategory} onChange={handleCategoryChange} placeholder="Cat..." />
+                     <SearchableSelect label="إسم المعدة" options={categoryOptions} value={filterCategory} onChange={handleCategoryChange} placeholder="Cat..." />
                    </div>
                    <div className="grid grid-cols-2 gap-2">
                       <SearchableSelect label="Brand" options={brandOptions} value={filterBrand} onChange={handleBrandChange} placeholder="Brand..." />

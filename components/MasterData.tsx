@@ -59,7 +59,7 @@ const COLUMNS_CONFIG: Record<TabType, { key: string, label: string }[]> = {
     { key: 'modelNo', label: 'Model No (طراز)' },
     { key: 'mainGroup', label: 'Main Group' },
     { key: 'subGroup', label: 'Sub Group' },
-    { key: 'category', label: 'Category' },
+    { key: 'category', label: 'إسم المعدة' },
     { key: 'brand', label: 'Brand / Manufacturer' },
     { key: 'divisionId', label: 'Division' }
   ],
@@ -273,7 +273,7 @@ const MasterData: React.FC<MasterDataProps> = ({
         ]);
         break;
       case 'machines':
-        headers = ['ID', 'Name', 'Model Name', 'Model No', 'Main Group', 'Sub Group', 'Category', 'Brand', 'Division ID'];
+        headers = ['ID', 'Name', 'Model Name', 'Model No', 'Main Group', 'Sub Group', 'إسم المعدة', 'Brand', 'Division ID'];
         rows = machines.map(m => [
             m.id, m.name, m.model, m.modelNo,
             m.mainGroup, m.subGroup, m.category, m.brand, m.divisionId
@@ -373,7 +373,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             modelNo: ['Model No', 'Model Number', 'طراز'],
             mainGroup: ['Main Group'],
             subGroup: ['Sub Group'],
-            category: ['Category'],
+            category: ['Category', 'إسم المعدة'],
             brand: ['Brand'],
             divisionId: ['Division ID', 'Division']
         };
@@ -990,7 +990,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                       <label className={labelClass}>Category</label>
+                       <label className={labelClass}>إسم المعدة</label>
                        <input className={commonInputClass} value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} />
                     </div>
                     <div>
