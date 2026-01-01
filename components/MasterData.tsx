@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
-import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet, parseCSVLine } from '../services/googleSheetsService';
+import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet } from '../services/googleSheetsService';
 import * as XLSX from 'xlsx';
 
 interface MasterDataProps {
@@ -337,45 +337,38 @@ const MasterData: React.FC<MasterDataProps> = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const data = e.target?.result;
-        const workbook = XLSX.read(data, { type: 'array' });
-        // Assume data is in the first sheet
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        // Convert to CSV to reuse existing CSV processing logic (it handles column mapping)
-        const csv = XLSX.utils.sheet_to_csv(worksheet);
-        processCSVImport(csv);
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      // CSV or TXT
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const text = e.target?.result as string;
-        processCSVImport(text);
-      };
-      reader.readAsText(file);
-    }
-    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const data = e.target?.result;
+      try {
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          // Convert sheet directly to JSON (array of objects)
+          // This maps data by column header name, regardless of order
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          processImportData(jsonData);
+      } catch (error) {
+          console.error("Error parsing file:", error);
+          alert("Error parsing file. Please check format.");
+      }
+    };
+    reader.readAsArrayBuffer(file);
     event.target.value = '';
   };
 
-  const processCSVImport = (csvText: string) => {
-    const lines = csvText.split(/\r?\n/);
-    if (lines.length < 2) {
-        alert("File appears to be empty or missing headers.");
+  const processImportData = (data: any[]) => {
+    if (data.length === 0) {
+        alert("File appears to be empty or contains no data rows.");
         return;
     }
 
-    const headers = parseCSVLine(lines[0]).map(h => h.trim());
+    // Identify available headers from the first row of data
+    // XLSX.utils.sheet_to_json uses the first row as keys
+    const fileHeaders = Object.keys(data[0]);
+
     let added = 0;
     let updated = 0;
-
-    const getIdx = (candidates: string[]) => 
-        headers.findIndex(h => candidates.some(c => c.toLowerCase() === h.toLowerCase()));
 
     let fieldMap: Record<string, string[]> = {};
 
@@ -425,20 +418,31 @@ const MasterData: React.FC<MasterDataProps> = ({
         };
     }
 
-    for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if(!line) continue;
-        const values = parseCSVLine(line);
+    // Build a map of Internal Field -> Actual Column Header in File
+    const keyMap: Record<string, string> = {};
+    Object.keys(fieldMap).forEach(key => {
+        const candidates = fieldMap[key];
+        // Case-insensitive match for headers
+        const match = fileHeaders.find(h => candidates.some(c => c.toLowerCase() === h.toLowerCase()));
+        if (match) {
+            keyMap[key] = match;
+        }
+    });
+
+    const idKey = activeTab === 'users' ? 'username' : 'id';
+    
+    // Process rows
+    data.forEach((row: any) => {
         const getValue = (key: string) => {
-           const idx = getIdx(fieldMap[key] || []);
-           if (idx > -1 && values[idx]) return values[idx].replace(/^"|"$/g, '').trim();
-           return undefined;
+            const header = keyMap[key];
+            if (header && row[header] !== undefined) {
+                return String(row[header]).trim();
+            }
+            return undefined;
         };
 
-        const idKey = activeTab === 'users' ? 'username' : 'id';
         const idVal = getValue(idKey);
-        
-        if (!idVal) continue; 
+        if (!idVal) return; // Skip rows without ID
 
         let payload: any = {};
         Object.keys(fieldMap).forEach(key => {
@@ -446,6 +450,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             if (val !== undefined) payload[key] = val;
         });
 
+        // Set Defaults
         if (activeTab === 'items') {
              if (!payload.category) payload.category = 'General';
              if (!payload.unit) payload.unit = 'pcs';
@@ -484,7 +489,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             else if (activeTab === 'users') onAddUser(payload);
             added++;
         }
-    }
+    });
 
     alert(`Import Complete!\nAdded: ${added}\nUpdated: ${updated}`);
   };
