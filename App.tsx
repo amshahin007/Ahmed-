@@ -31,6 +31,23 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
   }
 };
 
+// Helper to save to LocalStorage safely preventing crashes on quota limit
+const saveToStorage = (key: string, data: any) => {
+    try {
+        localStorage.setItem(key, JSON.stringify(data));
+    } catch (error) {
+        if (error instanceof DOMException && 
+            (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+            console.error(`Storage limit reached for ${key}. Data not saved.`);
+            // Using a simple debounce/check to avoid spamming alerts could be added, 
+            // but for now, we just log to console to prevent the crash.
+            // alert(`Warning: Local storage limit reached! Changes to ${key} will not be saved permanently. Please export your data.`);
+        } else {
+            console.error(`Error saving ${key} to storage:`, error);
+        }
+    }
+};
+
 const App: React.FC = () => {
   // --- Auth State ---
   const [user, setUser] = useState<User | null>(() => loadFromStorage('wf_user', null));
@@ -49,16 +66,16 @@ const App: React.FC = () => {
   const [plans, setPlans] = useState<MaintenancePlan[]>(() => loadFromStorage('wf_plans', INIT_PLANS));
   const [usersList, setUsersList] = useState<User[]>(() => loadFromStorage('wf_users', INIT_USERS));
 
-  // Persistence Effects
-  useEffect(() => { localStorage.setItem('wf_user', JSON.stringify(user)); }, [user]);
-  useEffect(() => { localStorage.setItem('wf_history', JSON.stringify(history)); }, [history]);
-  useEffect(() => { localStorage.setItem('wf_items', JSON.stringify(items)); }, [items]);
-  useEffect(() => { localStorage.setItem('wf_machines', JSON.stringify(machines)); }, [machines]);
-  useEffect(() => { localStorage.setItem('wf_locations', JSON.stringify(locations)); }, [locations]);
-  useEffect(() => { localStorage.setItem('wf_sectors', JSON.stringify(sectors)); }, [sectors]);
-  useEffect(() => { localStorage.setItem('wf_divisions', JSON.stringify(divisions)); }, [divisions]);
-  useEffect(() => { localStorage.setItem('wf_plans', JSON.stringify(plans)); }, [plans]);
-  useEffect(() => { localStorage.setItem('wf_users', JSON.stringify(usersList)); }, [usersList]);
+  // Persistence Effects - Wrapped in Safe Saver
+  useEffect(() => { saveToStorage('wf_user', user); }, [user]);
+  useEffect(() => { saveToStorage('wf_history', history); }, [history]);
+  useEffect(() => { saveToStorage('wf_items', items); }, [items]);
+  useEffect(() => { saveToStorage('wf_machines', machines); }, [machines]);
+  useEffect(() => { saveToStorage('wf_locations', locations); }, [locations]);
+  useEffect(() => { saveToStorage('wf_sectors', sectors); }, [sectors]);
+  useEffect(() => { saveToStorage('wf_divisions', divisions); }, [divisions]);
+  useEffect(() => { saveToStorage('wf_plans', plans); }, [plans]);
+  useEffect(() => { saveToStorage('wf_users', usersList); }, [usersList]);
 
   // Auth Handlers
   const handleLogin = (loggedInUser: User) => {
