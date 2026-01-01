@@ -129,13 +129,23 @@ const MasterData: React.FC<MasterDataProps> = ({
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // 2. Smart Merge: Ensure new columns in code (COLUMNS_CONFIG) appear even if localStorage has old data
+        // 2. Smart Merge: 
+        // - Preserve visibility and order from saved state
+        // - FORCE update labels from fresh config (fixes stale "Category" label)
+        // - Add any new columns defined in code
         const merged: Record<string, any> = { ...defaults };
         Object.keys(defaults).forEach(key => {
             if (parsed[key]) {
                 const savedKeys = new Set(parsed[key].map((c: any) => c.key));
+                
+                // Update labels of existing columns
+                const updatedSavedColumns = parsed[key].map((savedCol: any) => {
+                    const freshCol = defaults[key].find((d: any) => d.key === savedCol.key);
+                    return freshCol ? { ...savedCol, label: freshCol.label } : savedCol;
+                });
+
                 const newColumns = defaults[key].filter((c: any) => !savedKeys.has(c.key));
-                merged[key] = [...parsed[key], ...newColumns];
+                merged[key] = [...updatedSavedColumns, ...newColumns];
             }
         });
         return merged;
