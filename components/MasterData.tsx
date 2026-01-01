@@ -1073,7 +1073,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                     const id = row.id || row.username;
                     const isSelected = selectedIds.has(id);
                     return (
-                        <tr key={id} className={`transition ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                        <tr key={id} className={`transition ${isSelected ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
                             {/* Checkbox Cell */}
                             <td className="sticky left-0 z-10 bg-inherit border-r border-gray-100 px-4 py-3 text-center align-middle">
                                 <input 
