@@ -105,6 +105,9 @@ const MasterData: React.FC<MasterDataProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({});
   
+  // Processing State for Uploads
+  const [processingStatus, setProcessingStatus] = useState<string | null>(null);
+
   // File Import Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -339,21 +342,36 @@ const MasterData: React.FC<MasterDataProps> = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setProcessingStatus(`Reading ${file.name}...`);
+
     const reader = new FileReader();
     reader.onload = (e) => {
-      const data = e.target?.result;
-      try {
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          // Convert sheet directly to JSON (array of objects)
-          // This maps data by column header name, regardless of order
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          processImportData(jsonData);
-      } catch (error) {
-          console.error("Error parsing file:", error);
-          alert("Error parsing file. Please check format.");
-      }
+      // Small timeout to allow React to render the "Reading file..." state
+      setTimeout(() => {
+        const data = e.target?.result;
+        try {
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            
+            if (jsonData.length > 2000) {
+               setProcessingStatus(`Large file detected. Processing ${jsonData.length} rows... this may take a moment.`);
+            } else {
+               setProcessingStatus(`Analyzing ${jsonData.length} rows...`);
+            }
+
+            // Another timeout to render the row count message before heavy processing
+            setTimeout(() => {
+                processImportData(jsonData);
+            }, 50);
+
+        } catch (error) {
+            console.error("Error parsing file:", error);
+            setProcessingStatus(null);
+            alert("Error parsing file. Please check format.");
+        }
+      }, 50);
     };
     reader.readAsArrayBuffer(file);
     event.target.value = '';
@@ -361,6 +379,7 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   const processImportData = (data: any[]) => {
     if (data.length === 0) {
+        setProcessingStatus(null);
         alert("File appears to be empty or contains no data rows.");
         return;
     }
@@ -486,7 +505,13 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     // Execute Bulk Update
     onBulkImport(activeTab, toAdd, toUpdate);
-    alert(`Import Complete!\nAdded: ${addedCount}\nUpdated: ${updatedCount}`);
+    
+    setProcessingStatus(null);
+    
+    // Show success message with stats
+    setTimeout(() => {
+        alert(`Import Complete!\n\nTotal Processed: ${data.length}\nAdded: ${addedCount}\nUpdated: ${updatedCount}`);
+    }, 100);
   };
 
   // --- Column Management Logic ---
@@ -824,6 +849,18 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     return (
       <div className="flex flex-col space-y-4 relative">
+        {/* Loading Overlay for Processing */}
+        {processingStatus && (
+            <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center">
+                <div className="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center animate-bounce-in max-w-sm text-center">
+                    <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <h3 className="text-lg font-bold text-gray-800">Processing Upload</h3>
+                    <p className="text-gray-600 mt-2 font-medium">{processingStatus}</p>
+                    <p className="text-xs text-gray-400 mt-2">Please do not close this window.</p>
+                </div>
+            </div>
+        )}
+
         {/* Columns Management Tool (Hidden by default) */}
         {showColumnMenu && (
            <div className="absolute z-10 bg-white border border-gray-200 rounded-lg shadow-xl p-4 right-0 top-0 mt-2 w-64 max-h-96 overflow-y-auto animate-fade-in-up">
