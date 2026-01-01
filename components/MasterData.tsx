@@ -32,6 +32,7 @@ interface MasterDataProps {
   onUpdateUser: (user: User) => void;
 
   onDeleteItem: (itemId: string) => void;
+  onBulkImport: (tab: string, added: any[], updated: any[]) => void;
 }
 
 type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions' | 'users' | 'plans';
@@ -96,7 +97,7 @@ const MasterData: React.FC<MasterDataProps> = ({
   history, items, machines, locations, sectors, divisions, plans, users,
   onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision, onAddPlan, onAddUser,
   onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision, onUpdatePlan, onUpdateUser,
-  onDeleteItem
+  onDeleteItem, onBulkImport
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('items');
   const [showForm, setShowForm] = useState(false);
@@ -217,19 +218,20 @@ const MasterData: React.FC<MasterDataProps> = ({
       if (newItems.length === 0) {
         setSyncMsg('No items found. Check ID/GID or CSV headers.');
       } else {
-        let addedCount = 0;
-        let updatedCount = 0;
+        const toAdd: any[] = [];
+        const toUpdate: any[] = [];
+        
         newItems.forEach(newItem => {
           const exists = items.find(i => i.id === newItem.id);
           if (exists) {
-            onUpdateItem(newItem);
-            updatedCount++;
+            toUpdate.push(newItem);
           } else {
-            onAddItem(newItem);
-            addedCount++;
+            toAdd.push(newItem);
           }
         });
-        setSyncMsg(`Success! Added: ${addedCount}, Updated: ${updatedCount}`);
+        
+        onBulkImport('items', toAdd, toUpdate);
+        setSyncMsg(`Success! Added: ${toAdd.length}, Updated: ${toUpdate.length}`);
       }
     } catch (e) {
       setSyncMsg('Error: ' + (e as Error).message);
@@ -367,8 +369,11 @@ const MasterData: React.FC<MasterDataProps> = ({
     // XLSX.utils.sheet_to_json uses the first row as keys
     const fileHeaders = Object.keys(data[0]);
 
-    let added = 0;
-    let updated = 0;
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    const toAdd: any[] = [];
+    const toUpdate: any[] = [];
 
     let fieldMap: Record<string, string[]> = {};
 
@@ -471,27 +476,17 @@ const MasterData: React.FC<MasterDataProps> = ({
 
         if (exists) {
             const merged = { ...exists, ...payload };
-            if (activeTab === 'items') onUpdateItem(merged);
-            else if (activeTab === 'machines') onUpdateMachine(merged);
-            else if (activeTab === 'locations') onUpdateLocation(merged);
-            else if (activeTab === 'sectors') onUpdateSector(merged);
-            else if (activeTab === 'divisions') onUpdateDivision(merged);
-            else if (activeTab === 'plans') onUpdatePlan(merged);
-            else if (activeTab === 'users') onUpdateUser(merged);
-            updated++;
+            toUpdate.push(merged);
+            updatedCount++;
         } else {
-            if (activeTab === 'items') onAddItem(payload);
-            else if (activeTab === 'machines') onAddMachine(payload);
-            else if (activeTab === 'locations') onAddLocation(payload);
-            else if (activeTab === 'sectors') onAddSector(payload);
-            else if (activeTab === 'divisions') onAddDivision(payload);
-            else if (activeTab === 'plans') onAddPlan(payload);
-            else if (activeTab === 'users') onAddUser(payload);
-            added++;
+            toAdd.push(payload);
+            addedCount++;
         }
     });
 
-    alert(`Import Complete!\nAdded: ${added}\nUpdated: ${updated}`);
+    // Execute Bulk Update
+    onBulkImport(activeTab, toAdd, toUpdate);
+    alert(`Import Complete!\nAdded: ${addedCount}\nUpdated: ${updatedCount}`);
   };
 
   // --- Column Management Logic ---

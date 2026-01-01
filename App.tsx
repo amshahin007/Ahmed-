@@ -80,6 +80,7 @@ const App: React.FC = () => {
     setHistory(prev => prev.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue));
   };
 
+  // Single Item Handlers
   const handleAddItem = (item: Item) => setItems(prev => [...prev, item]);
   const handleAddMachine = (machine: Machine) => setMachines(prev => [...prev, machine]);
   const handleAddLocation = (location: Location) => setLocations(prev => [...prev, location]);
@@ -112,6 +113,38 @@ const App: React.FC = () => {
   
   const handleDeleteItem = (itemId: string) => {
     setItems(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  // --- Bulk Import Handler (Performance Optimized) ---
+  const handleBulkImport = (tab: string, added: any[], updated: any[]) => {
+    // Generic helper for entities with 'id' field
+    const updateIdBasedState = (setter: React.Dispatch<React.SetStateAction<any[]>>) => {
+        setter(prev => {
+            // Create map for O(1) lookup of updates
+            const updateMap = new Map(updated.map(u => [u.id, u]));
+            // Apply updates to existing items
+            const nextState = prev.map(item => updateMap.has(item.id) ? updateMap.get(item.id) : item);
+            // Append new items
+            return [...nextState, ...added];
+        });
+    };
+
+    switch(tab) {
+        case 'items': updateIdBasedState(setItems); break;
+        case 'machines': updateIdBasedState(setMachines); break;
+        case 'locations': updateIdBasedState(setLocations); break;
+        case 'sectors': updateIdBasedState(setSectors); break;
+        case 'divisions': updateIdBasedState(setDivisions); break;
+        case 'plans': updateIdBasedState(setPlans); break;
+        case 'users': 
+            // Users use 'username' as ID
+            setUsersList(prev => {
+                const updateMap = new Map(updated.map((u: any) => [u.username, u]));
+                const nextState = prev.map(u => updateMap.has(u.username) ? updateMap.get(u.username)! : u);
+                return [...nextState, ...added];
+            });
+            break;
+    }
   };
 
   // If no user is logged in, show Login Screen
@@ -177,6 +210,7 @@ const App: React.FC = () => {
             onUpdatePlan={handleUpdatePlan}
             onUpdateUser={handleUpdateUser}
             onDeleteItem={handleDeleteItem}
+            onBulkImport={handleBulkImport}
           />
         );
       default:
