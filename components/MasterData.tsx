@@ -337,12 +337,29 @@ const MasterData: React.FC<MasterDataProps> = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      processCSVImport(text);
-    };
-    reader.readAsText(file);
+    if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'array' });
+        // Assume data is in the first sheet
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        // Convert to CSV to reuse existing CSV processing logic (it handles column mapping)
+        const csv = XLSX.utils.sheet_to_csv(worksheet);
+        processCSVImport(csv);
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // CSV or TXT
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        processCSVImport(text);
+      };
+      reader.readAsText(file);
+    }
+    
     event.target.value = '';
   };
 
@@ -1124,7 +1141,7 @@ const MasterData: React.FC<MasterDataProps> = ({
       {/* Hidden File Input for Imports */}
       <input 
         type="file" 
-        accept=".csv,.txt" 
+        accept=".csv,.txt,.xlsx,.xls" 
         ref={fileInputRef} 
         onChange={handleFileChange} 
         className="hidden" 
