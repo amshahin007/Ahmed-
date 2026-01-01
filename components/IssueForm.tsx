@@ -39,7 +39,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const [filterSubGroup, setFilterSubGroup] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterBrand, setFilterBrand] = useState('');
-  const [filterModel, setFilterModel] = useState('');
+  // "Model" usually refers to Name, but we have a specific Model No field now
+  const [filterModelNo, setFilterModelNo] = useState(''); 
 
   // --- Email/Notification State ---
   const [warehouseEmail, setWarehouseEmail] = useState('warehouse@company.com');
@@ -278,7 +279,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
      currentSub: string, 
      currentCat: string, 
      currentBrand: string,
-     currentModel: string
+     currentModelNo: string
   ) => {
     // Get all machines that match the non-empty filters provided
     const matchingMachines = machines.filter(m => {
@@ -286,7 +287,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
         if (currentSub && m.subGroup !== currentSub) return false;
         if (currentCat && m.category !== currentCat) return false;
         if (currentBrand && m.brand !== currentBrand) return false;
-        if (currentModel && m.model !== currentModel) return false;
+        if (currentModelNo && m.modelNo !== currentModelNo) return false;
         return true;
     });
 
@@ -297,14 +298,14 @@ const IssueForm: React.FC<IssueFormProps> = ({
     const uniqueSubs = Array.from(new Set(matchingMachines.map(m => m.subGroup).filter(Boolean)));
     const uniqueCats = Array.from(new Set(matchingMachines.map(m => m.category).filter(Boolean)));
     const uniqueBrands = Array.from(new Set(matchingMachines.map(m => m.brand).filter(Boolean)));
-    const uniqueModels = Array.from(new Set(matchingMachines.map(m => m.model).filter(Boolean)));
+    const uniqueModelNos = Array.from(new Set(matchingMachines.map(m => m.modelNo).filter(Boolean)));
 
     // Auto-fill if there's exactly one possibility and it's not already set
     if (uniqueMains.length === 1 && !currentMain) setFilterMainGroup(uniqueMains[0] as string);
     if (uniqueSubs.length === 1 && !currentSub) setFilterSubGroup(uniqueSubs[0] as string);
     if (uniqueCats.length === 1 && !currentCat) setFilterCategory(uniqueCats[0] as string);
     if (uniqueBrands.length === 1 && !currentBrand) setFilterBrand(uniqueBrands[0] as string);
-    if (uniqueModels.length === 1 && !currentModel) setFilterModel(uniqueModels[0] as string);
+    if (uniqueModelNos.length === 1 && !currentModelNo) setFilterModelNo(uniqueModelNos[0] as string);
   };
 
   // Handlers with cascading clear logic
@@ -313,7 +314,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     setFilterSubGroup('');
     setFilterCategory('');
     setFilterBrand('');
-    setFilterModel('');
+    setFilterModelNo('');
     setMachineId('');
     inferUpstreamFilters(val, '', '', '', '');
   };
@@ -322,7 +323,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     setFilterSubGroup(val);
     setFilterCategory('');
     setFilterBrand('');
-    setFilterModel('');
+    setFilterModelNo('');
     setMachineId('');
     inferUpstreamFilters(filterMainGroup, val, '', '', '');
   };
@@ -330,20 +331,20 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const handleCategoryChange = (val: string) => {
     setFilterCategory(val);
     setFilterBrand('');
-    setFilterModel('');
+    setFilterModelNo('');
     setMachineId('');
     inferUpstreamFilters(filterMainGroup, filterSubGroup, val, '', '');
   };
 
   const handleBrandChange = (val: string) => {
     setFilterBrand(val);
-    setFilterModel('');
+    setFilterModelNo('');
     setMachineId('');
     inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, val, '');
   };
 
-  const handleModelChange = (val: string) => {
-    setFilterModel(val);
+  const handleModelNoChange = (val: string) => {
+    setFilterModelNo(val);
     setMachineId('');
     inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, filterBrand, val);
   };
@@ -357,7 +358,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
         if (m.subGroup) setFilterSubGroup(m.subGroup);
         if (m.category) setFilterCategory(m.category);
         if (m.brand) setFilterBrand(m.brand);
-        if (m.model) setFilterModel(m.model);
+        if (m.modelNo) setFilterModelNo(m.modelNo);
     }
   };
 
@@ -399,14 +400,14 @@ const IssueForm: React.FC<IssueFormProps> = ({
     return Array.from(brands).map(b => ({ id: b, label: b }));
   }, [machines, filterMainGroup, filterSubGroup, filterCategory]);
 
-  const modelOptions = useMemo(() => {
+  const modelNoOptions = useMemo(() => {
     const models = new Set<string>();
     machines.forEach(m => {
        if (filterMainGroup && m.mainGroup !== filterMainGroup) return;
        if (filterSubGroup && m.subGroup !== filterSubGroup) return;
        if (filterCategory && m.category !== filterCategory) return;
        if (filterBrand && m.brand !== filterBrand) return;
-       if (m.model) models.add(m.model);
+       if (m.modelNo) models.add(m.modelNo);
     });
     return Array.from(models).map(mod => ({ id: mod, label: mod }));
   }, [machines, filterMainGroup, filterSubGroup, filterCategory, filterBrand]);
@@ -470,7 +471,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     if (filterSubGroup && m.subGroup !== filterSubGroup) return false;
     if (filterCategory && m.category !== filterCategory) return false;
     if (filterBrand && m.brand !== filterBrand) return false;
-    if (filterModel && m.model !== filterModel) return false;
+    if (filterModelNo && m.modelNo !== filterModelNo) return false;
     return true;
   });
 
@@ -614,8 +615,12 @@ const IssueForm: React.FC<IssueFormProps> = ({
                    <h4 className="text-xs font-bold text-gray-400 uppercase">Technical Filter</h4>
                    <SearchableSelect label="Main Group" options={mainGroupOptions} value={filterMainGroup} onChange={handleMainGroupChange} placeholder="Filter by Group..." />
                    <div className="grid grid-cols-2 gap-2">
-                     <SearchableSelect label="Category" disabled={!filterMainGroup} options={categoryOptions} value={filterCategory} onChange={handleCategoryChange} placeholder="Cat..." />
-                     <SearchableSelect label="Brand" options={brandOptions} value={filterBrand} onChange={handleBrandChange} placeholder="Brand..." />
+                     <SearchableSelect label="Sub Group" options={subGroupOptions} value={filterSubGroup} onChange={handleSubGroupChange} placeholder="Sub Group..." />
+                     <SearchableSelect label="Category" options={categoryOptions} value={filterCategory} onChange={handleCategoryChange} placeholder="Cat..." />
+                   </div>
+                   <div className="grid grid-cols-2 gap-2">
+                      <SearchableSelect label="Brand" options={brandOptions} value={filterBrand} onChange={handleBrandChange} placeholder="Brand..." />
+                      <SearchableSelect label="Model No (طراز المعده)" options={modelNoOptions} value={filterModelNo} onChange={handleModelNoChange} placeholder="Model No..." />
                    </div>
                 </div>
                 

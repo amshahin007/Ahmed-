@@ -29,7 +29,8 @@ export interface Division {
 export interface Machine {
   id: string;
   name: string;
-  model: string;
+  model: string;       // Used as Model Name or Legacy Model
+  modelNo?: string;    // New Field: "Model No (طراز المعده)"
   divisionId?: string; // Optional for backward compatibility, but used for filtering
   
   // New Classification Fields
