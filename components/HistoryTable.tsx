@@ -123,18 +123,18 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
                         filteredHistory.map((record) => (
                             <tr key={record.id} className="hover:bg-gray-50 transition">
                                 {/* ID */}
-                                <td className="px-6 py-4 font-medium text-gray-900 align-top whitespace-nowrap">
+                                <td className="px-6 py-4 font-medium text-gray-900 align-middle whitespace-nowrap">
                                   {record.id}
                                 </td>
                                 
                                 {/* Date */}
-                                <td className="px-6 py-4 align-top whitespace-nowrap">
+                                <td className="px-6 py-4 align-middle whitespace-nowrap">
                                   <div>{new Date(record.timestamp).toLocaleDateString()}</div>
                                   <div className="text-xs text-gray-400">{new Date(record.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                 </td>
                                 
                                 {/* Location / Site */}
-                                <td className="px-6 py-4 align-top min-w-[150px]">
+                                <td className="px-6 py-4 align-middle whitespace-nowrap">
                                     <div className="font-medium text-gray-800">{record.locationId}</div>
                                     {record.requesterEmail && (
                                       <div className="text-xs text-blue-600 mt-1">{record.requesterEmail}</div>
@@ -142,35 +142,35 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
                                 </td>
 
                                 {/* Sector / Div */}
-                                <td className="px-6 py-4 align-top min-w-[120px]">
+                                <td className="px-6 py-4 align-middle whitespace-nowrap">
                                     <div className="text-xs text-gray-500">{record.sectorName || '-'}</div>
                                     <div className="text-xs text-gray-400">{record.divisionName || '-'}</div>
                                 </td>
                                 
                                 {/* Machine & Plan */}
-                                <td className="px-6 py-4 align-top min-w-[180px]">
+                                <td className="px-6 py-4 align-middle whitespace-nowrap">
                                     <div className="text-gray-900 font-medium">{record.machineName}</div>
                                     {record.maintenancePlan && (
-                                      <div className="mt-1 inline-block px-2 py-0.5 bg-orange-50 text-orange-700 text-[10px] rounded border border-orange-100">
+                                      <div className="mt-1 inline-block px-2 py-0.5 bg-orange-50 text-orange-700 text-[10px] rounded border border-orange-100 whitespace-nowrap">
                                         {record.maintenancePlan}
                                       </div>
                                     )}
                                 </td>
 
                                 {/* Item Details */}
-                                <td className="px-6 py-4 align-top min-w-[180px]">
+                                <td className="px-6 py-4 align-middle whitespace-nowrap">
                                     <div className="text-gray-900 font-medium">{record.itemName}</div>
                                     <div className="text-xs text-gray-500 font-mono">{record.itemId}</div>
                                 </td>
                                 
                                 {/* Qty */}
-                                <td className="px-6 py-4 font-mono font-bold align-top">
+                                <td className="px-6 py-4 font-mono font-bold align-middle whitespace-nowrap">
                                   {record.quantity}
                                 </td>
                                 
                                 {/* Status */}
-                                <td className="px-6 py-4 align-top whitespace-nowrap">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium inline-block ${
+                                <td className="px-6 py-4 align-middle whitespace-nowrap">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium inline-block whitespace-nowrap ${
                                         record.status === 'Completed' || record.status === 'Approved' ? 'bg-green-100 text-green-700' :
                                         record.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
                                         record.status === 'Rejected' ? 'bg-red-100 text-red-700' :
@@ -179,7 +179,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
                                         {record.status}
                                     </span>
                                     {record.notes && (
-                                      <div className="text-xs text-gray-500 mt-2 italic max-w-xs">
+                                      <div className="text-xs text-gray-500 mt-2 italic whitespace-nowrap">
                                         "{record.notes}"
                                       </div>
                                     )}

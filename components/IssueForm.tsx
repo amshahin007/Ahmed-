@@ -546,17 +546,17 @@ const IssueForm: React.FC<IssueFormProps> = ({
             <table className="w-full text-left border-collapse border border-black mb-8">
                 <thead>
                     <tr className="bg-gray-100">
-                         <th className="border border-black p-2">Item Number</th>
-                         <th className="border border-black p-2">Item Name</th>
-                         <th className="border border-black p-2 text-right">Qty</th>
+                         <th className="border border-black p-2 whitespace-nowrap">Item Number</th>
+                         <th className="border border-black p-2 whitespace-nowrap">Item Name</th>
+                         <th className="border border-black p-2 text-right whitespace-nowrap">Qty</th>
                     </tr>
                 </thead>
                 <tbody>
                     {lastSubmittedBatch.map(item => (
                         <tr key={item.id}>
-                            <td className="border border-black p-2">{item.itemId}</td>
-                            <td className="border border-black p-2">{item.itemName}</td>
-                            <td className="border border-black p-2 text-right font-bold">{item.quantity}</td>
+                            <td className="border border-black p-2 whitespace-nowrap">{item.itemId}</td>
+                            <td className="border border-black p-2 whitespace-nowrap">{item.itemName}</td>
+                            <td className="border border-black p-2 text-right font-bold whitespace-nowrap">{item.quantity}</td>
                         </tr>
                     ))}
                 </tbody>
@@ -690,19 +690,19 @@ const IssueForm: React.FC<IssueFormProps> = ({
                     <table className="w-full text-sm text-left min-w-[500px]">
                         <thead className="bg-gray-100 text-gray-700 font-semibold">
                             <tr>
-                                <th className="px-4 py-2">Item Number</th>
-                                <th className="px-4 py-2">Item Name</th>
-                                <th className="px-4 py-2 w-24 text-center">Qty</th>
-                                <th className="px-4 py-2 w-24 text-center">Action</th>
+                                <th className="px-4 py-2 whitespace-nowrap">Item Number</th>
+                                <th className="px-4 py-2 whitespace-nowrap">Item Name</th>
+                                <th className="px-4 py-2 w-24 text-center whitespace-nowrap">Qty</th>
+                                <th className="px-4 py-2 w-24 text-center whitespace-nowrap">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {lineItems.map((line, idx) => (
                                 <tr key={idx} className="hover:bg-gray-50">
-                                    <td className="px-4 py-2 font-mono text-gray-600 font-bold">{line.itemId}</td>
-                                    <td className="px-4 py-2">{line.itemName}</td>
-                                    <td className="px-4 py-2 text-center font-bold text-lg">{line.quantity}</td>
-                                    <td className="px-4 py-2 text-center">
+                                    <td className="px-4 py-2 font-mono text-gray-600 font-bold whitespace-nowrap">{line.itemId}</td>
+                                    <td className="px-4 py-2 whitespace-nowrap">{line.itemName}</td>
+                                    <td className="px-4 py-2 text-center font-bold text-lg whitespace-nowrap">{line.quantity}</td>
+                                    <td className="px-4 py-2 text-center whitespace-nowrap">
                                         <button type="button" onClick={() => handleRemoveLineItem(idx)} className="text-red-500 hover:text-red-700 font-medium">Remove</button>
                                     </td>
                                 </tr>

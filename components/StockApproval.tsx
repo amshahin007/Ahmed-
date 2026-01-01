@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { IssueRecord, Location } from '../types';
 
@@ -114,12 +115,12 @@ const StockApproval: React.FC<StockApprovalProps> = ({ history, locations, onUpd
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="bg-gray-50 border-b border-gray-200 text-sm uppercase text-gray-500 font-semibold tracking-wider">
-                            <th className="p-4">Date / ID</th>
-                            <th className="p-4">Location / Machine</th>
-                            <th className="p-4">Item Details</th>
-                            <th className="p-4 w-32">Qty Request</th>
-                            <th className="p-4 w-48">Notes</th>
-                            <th className="p-4 text-center">Actions</th>
+                            <th className="p-4 whitespace-nowrap">Date / ID</th>
+                            <th className="p-4 whitespace-nowrap">Location / Machine</th>
+                            <th className="p-4 whitespace-nowrap">Item Details</th>
+                            <th className="p-4 w-32 whitespace-nowrap">Qty Request</th>
+                            <th className="p-4 w-48 whitespace-nowrap">Notes</th>
+                            <th className="p-4 text-center whitespace-nowrap">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -129,20 +130,20 @@ const StockApproval: React.FC<StockApprovalProps> = ({ history, locations, onUpd
                             
                             return (
                                 <tr key={issue.id} className="hover:bg-blue-50 transition-colors group">
-                                    <td className="p-4 align-top">
+                                    <td className="p-4 align-middle whitespace-nowrap">
                                         <div className="text-gray-900 font-medium">{issue.id}</div>
                                         <div className="text-xs text-gray-500">{new Date(issue.timestamp).toLocaleDateString()}</div>
                                         <div className="text-xs text-gray-400">{new Date(issue.timestamp).toLocaleTimeString()}</div>
                                     </td>
-                                    <td className="p-4 align-top">
+                                    <td className="p-4 align-middle whitespace-nowrap">
                                         <div className="text-sm font-medium text-gray-800">{issue.machineName}</div>
                                         <div className="text-xs text-gray-500">{issue.locationId}</div>
                                     </td>
-                                    <td className="p-4 align-top">
+                                    <td className="p-4 align-middle whitespace-nowrap">
                                         <div className="text-sm font-medium text-blue-700">{issue.itemName}</div>
                                         <div className="text-xs text-gray-500 font-mono">{issue.itemId}</div>
                                     </td>
-                                    <td className="p-4 align-top">
+                                    <td className="p-4 align-middle whitespace-nowrap">
                                         <input 
                                             type="number" 
                                             min="0"
@@ -154,7 +155,7 @@ const StockApproval: React.FC<StockApprovalProps> = ({ history, locations, onUpd
                                             <div className="text-xs text-orange-600 mt-1 font-medium">Reduced</div>
                                         )}
                                     </td>
-                                    <td className="p-4 align-top">
+                                    <td className="p-4 align-middle whitespace-nowrap">
                                         <textarea 
                                             placeholder="Add notes..."
                                             rows={2}
@@ -163,7 +164,7 @@ const StockApproval: React.FC<StockApprovalProps> = ({ history, locations, onUpd
                                             className="w-full text-sm px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                                         />
                                     </td>
-                                    <td className="p-4 align-top text-center space-y-2">
+                                    <td className="p-4 align-middle text-center space-y-2 whitespace-nowrap">
                                         <button 
                                             onClick={() => processAction(issue, 'Approved')}
                                             className="w-full px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 shadow-sm transition flex items-center justify-center gap-1"

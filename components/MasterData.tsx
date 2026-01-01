@@ -802,7 +802,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     }
     if (activeTab === 'users' && key === 'role') {
        return (
-         <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+         <span className={`px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
             row.role === 'admin' ? 'bg-purple-100 text-purple-700' :
             row.role.includes('manager') ? 'bg-orange-100 text-orange-700' :
             'bg-blue-100 text-blue-700'
@@ -812,13 +812,13 @@ const MasterData: React.FC<MasterDataProps> = ({
        );
     }
     if (activeTab === 'users' && key === 'allowedLocationIds') {
-        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs">All Access</span>;
-        if (!row.allowedLocationIds || row.allowedLocationIds.length === 0) return <span className="text-gray-400 italic text-xs">No restrictions</span>;
+        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs whitespace-nowrap">All Access</span>;
+        if (!row.allowedLocationIds || row.allowedLocationIds.length === 0) return <span className="text-gray-400 italic text-xs whitespace-nowrap">No restrictions</span>;
         
         return (
-           <div className="flex flex-wrap gap-1 max-w-[200px]">
+           <div className="flex gap-1">
              {row.allowedLocationIds.map((lid: string) => (
-               <span key={lid} className="px-1.5 py-0.5 bg-gray-100 rounded border border-gray-200 text-xs">
+               <span key={lid} className="px-1.5 py-0.5 bg-gray-100 rounded border border-gray-200 text-xs whitespace-nowrap">
                   {locations.find(l => l.id === lid)?.name || lid}
                </span>
              ))}
@@ -827,13 +827,13 @@ const MasterData: React.FC<MasterDataProps> = ({
     }
 
     if (activeTab === 'users' && key === 'allowedSectorIds') {
-        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs">All Access</span>;
-        if (!row.allowedSectorIds || row.allowedSectorIds.length === 0) return <span className="text-gray-400 italic text-xs">No restrictions</span>;
+        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs whitespace-nowrap">All Access</span>;
+        if (!row.allowedSectorIds || row.allowedSectorIds.length === 0) return <span className="text-gray-400 italic text-xs whitespace-nowrap">No restrictions</span>;
         
         return (
-           <div className="flex flex-wrap gap-1 max-w-[200px]">
+           <div className="flex gap-1">
              {row.allowedSectorIds.map((sid: string) => (
-               <span key={sid} className="px-1.5 py-0.5 bg-indigo-100 rounded border border-indigo-200 text-xs text-indigo-800">
+               <span key={sid} className="px-1.5 py-0.5 bg-indigo-100 rounded border border-indigo-200 text-xs text-indigo-800 whitespace-nowrap">
                   {sectors.find(s => s.id === sid)?.name || sid}
                </span>
              ))}
@@ -842,13 +842,13 @@ const MasterData: React.FC<MasterDataProps> = ({
     }
 
     if (activeTab === 'users' && key === 'allowedDivisionIds') {
-        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs">All Access</span>;
-        if (!row.allowedDivisionIds || row.allowedDivisionIds.length === 0) return <span className="text-gray-400 italic text-xs">No restrictions</span>;
+        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs whitespace-nowrap">All Access</span>;
+        if (!row.allowedDivisionIds || row.allowedDivisionIds.length === 0) return <span className="text-gray-400 italic text-xs whitespace-nowrap">No restrictions</span>;
         
         return (
-           <div className="flex flex-wrap gap-1 max-w-[200px]">
+           <div className="flex gap-1">
              {row.allowedDivisionIds.map((did: string) => (
-               <span key={did} className="px-1.5 py-0.5 bg-pink-100 rounded border border-pink-200 text-xs text-pink-800">
+               <span key={did} className="px-1.5 py-0.5 bg-pink-100 rounded border border-pink-200 text-xs text-pink-800 whitespace-nowrap">
                   {divisions.find(d => d.id === did)?.name || did}
                </span>
              ))}
@@ -857,7 +857,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     }
     
     // Default Text Render
-    return <span className="text-gray-700">{row[key] || '-'}</span>;
+    return <span className="text-gray-700 whitespace-nowrap">{row[key] || '-'}</span>;
   };
 
   const renderTable = () => {
@@ -947,12 +947,12 @@ const MasterData: React.FC<MasterDataProps> = ({
                 {paginatedData.map((row: any) => (
                 <tr key={row.id || row.username} className="hover:bg-gray-50 transition">
                     {visibleColumns.map(col => (
-                       <td key={col.key} className="px-6 py-3 align-top">
+                       <td key={col.key} className="px-6 py-3 align-middle whitespace-nowrap">
                           {renderCellContent(col.key, row)}
                        </td>
                     ))}
 
-                    <td className="px-6 py-3 align-top">
+                    <td className="px-6 py-3 align-middle whitespace-nowrap">
                        <div className="flex items-center gap-3">
                         <button 
                             onClick={() => handleEdit(row)}
