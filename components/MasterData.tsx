@@ -1077,7 +1077,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                         </th>
                     );
                 })}
-                <th className="sticky top-0 right-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-3 font-semibold text-gray-700 whitespace-nowrap">Actions</th>
+                <th className="sticky top-0 right-0 z-30 bg-gray-50 border-b border-l border-gray-200 px-6 py-3 font-semibold text-gray-700 whitespace-nowrap shadow-sm">Actions</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -1106,7 +1106,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                             );
                             })}
 
-                            <td className="px-6 py-3 align-middle whitespace-nowrap">
+                            <td className="sticky right-0 z-10 bg-inherit border-l border-gray-100 px-6 py-3 align-middle whitespace-nowrap shadow-sm">
                             <div className="flex items-center gap-3">
                                 <button 
                                     onClick={() => handleEdit(row)}
