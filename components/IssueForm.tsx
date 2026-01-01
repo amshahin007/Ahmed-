@@ -126,90 +126,99 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation Checks
-    if (!locationId) {
-        alert("Please select a 'Warehouse Location' from the dropdown list.");
-        return;
-    }
-    if (!machineId) {
-        alert("Please select a 'Machine' from the dropdown list.");
-        return;
-    }
-    if (lineItems.length === 0) {
-        alert("Please add at least one item to the list before submitting.");
-        return;
-    }
-    if (!selectedPlanId) {
-        alert("Please check a 'Maintenance Plan' before submitting.");
-        return;
-    }
-    if (!warehouseEmail) {
-        alert("Please provide a Warehouse Email address.");
-        return;
-    }
+    try {
+        // Validation Checks
+        if (!locationId) {
+            alert("Please select a 'Warehouse Location' from the dropdown list.");
+            return;
+        }
+        if (!machineId) {
+            alert("Please select a 'Machine' from the dropdown list.");
+            return;
+        }
+        if (lineItems.length === 0) {
+            alert("Please add at least one item to the list before submitting.");
+            return;
+        }
+        if (!selectedPlanId) {
+            alert("Please check a 'Maintenance Plan' before submitting.");
+            return;
+        }
+        if (!warehouseEmail) {
+            alert("Please provide a Warehouse Email address.");
+            return;
+        }
 
-    setIsSubmitting(true);
-    setEmailStatus('Processing Request & Sending Email...');
-    
-    const machine = machines.find(m => m.id === machineId);
-    const sector = sectors.find(s => s.id === sectorId);
-    const division = divisions.find(d => d.id === divisionId);
-    const plan = maintenancePlans.find(p => p.id === selectedPlanId);
+        setIsSubmitting(true);
+        setEmailStatus('Processing Request & Sending Email...');
+        
+        const machine = machines.find(m => m.id === machineId);
+        const sector = sectors.find(s => s.id === sectorId);
+        const division = divisions.find(d => d.id === divisionId);
+        const plan = maintenancePlans.find(p => p.id === selectedPlanId);
 
-    const timestamp = new Date().toISOString();
-    const batchIdBase = Date.now().toString().slice(-6);
-    
-    const newRecords: IssueRecord[] = [];
+        const timestamp = new Date().toISOString();
+        const batchIdBase = Date.now().toString().slice(-6);
+        
+        const newRecords: IssueRecord[] = [];
 
-    // Create a record for each line item
-    for (let i = 0; i < lineItems.length; i++) {
-      const line = lineItems[i];
-      const newIssue: IssueRecord = {
-        id: `REQ-${batchIdBase}-${i + 1}`,
-        timestamp: timestamp,
-        locationId,
-        itemId: line.itemId,
-        itemName: line.itemName,
-        quantity: line.quantity,
-        machineId,
-        machineName: machine ? machine.name : 'Unknown Machine',
-        sectorName: sector ? sector.name : '',
-        divisionName: division ? division.name : '',
-        maintenancePlan: plan ? plan.name : '',
-        status: 'Pending',
-        warehouseEmail,
-        requesterEmail
-      };
-      newRecords.push(newIssue);
+        // Create a record for each line item
+        for (let i = 0; i < lineItems.length; i++) {
+        const line = lineItems[i];
+        const newIssue: IssueRecord = {
+            id: `REQ-${batchIdBase}-${i + 1}`,
+            timestamp: timestamp,
+            locationId,
+            itemId: line.itemId,
+            itemName: line.itemName,
+            quantity: line.quantity,
+            machineId,
+            machineName: machine ? machine.name : 'Unknown Machine',
+            sectorName: sector ? sector.name : '',
+            divisionName: division ? division.name : '',
+            maintenancePlan: plan ? plan.name : '',
+            status: 'Pending',
+            warehouseEmail,
+            requesterEmail
+        };
+        newRecords.push(newIssue);
+        }
+
+        // Simulate Network Delay
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        // 1. Trigger AI Email Generation (Simulation of sending)
+        // Wrapped safely inside geminiService, but extra check here
+        const emailData = await generateIssueEmail(newRecords);
+        console.log(`[System] Email prepared for ${warehouseEmail}: ${emailData.subject}`);
+        
+        // 2. Check for Google Sheet Script URL
+        const scriptUrl = localStorage.getItem('wf_script_url');
+        if (scriptUrl) {
+            console.log("Syncing with Google Sheet...");
+            // Non-blocking sync
+            Promise.all(newRecords.map(r => sendIssueToSheet(scriptUrl, r)))
+                .catch(err => console.error("Sheet Sync Failed", err));
+        }
+
+        // 3. Save records locally
+        // Updating state in parent component
+        newRecords.forEach(record => onAddIssue(record));
+        
+        setLastSubmittedBatch(newRecords);
+        setEmailStatus(`Sent to: ${warehouseEmail}`);
+        
+        // 4. Reset Form logic
+        setMachineId('');
+        setLineItems([]);
+        setSelectedPlanId('');
+        
+    } catch (error) {
+        console.error("Critical Error during submission:", error);
+        alert("An unexpected error occurred while processing the request. Please check the console for details.");
+    } finally {
+        setIsSubmitting(false);
     }
-
-    // Simulate Network Delay & Email Sending
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // 1. Trigger AI Email Generation (Simulation of sending)
-    const emailData = await generateIssueEmail(newRecords);
-    console.log(`[System] Email sent to ${warehouseEmail} with subject: ${emailData.subject}`);
-    
-    // 2. Check for Google Sheet Script URL
-    const scriptUrl = localStorage.getItem('wf_script_url');
-    if (scriptUrl) {
-       console.log("Syncing with Google Sheet...");
-       newRecords.forEach(r => sendIssueToSheet(scriptUrl, r));
-    }
-
-    // 3. Save records locally
-    newRecords.forEach(record => onAddIssue(record));
-    
-    setLastSubmittedBatch(newRecords);
-    setEmailStatus(`Sent to: ${warehouseEmail}`);
-    
-    // 4. Reset Form logic (Keep Location as it might be same)
-    // setLocationId(''); 
-    setMachineId('');
-    setLineItems([]);
-    setSelectedPlanId('');
-    
-    setIsSubmitting(false);
   };
 
   const handlePrint = () => {

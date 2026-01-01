@@ -1,13 +1,20 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { IssueRecord } from "../types";
 
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.warn("API Key not found in environment variables.");
+  try {
+    // Safely check for process.env. In browser ESM without a bundler polyfill, process might be undefined.
+    const apiKey = typeof process !== 'undefined' && process.env ? process.env.API_KEY : null;
+    if (!apiKey) {
+      console.warn("API Key not found in environment variables.");
+      return null;
+    }
+    return new GoogleGenAI({ apiKey });
+  } catch (e) {
+    console.warn("Error initializing AI client:", e);
     return null;
   }
-  return new GoogleGenAI({ apiKey });
 };
 
 export const generateDashboardInsights = async (history: IssueRecord[]): Promise<string> => {
@@ -47,12 +54,12 @@ export const generateIssueEmail = async (input: IssueRecord | IssueRecord[]): Pr
   const firstRecord = records[0];
   const isMultiLine = records.length > 1;
 
+  const fallbackSubject = `Issue Alert: ${isMultiLine ? 'Multiple Items' : firstRecord.itemName}`;
+  const fallbackBody = `New issue recorded.\n\nMachine: ${firstRecord.machineName}\nLocation: ${firstRecord.locationId}\n\nItems:\n${records.map(r => `- ${r.itemName} (${r.quantity})`).join('\n')}`;
+
   // Fallback if AI not available
   if (!ai) {
-    return {
-      subject: `Issue Alert: ${isMultiLine ? 'Multiple Items' : firstRecord.itemName}`,
-      body: `New issue recorded.\n\nMachine: ${firstRecord.machineName}\nLocation: ${firstRecord.locationId}\n\nItems:\n${records.map(r => `- ${r.itemName} (${r.quantity})`).join('\n')}`
-    };
+    return { subject: fallbackSubject, body: fallbackBody };
   }
 
   try {
@@ -79,9 +86,6 @@ export const generateIssueEmail = async (input: IssueRecord | IssueRecord[]): Pr
     return JSON.parse(jsonText);
   } catch (error) {
     console.error("Gemini Email Error:", error);
-     return {
-      subject: `Issue Alert: ${isMultiLine ? 'Multiple Items' : firstRecord.itemName}`,
-      body: `New issue recorded.\n\nMachine: ${firstRecord.machineName}\nLocation: ${firstRecord.locationId}\n\nItems:\n${records.map(r => `- ${r.itemName} (${r.quantity})`).join('\n')}`
-    };
+     return { subject: fallbackSubject, body: fallbackBody };
   }
 };

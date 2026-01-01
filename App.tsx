@@ -8,6 +8,7 @@ import HistoryTable from './components/HistoryTable';
 import MasterData from './components/MasterData';
 import StockApproval from './components/StockApproval';
 import Login from './components/Login';
+import * as storageService from './services/storageService';
 import { 
   INITIAL_HISTORY, 
   ITEMS as INIT_ITEMS, 
@@ -20,62 +21,87 @@ import {
 } from './constants';
 import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan } from './types';
 
-// Helper to load from LocalStorage safely
-const loadFromStorage = <T,>(key: string, fallback: T): T => {
+// Helper to load small configs from LocalStorage safely (kept for non-data prefs)
+const loadConfig = <T,>(key: string, fallback: T): T => {
   try {
     const stored = localStorage.getItem(key);
     return stored ? JSON.parse(stored) : fallback;
   } catch (error) {
-    console.error(`Error loading ${key} from storage:`, error);
     return fallback;
   }
 };
 
-// Helper to save to LocalStorage safely preventing crashes on quota limit
-const saveToStorage = (key: string, data: any) => {
-    try {
-        localStorage.setItem(key, JSON.stringify(data));
-    } catch (error) {
-        if (error instanceof DOMException && 
-            (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
-            console.error(`Storage limit reached for ${key}. Data not saved.`);
-            // Using a simple debounce/check to avoid spamming alerts could be added, 
-            // but for now, we just log to console to prevent the crash.
-            // alert(`Warning: Local storage limit reached! Changes to ${key} will not be saved permanently. Please export your data.`);
-        } else {
-            console.error(`Error saving ${key} to storage:`, error);
-        }
-    }
-};
-
 const App: React.FC = () => {
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
   // --- Auth State ---
-  const [user, setUser] = useState<User | null>(() => loadFromStorage('wf_user', null));
+  // User session is small, keep in localStorage for simplicity or move to DB. Keeping in LS for now to avoid async login flicker.
+  const [user, setUser] = useState<User | null>(() => loadConfig('wf_user', null));
 
   // --- View State ---
   const [currentView, setCurrentView] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  // --- Data State with Persistence ---
-  const [history, setHistory] = useState<IssueRecord[]>(() => loadFromStorage('wf_history', INITIAL_HISTORY));
-  const [items, setItems] = useState<Item[]>(() => loadFromStorage('wf_items', INIT_ITEMS));
-  const [machines, setMachines] = useState<Machine[]>(() => loadFromStorage('wf_machines', INIT_MACHINES));
-  const [locations, setLocations] = useState<Location[]>(() => loadFromStorage('wf_locations', INIT_LOCATIONS));
-  const [sectors, setSectors] = useState<Sector[]>(() => loadFromStorage('wf_sectors', INIT_SECTORS));
-  const [divisions, setDivisions] = useState<Division[]>(() => loadFromStorage('wf_divisions', INIT_DIVISIONS));
-  const [plans, setPlans] = useState<MaintenancePlan[]>(() => loadFromStorage('wf_plans', INIT_PLANS));
-  const [usersList, setUsersList] = useState<User[]>(() => loadFromStorage('wf_users', INIT_USERS));
+  // --- Data State ---
+  const [history, setHistory] = useState<IssueRecord[]>(INITIAL_HISTORY);
+  const [items, setItems] = useState<Item[]>(INIT_ITEMS);
+  const [machines, setMachines] = useState<Machine[]>(INIT_MACHINES);
+  const [locations, setLocations] = useState<Location[]>(INIT_LOCATIONS);
+  const [sectors, setSectors] = useState<Sector[]>(INIT_SECTORS);
+  const [divisions, setDivisions] = useState<Division[]>(INIT_DIVISIONS);
+  const [plans, setPlans] = useState<MaintenancePlan[]>(INIT_PLANS);
+  const [usersList, setUsersList] = useState<User[]>(INIT_USERS);
 
-  // Persistence Effects - Wrapped in Safe Saver
-  useEffect(() => { saveToStorage('wf_user', user); }, [user]);
-  useEffect(() => { saveToStorage('wf_history', history); }, [history]);
-  useEffect(() => { saveToStorage('wf_items', items); }, [items]);
-  useEffect(() => { saveToStorage('wf_machines', machines); }, [machines]);
-  useEffect(() => { saveToStorage('wf_locations', locations); }, [locations]);
-  useEffect(() => { saveToStorage('wf_sectors', sectors); }, [sectors]);
-  useEffect(() => { saveToStorage('wf_divisions', divisions); }, [divisions]);
-  useEffect(() => { saveToStorage('wf_plans', plans); }, [plans]);
-  useEffect(() => { saveToStorage('wf_users', usersList); }, [usersList]);
+  // --- Load Data from IndexedDB on Mount ---
+  useEffect(() => {
+    const loadAllData = async () => {
+      try {
+        const [
+          loadedHistory, loadedItems, loadedMachines, loadedLocations, 
+          loadedSectors, loadedDivisions, loadedPlans, loadedUsers
+        ] = await Promise.all([
+          storageService.getItem<IssueRecord[]>('wf_history'),
+          storageService.getItem<Item[]>('wf_items'),
+          storageService.getItem<Machine[]>('wf_machines'),
+          storageService.getItem<Location[]>('wf_locations'),
+          storageService.getItem<Sector[]>('wf_sectors'),
+          storageService.getItem<Division[]>('wf_divisions'),
+          storageService.getItem<MaintenancePlan[]>('wf_plans'),
+          storageService.getItem<User[]>('wf_users'),
+        ]);
+
+        if (loadedHistory) setHistory(loadedHistory);
+        if (loadedItems) setItems(loadedItems);
+        if (loadedMachines) setMachines(loadedMachines);
+        if (loadedLocations) setLocations(loadedLocations);
+        if (loadedSectors) setSectors(loadedSectors);
+        if (loadedDivisions) setDivisions(loadedDivisions);
+        if (loadedPlans) setPlans(loadedPlans);
+        if (loadedUsers) setUsersList(loadedUsers);
+
+      } catch (err) {
+        console.error("Failed to load data from database:", err);
+      } finally {
+        setIsDataLoaded(true);
+      }
+    };
+    loadAllData();
+  }, []);
+
+  // --- Persistence Effects (Save on Change) ---
+  // Only save if data has been loaded to prevent overwriting DB with initial empty/default state
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_history', history); }, [history, isDataLoaded]);
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_items', items); }, [items, isDataLoaded]);
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_machines', machines); }, [machines, isDataLoaded]);
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_locations', locations); }, [locations, isDataLoaded]);
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_sectors', sectors); }, [sectors, isDataLoaded]);
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_divisions', divisions); }, [divisions, isDataLoaded]);
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_plans', plans); }, [plans, isDataLoaded]);
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_users', usersList); }, [usersList, isDataLoaded]);
+  
+  // User persist to localStorage (Auth)
+  useEffect(() => { localStorage.setItem('wf_user', JSON.stringify(user)); }, [user]);
+
 
   // Auth Handlers
   const handleLogin = (loggedInUser: User) => {
@@ -154,14 +180,10 @@ const App: React.FC = () => {
 
   // --- Bulk Import Handler (Performance Optimized) ---
   const handleBulkImport = (tab: string, added: any[], updated: any[]) => {
-    // Generic helper for entities with 'id' field
     const updateIdBasedState = (setter: React.Dispatch<React.SetStateAction<any[]>>) => {
         setter(prev => {
-            // Create map for O(1) lookup of updates
             const updateMap = new Map(updated.map(u => [u.id, u]));
-            // Apply updates to existing items
             const nextState = prev.map(item => updateMap.has(item.id) ? updateMap.get(item.id) : item);
-            // Append new items
             return [...nextState, ...added];
         });
     };
@@ -174,7 +196,6 @@ const App: React.FC = () => {
         case 'divisions': updateIdBasedState(setDivisions); break;
         case 'plans': updateIdBasedState(setPlans); break;
         case 'users': 
-            // Users use 'username' as ID
             setUsersList(prev => {
                 const updateMap = new Map(updated.map((u: any) => [u.username, u]));
                 const nextState = prev.map(u => updateMap.has(u.username) ? updateMap.get(u.username)! : u);
@@ -183,6 +204,17 @@ const App: React.FC = () => {
             break;
     }
   };
+
+  // Loading Screen
+  if (!isDataLoaded) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50 flex-col">
+        <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <h2 className="text-xl font-bold text-gray-700">Loading WareFlow Data...</h2>
+        <p className="text-gray-500 text-sm mt-2">Initializing Database</p>
+      </div>
+    );
+  }
 
   // If no user is logged in, show Login Screen
   if (!user) {
@@ -208,7 +240,6 @@ const App: React.FC = () => {
           />
         );
       case 'stock-approval':
-        // Protected Route: Admin, Warehouse Manager, Warehouse Supervisor
         if (!['admin', 'warehouse_manager', 'warehouse_supervisor'].includes(user.role)) return <Dashboard history={history} />;
         return (
           <StockApproval 
@@ -220,7 +251,6 @@ const App: React.FC = () => {
       case 'history':
         return <HistoryTable history={history} locations={locations} />;
       case 'master-data':
-        // Protected Route: Admin only
         if (user.role !== 'admin') return <Dashboard history={history} />;
         return (
           <MasterData 
@@ -295,7 +325,6 @@ const App: React.FC = () => {
                     <p className="font-medium text-gray-900">Welcome, {user.name}</p>
                     <p className="text-xs text-gray-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
                 </div>
-                {/* Mobile User Icon */}
                 <div className="sm:hidden w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs">
                     {user.username.substring(0,2).toUpperCase()}
                 </div>
