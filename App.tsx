@@ -128,9 +128,29 @@ const App: React.FC = () => {
     setUsersList(prev => prev.map(u => u.username === updatedUser.username ? updatedUser : u));
   };
   
-  const handleDeleteItem = (itemId: string) => {
-    setItems(prev => prev.filter(item => item.id !== itemId));
+  // Bulk Delete Handlers
+  const handleDeleteItems = (ids: string[]) => {
+    setItems(prev => prev.filter(item => !ids.includes(item.id)));
   };
+  const handleDeleteMachines = (ids: string[]) => {
+    setMachines(prev => prev.filter(m => !ids.includes(m.id)));
+  };
+  const handleDeleteLocations = (ids: string[]) => {
+    setLocations(prev => prev.filter(l => !ids.includes(l.id)));
+  };
+  const handleDeleteSectors = (ids: string[]) => {
+    setSectors(prev => prev.filter(s => !ids.includes(s.id)));
+  };
+  const handleDeleteDivisions = (ids: string[]) => {
+    setDivisions(prev => prev.filter(d => !ids.includes(d.id)));
+  };
+  const handleDeletePlans = (ids: string[]) => {
+    setPlans(prev => prev.filter(p => !ids.includes(p.id)));
+  };
+  const handleDeleteUsers = (usernames: string[]) => {
+    setUsersList(prev => prev.filter(u => !usernames.includes(u.username)));
+  };
+
 
   // --- Bulk Import Handler (Performance Optimized) ---
   const handleBulkImport = (tab: string, added: any[], updated: any[]) => {
@@ -226,7 +246,13 @@ const App: React.FC = () => {
             onUpdateDivision={handleUpdateDivision}
             onUpdatePlan={handleUpdatePlan}
             onUpdateUser={handleUpdateUser}
-            onDeleteItem={handleDeleteItem}
+            onDeleteItems={handleDeleteItems}
+            onDeleteMachines={handleDeleteMachines}
+            onDeleteLocations={handleDeleteLocations}
+            onDeleteSectors={handleDeleteSectors}
+            onDeleteDivisions={handleDeleteDivisions}
+            onDeletePlans={handleDeletePlans}
+            onDeleteUsers={handleDeleteUsers}
             onBulkImport={handleBulkImport}
           />
         );

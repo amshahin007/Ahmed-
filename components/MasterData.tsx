@@ -31,7 +31,14 @@ interface MasterDataProps {
   onUpdatePlan: (plan: MaintenancePlan) => void;
   onUpdateUser: (user: User) => void;
 
-  onDeleteItem: (itemId: string) => void;
+  onDeleteItems: (ids: string[]) => void;
+  onDeleteMachines: (ids: string[]) => void;
+  onDeleteLocations: (ids: string[]) => void;
+  onDeleteSectors: (ids: string[]) => void;
+  onDeleteDivisions: (ids: string[]) => void;
+  onDeletePlans: (ids: string[]) => void;
+  onDeleteUsers: (usernames: string[]) => void;
+
   onBulkImport: (tab: string, added: any[], updated: any[]) => void;
 }
 
@@ -97,7 +104,8 @@ const MasterData: React.FC<MasterDataProps> = ({
   history, items, machines, locations, sectors, divisions, plans, users,
   onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision, onAddPlan, onAddUser,
   onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision, onUpdatePlan, onUpdateUser,
-  onDeleteItem, onBulkImport
+  onDeleteItems, onDeleteMachines, onDeleteLocations, onDeleteSectors, onDeleteDivisions, onDeletePlans, onDeleteUsers,
+  onBulkImport
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('items');
   const [showForm, setShowForm] = useState(false);
@@ -105,6 +113,9 @@ const MasterData: React.FC<MasterDataProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({});
   
+  // Selection State
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   // Processing State for Uploads
   const [processingStatus, setProcessingStatus] = useState<string | null>(null);
 
@@ -174,9 +185,10 @@ const MasterData: React.FC<MasterDataProps> = ({
     localStorage.setItem('wf_column_settings', JSON.stringify(columnSettings));
   }, [columnSettings]);
 
-  // Reset pagination when tab changes
+  // Reset pagination and selection when tab changes
   useEffect(() => {
     setCurrentPage(1);
+    setSelectedIds(new Set());
   }, [activeTab]);
 
   const handleSheetIdChange = (val: string) => {
@@ -205,10 +217,55 @@ const MasterData: React.FC<MasterDataProps> = ({
     setShowForm(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to remove this item? This action cannot be undone.')) {
-      onDeleteItem(id);
+  const handleDeleteSingle = (id: string) => {
+    if (confirm('Are you sure you want to remove this record?')) {
+        handleDeleteImplementation([id]);
     }
+  };
+
+  const handleBulkDelete = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    if (confirm(`Are you sure you want to delete ${ids.length} records? This cannot be undone.`)) {
+        handleDeleteImplementation(ids);
+        setSelectedIds(new Set()); // Clear selection
+    }
+  };
+
+  const handleDeleteImplementation = (ids: string[]) => {
+      switch (activeTab) {
+        case 'items': onDeleteItems(ids); break;
+        case 'machines': onDeleteMachines(ids); break;
+        case 'locations': onDeleteLocations(ids); break;
+        case 'sectors': onDeleteSectors(ids); break;
+        case 'divisions': onDeleteDivisions(ids); break;
+        case 'plans': onDeletePlans(ids); break;
+        case 'users': onDeleteUsers(ids); break;
+      }
+  };
+
+  const toggleSelection = (id: string) => {
+      const newSet = new Set(selectedIds);
+      if (newSet.has(id)) {
+          newSet.delete(id);
+      } else {
+          newSet.add(id);
+      }
+      setSelectedIds(newSet);
+  };
+
+  // Select all items ON THE CURRENT PAGE
+  const handleSelectAllPage = (pageItems: any[]) => {
+      const allSelected = pageItems.every(item => selectedIds.has(item.id || item.username));
+      const newSet = new Set(selectedIds);
+      
+      if (allSelected) {
+          pageItems.forEach(item => newSet.delete(item.id || item.username));
+      } else {
+          pageItems.forEach(item => newSet.add(item.id || item.username));
+      }
+      setSelectedIds(newSet);
   };
 
   const handleSyncItems = async () => {
@@ -880,6 +937,9 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     const visibleColumns = (columnSettings[activeTab] || []).filter(c => c.visible);
 
+    // Calculate selection state for header checkbox
+    const allPageSelected = paginatedData.length > 0 && paginatedData.every(row => selectedIds.has(row.id || row.username));
+
     return (
       <div className="flex flex-col space-y-4 relative flex-1">
         {/* Loading Overlay for Processing */}
@@ -929,16 +989,25 @@ const MasterData: React.FC<MasterDataProps> = ({
             <table className="w-full text-left text-sm border-separate border-spacing-0">
             <thead className="bg-gray-50">
                 <tr>
+                {/* Checkbox Header */}
+                <th className="sticky top-0 left-0 z-30 bg-gray-50 border-b border-r border-gray-200 px-4 py-3 w-12 text-center">
+                    <input 
+                        type="checkbox" 
+                        checked={allPageSelected}
+                        onChange={() => handleSelectAllPage(paginatedData)}
+                        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                    />
+                </th>
+
                 {visibleColumns.map((col, index) => {
-                    const isFirst = index === 0;
+                    // Adjust sticky index since checkbox is now first
                     return (
                         <th 
                         key={col.key} 
                         className={`
                             px-6 py-3 font-semibold text-gray-700 whitespace-nowrap 
                             border-b border-gray-200
-                            sticky top-0 
-                            ${isFirst ? 'left-0 z-30' : 'z-20'} 
+                            sticky top-0 z-20
                             bg-gray-50
                             cursor-move hover:bg-gray-100 select-none
                         `}
@@ -959,45 +1028,53 @@ const MasterData: React.FC<MasterDataProps> = ({
                 </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-                {paginatedData.map((row: any) => (
-                <tr key={row.id || row.username} className="hover:bg-gray-50 transition">
-                    {visibleColumns.map((col, index) => {
-                       const isFirst = index === 0;
-                       return (
-                           <td key={col.key} 
-                               className={`
-                                   px-6 py-3 align-middle whitespace-nowrap
-                                   ${isFirst ? 'sticky left-0 z-10 bg-white border-r border-gray-100' : ''}
-                               `}
-                           >
-                              {renderCellContent(col.key, row)}
-                           </td>
-                       );
-                    })}
+                {paginatedData.map((row: any) => {
+                    const id = row.id || row.username;
+                    const isSelected = selectedIds.has(id);
+                    return (
+                        <tr key={id} className={`transition ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                            {/* Checkbox Cell */}
+                            <td className="sticky left-0 z-10 bg-inherit border-r border-gray-100 px-4 py-3 text-center align-middle">
+                                <input 
+                                    type="checkbox" 
+                                    checked={isSelected}
+                                    onChange={() => toggleSelection(id)}
+                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                />
+                            </td>
 
-                    <td className="px-6 py-3 align-middle whitespace-nowrap">
-                       <div className="flex items-center gap-3">
-                        <button 
-                            onClick={() => handleEdit(row)}
-                            className="text-blue-600 hover:text-blue-900 font-medium hover:underline"
-                        >
-                            Edit
-                        </button>
-                        {activeTab === 'items' && (
-                             <button 
-                                onClick={() => handleDelete(row.id)}
-                                className="text-red-600 hover:text-red-900 font-medium hover:underline text-xs"
-                             >
-                                Remove
-                            </button>
-                        )}
-                       </div>
-                    </td>
-                </tr>
-                ))}
+                            {visibleColumns.map((col, index) => {
+                            return (
+                                <td key={col.key} 
+                                    className="px-6 py-3 align-middle whitespace-nowrap"
+                                >
+                                    {renderCellContent(col.key, row)}
+                                </td>
+                            );
+                            })}
+
+                            <td className="px-6 py-3 align-middle whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={() => handleEdit(row)}
+                                    className="text-blue-600 hover:text-blue-900 font-medium hover:underline"
+                                >
+                                    Edit
+                                </button>
+                                <button 
+                                    onClick={() => handleDeleteSingle(id)}
+                                    className="text-red-600 hover:text-red-900 font-medium hover:underline text-xs"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                            </td>
+                        </tr>
+                    );
+                })}
                 {data.length === 0 && (
                 <tr>
-                    <td colSpan={visibleColumns.length + 1} className="px-6 py-8 text-center text-gray-400">
+                    <td colSpan={visibleColumns.length + 2} className="px-6 py-8 text-center text-gray-400">
                     No records found.
                     </td>
                 </tr>
@@ -1259,45 +1336,57 @@ const MasterData: React.FC<MasterDataProps> = ({
         </div>
         
         <div className="flex gap-2">
-           <button
-             onClick={handleImportClick}
-             className="flex items-center px-4 py-2 bg-orange-100 text-orange-800 border border-orange-200 rounded-lg hover:bg-orange-200 shadow-sm transition"
-           >
-             <span className="mr-2 text-lg">📂</span>
-             Import Excel/CSV
-           </button>
+           {selectedIds.size > 0 ? (
+               <button
+                 onClick={handleBulkDelete}
+                 className="flex items-center px-4 py-2 bg-red-600 text-white border border-red-700 rounded-lg hover:bg-red-700 shadow-sm transition animate-fade-in-up"
+               >
+                 <span className="mr-2">🗑️</span>
+                 Delete Selected ({selectedIds.size})
+               </button>
+           ) : (
+               <>
+                <button
+                    onClick={handleImportClick}
+                    className="flex items-center px-4 py-2 bg-orange-100 text-orange-800 border border-orange-200 rounded-lg hover:bg-orange-200 shadow-sm transition"
+                >
+                    <span className="mr-2 text-lg">📂</span>
+                    Import
+                </button>
 
-           <button
-             onClick={handleExportDataToExcel}
-             className="flex items-center px-4 py-2 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-200 shadow-sm transition"
-           >
-             <span className="mr-2 text-lg">📥</span>
-             Export Excel
-           </button>
+                <button
+                    onClick={handleExportDataToExcel}
+                    className="flex items-center px-4 py-2 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-200 shadow-sm transition"
+                >
+                    <span className="mr-2 text-lg">📥</span>
+                    Excel
+                </button>
 
-           <button
-               onClick={() => setShowSyncModal(true)}
-               className={`flex items-center px-4 py-2 bg-white border rounded-lg shadow-sm transition ${
-                 activeTab === 'items' 
-                   ? 'text-green-700 border-green-200 hover:bg-green-50' 
-                   : 'text-gray-700 border-gray-200 hover:bg-gray-50'
-               }`}
-           >
-             <span className="mr-2">
-               {activeTab === 'items' ? '📊' : '⚙️'}
-             </span> 
-             {activeTab === 'items' ? 'Sync Items' : 'Cloud Config'}
-           </button>
+                <button
+                    onClick={() => setShowSyncModal(true)}
+                    className={`flex items-center px-4 py-2 bg-white border rounded-lg shadow-sm transition ${
+                        activeTab === 'items' 
+                        ? 'text-green-700 border-green-200 hover:bg-green-50' 
+                        : 'text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                >
+                    <span className="mr-2">
+                        {activeTab === 'items' ? '📊' : '⚙️'}
+                    </span> 
+                    {activeTab === 'items' ? 'Sync Items' : 'Cloud'}
+                </button>
 
-           <button
-             onClick={() => setShowColumnMenu(!showColumnMenu)}
-             className={`flex items-center px-4 py-2 bg-white border rounded-lg shadow-sm transition ${
-                showColumnMenu ? 'bg-gray-100 ring-2 ring-blue-200' : 'hover:bg-gray-50'
-             }`}
-           >
-             <span className="mr-2">👁️</span>
-             Columns
-           </button>
+                <button
+                    onClick={() => setShowColumnMenu(!showColumnMenu)}
+                    className={`flex items-center px-4 py-2 bg-white border rounded-lg shadow-sm transition ${
+                        showColumnMenu ? 'bg-gray-100 ring-2 ring-blue-200' : 'hover:bg-gray-50'
+                    }`}
+                >
+                    <span className="mr-2">👁️</span>
+                    Columns
+                </button>
+               </>
+           )}
 
            <button
              onClick={handleAddNew}
