@@ -285,6 +285,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
      currentBrand: string,
      currentModelNo: string
   ) => {
+    // Safety check for machines
+    if (!machines) return;
+
     // Get all machines that match the non-empty filters provided
     const matchingMachines = machines.filter(m => {
         if (currentMain && m.mainGroup !== currentMain) return false;
@@ -366,7 +369,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     }
   };
 
-  // --- Calculate Options ---
+  // --- Calculate Options (Memoized for Performance) ---
   
   const mainGroupOptions = useMemo(() => {
     const groups = new Set<string>();
@@ -469,31 +472,57 @@ const IssueForm: React.FC<IssueFormProps> = ({
   }, [allowedDivisions, divisionId]);
 
 
-  const availableMachines = machines.filter(m => {
-    if (divisionId && m.divisionId !== divisionId) return false;
-    if (filterMainGroup && m.mainGroup !== filterMainGroup) return false;
-    if (filterSubGroup && m.subGroup !== filterSubGroup) return false;
-    if (filterCategory && m.category !== filterCategory) return false;
-    if (filterBrand && m.brand !== filterBrand) return false;
-    if (filterModelNo && m.modelNo !== filterModelNo) return false;
-    return true;
-  });
+  const availableMachines = useMemo(() => {
+    return machines.filter(m => {
+        if (divisionId && m.divisionId !== divisionId) return false;
+        if (filterMainGroup && m.mainGroup !== filterMainGroup) return false;
+        if (filterSubGroup && m.subGroup !== filterSubGroup) return false;
+        if (filterCategory && m.category !== filterCategory) return false;
+        if (filterBrand && m.brand !== filterBrand) return false;
+        if (filterModelNo && m.modelNo !== filterModelNo) return false;
+        return true;
+    });
+  }, [machines, divisionId, filterMainGroup, filterSubGroup, filterCategory, filterBrand, filterModelNo]);
 
-  const locationOptions: Option[] = allowedLocations.map(l => ({ id: l.id, label: l.name }));
-  const sectorOptions: Option[] = allowedSectors.map(s => ({ id: s.id, label: s.name }));
-  const divisionOptions: Option[] = allowedDivisions.map(d => ({ id: d.id, label: d.name }));
-  const machineOptions: Option[] = availableMachines.map(m => {
-    let sub = `${m.model} (${m.id})`;
-    if (m.brand) sub += ` - ${m.brand}`;
-    return { id: m.id, label: m.name, subLabel: sub };
-  });
+  // Memoize large lists to avoid unnecessary re-creation on render
+  const locationOptions: Option[] = useMemo(() => 
+    allowedLocations.map(l => ({ id: l.id, label: l.name })), 
+    [allowedLocations]
+  );
   
-  const itemOptions: Option[] = items.map(i => ({ id: i.id, label: i.id, subLabel: i.name }));
-  const itemNameOptions: Option[] = items.map(i => {
-    let sub = i.id;
-    if (i.partNumber) sub += ` | PN: ${i.partNumber}`;
-    return { id: i.id, label: i.name, subLabel: sub };
-  });
+  const sectorOptions: Option[] = useMemo(() => 
+    allowedSectors.map(s => ({ id: s.id, label: s.name })), 
+    [allowedSectors]
+  );
+  
+  const divisionOptions: Option[] = useMemo(() => 
+    allowedDivisions.map(d => ({ id: d.id, label: d.name })), 
+    [allowedDivisions]
+  );
+  
+  const machineOptions: Option[] = useMemo(() => 
+    availableMachines.map(m => {
+      let sub = `${m.model} (${m.id})`;
+      if (m.brand) sub += ` - ${m.brand}`;
+      return { id: m.id, label: m.name, subLabel: sub };
+    }), 
+    [availableMachines]
+  );
+  
+  // CRITICAL OPTIMIZATION: Memoize Item Options to prevent re-rendering loops/performance hits with large lists
+  const itemOptions: Option[] = useMemo(() => 
+    items.map(i => ({ id: i.id, label: i.id, subLabel: i.name })), 
+    [items]
+  );
+  
+  const itemNameOptions: Option[] = useMemo(() => 
+    items.map(i => {
+      let sub = i.id;
+      if (i.partNumber) sub += ` | PN: ${i.partNumber}`;
+      return { id: i.id, label: i.name, subLabel: sub };
+    }), 
+    [items]
+  );
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -731,7 +760,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
           <div className="bg-orange-50 p-4 md:p-5 rounded-lg border border-orange-200">
              <h3 className="text-sm font-bold text-orange-800 uppercase tracking-wider mb-4 border-b border-orange-200 pb-2">4. Maintenance Plan (Mandatory)</h3>
              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {maintenancePlans.map((plan) => (
+                {maintenancePlans && maintenancePlans.length > 0 ? maintenancePlans.map((plan) => (
                     <label 
                         key={plan.id} 
                         className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-all ${
@@ -752,7 +781,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                             {plan.name}
                         </span>
                     </label>
-                ))}
+                )) : <p className="text-sm text-gray-500">No maintenance plans available.</p>}
              </div>
              {!selectedPlanId && <p className="text-xs text-red-500 mt-2">* You must select a maintenance plan.</p>}
           </div>

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 
 export interface Option {
   id: string;
@@ -26,14 +27,19 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Sync internal search term with external value
+  // Using a ref to prevent cyclic dependencies if options is not memoized in parent
   useEffect(() => {
-    const selectedOption = options.find(o => o.id === value);
-    if (selectedOption) {
-      setSearchTerm(selectedOption.label);
-    } else if (!value) {
-      setSearchTerm('');
+    if (value) {
+      const selectedOption = options.find(o => o.id === value);
+      if (selectedOption) {
+        setSearchTerm(selectedOption.label);
+      }
+    } else {
+        // Only clear if user hasn't typed anything newly (this is a tricky balance)
+        // For now, if value is empty, we assume reset
+        if (!isOpen) setSearchTerm('');
     }
-  }, [value, options]);
+  }, [value, options, isOpen]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -52,10 +58,29 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [value, options]);
 
-  const filteredOptions = options.filter(option => 
-    option.label.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (option.subLabel && option.subLabel.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Optimize Filtering:
+  // 1. Limit results to 50 to prevent DOM freeze with large lists
+  // 2. Memoize to prevent recalc on every render if options haven't changed
+  const filteredOptions = useMemo(() => {
+     if (!isOpen && !searchTerm) return []; // Don't filter if closed and empty
+
+     const lowerSearch = searchTerm.toLowerCase();
+     let count = 0;
+     const limit = 50;
+     const result = [];
+
+     for (const option of options) {
+         if (
+             option.label.toLowerCase().includes(lowerSearch) || 
+             (option.subLabel && option.subLabel.toLowerCase().includes(lowerSearch))
+         ) {
+             result.push(option);
+             count++;
+             if (count >= limit) break;
+         }
+     }
+     return result;
+  }, [options, searchTerm, isOpen]);
 
   const handleSelect = (option: Option) => {
     onChange(option.id);
@@ -66,15 +91,15 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && isOpen) {
        // Auto-select logic for scanners
+       // Exact match first
        const exactMatch = filteredOptions.find(o => o.label.toLowerCase() === searchTerm.toLowerCase());
+       
        if (exactMatch) {
           handleSelect(exactMatch);
-          // Allow event to propagate to parent so they can switch focus
        } else if (filteredOptions.length === 1) {
           handleSelect(filteredOptions[0]);
        } else if (filteredOptions.length > 0) {
-          // Optional: Select first item if nothing matches exactly? 
-          // For safety, let's only do exact or single match, or strict prefix
+          // Select the first one if present
           handleSelect(filteredOptions[0]);
        }
     }
@@ -124,6 +149,12 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   {option.subLabel && <span className="text-xs text-gray-400">{option.subLabel}</span>}
                 </li>
               ))}
+              {/* Show warning if results are truncated (we don't know total count here efficiently without recalc, but 50 is the limit) */}
+              {filteredOptions.length === 50 && (
+                  <li className="px-4 py-2 text-xs text-gray-400 italic text-center bg-gray-50">
+                      Results limited. Keep typing to search...
+                  </li>
+              )}
             </ul>
           ) : (
             <div className="px-4 py-3 text-sm text-gray-500">No results found</div>

@@ -8,6 +8,7 @@ import HistoryTable from './components/HistoryTable';
 import MasterData from './components/MasterData';
 import StockApproval from './components/StockApproval';
 import Login from './components/Login';
+import ErrorBoundary from './components/ErrorBoundary';
 import * as storageService from './services/storageService';
 import { 
   INITIAL_HISTORY, 
@@ -333,7 +334,9 @@ const App: React.FC = () => {
           </header>
 
           <div className="p-4 md:p-8 flex-1 overflow-y-auto">
-            {renderContent()}
+            <ErrorBoundary>
+              {renderContent()}
+            </ErrorBoundary>
           </div>
         </main>
       </div>
