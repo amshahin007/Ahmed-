@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
@@ -84,7 +83,9 @@ const COLUMNS_CONFIG: Record<TabType, { key: string, label: string }[]> = {
     { key: 'name', label: 'Name' },
     { key: 'role', label: 'Role' },
     { key: 'email', label: 'Email' },
-    { key: 'allowedLocationIds', label: 'Locations' }
+    { key: 'allowedLocationIds', label: 'Locations' },
+    { key: 'allowedSectorIds', label: 'Sectors' },
+    { key: 'allowedDivisionIds', label: 'Divisions' }
   ]
 };
 
@@ -125,9 +126,22 @@ const MasterData: React.FC<MasterDataProps> = ({
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // 2. Merge saved settings with defaults to ensure new tabs (like 'plans') are present
-        // { ...defaults, ...parsed } ensures that if 'plans' is missing in 'parsed', it is taken from 'defaults'.
-        return { ...defaults, ...parsed };
+        
+        // 2. Smart Merge: Ensure new columns in code (COLUMNS_CONFIG) appear even if localStorage has old data
+        const merged: Record<string, any> = { ...defaults };
+        
+        Object.keys(defaults).forEach(key => {
+            if (parsed[key]) {
+                // Determine which keys exist in the saved config
+                const savedKeys = new Set(parsed[key].map((c: any) => c.key));
+                // Find columns that are in defaults but missing in saved (newly added features)
+                const newColumns = defaults[key].filter((c: any) => !savedKeys.has(c.key));
+                // Append new columns to the saved ones
+                merged[key] = [...parsed[key], ...newColumns];
+            }
+        });
+        
+        return merged;
       } catch (e) {
         console.error("Failed to load column settings", e);
       }
@@ -301,10 +315,12 @@ const MasterData: React.FC<MasterDataProps> = ({
         rows = plans.map(p => [p.id, p.name].map(escapeCsv));
         break;
       case 'users':
-        headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations'];
+        headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations', 'Allowed Sectors', 'Allowed Divisions'];
         rows = users.map(u => [
             u.username, u.name, u.role, u.email, 
-            (u.allowedLocationIds || []).join(';')
+            (u.allowedLocationIds || []).join(';'),
+            (u.allowedSectorIds || []).join(';'),
+            (u.allowedDivisionIds || []).join(';')
         ].map(escapeCsv));
         break;
     }
@@ -766,6 +782,36 @@ const MasterData: React.FC<MasterDataProps> = ({
              {row.allowedLocationIds.map((lid: string) => (
                <span key={lid} className="px-1.5 py-0.5 bg-gray-100 rounded border border-gray-200 text-xs">
                   {locations.find(l => l.id === lid)?.name || lid}
+               </span>
+             ))}
+           </div>
+        );
+    }
+
+    if (activeTab === 'users' && key === 'allowedSectorIds') {
+        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs">All Access</span>;
+        if (!row.allowedSectorIds || row.allowedSectorIds.length === 0) return <span className="text-gray-400 italic text-xs">No restrictions</span>;
+        
+        return (
+           <div className="flex flex-wrap gap-1 max-w-[200px]">
+             {row.allowedSectorIds.map((sid: string) => (
+               <span key={sid} className="px-1.5 py-0.5 bg-indigo-100 rounded border border-indigo-200 text-xs text-indigo-800">
+                  {sectors.find(s => s.id === sid)?.name || sid}
+               </span>
+             ))}
+           </div>
+        );
+    }
+
+    if (activeTab === 'users' && key === 'allowedDivisionIds') {
+        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs">All Access</span>;
+        if (!row.allowedDivisionIds || row.allowedDivisionIds.length === 0) return <span className="text-gray-400 italic text-xs">No restrictions</span>;
+        
+        return (
+           <div className="flex flex-wrap gap-1 max-w-[200px]">
+             {row.allowedDivisionIds.map((did: string) => (
+               <span key={did} className="px-1.5 py-0.5 bg-pink-100 rounded border border-pink-200 text-xs text-pink-800">
+                  {divisions.find(d => d.id === did)?.name || did}
                </span>
              ))}
            </div>
