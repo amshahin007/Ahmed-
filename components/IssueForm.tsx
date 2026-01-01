@@ -556,10 +556,47 @@ const IssueForm: React.FC<IssueFormProps> = ({
              )}
           </div>
 
-          {/* Section 2: LINES (Primary Action) */}
+          {/* Section 2: Machine Allocation (Moved up) */}
+          <div className="bg-white p-4 md:p-5 rounded-lg border border-gray-200">
+             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">2. Allocation Details (Machine)</h3>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                
+                {/* Org Filters */}
+                <div className="space-y-3">
+                   <h4 className="text-xs font-bold text-gray-400 uppercase">Organizational Filter</h4>
+                   <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." />
+                   <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
+                </div>
+
+                {/* Tech Filters */}
+                <div className="space-y-3">
+                   <h4 className="text-xs font-bold text-gray-400 uppercase">Technical Filter</h4>
+                   <SearchableSelect label="Main Group" options={mainGroupOptions} value={filterMainGroup} onChange={handleMainGroupChange} placeholder="Filter by Group..." />
+                   <div className="grid grid-cols-2 gap-2">
+                     <SearchableSelect label="Category" disabled={!filterMainGroup} options={categoryOptions} value={filterCategory} onChange={handleCategoryChange} placeholder="Cat..." />
+                     <SearchableSelect label="Brand" options={brandOptions} value={filterBrand} onChange={handleBrandChange} placeholder="Brand..." />
+                   </div>
+                </div>
+                
+                {/* Machine Select */}
+                <div className="md:col-span-2">
+                    <SearchableSelect 
+                       label="Machine Selection" 
+                       required 
+                       options={machineOptions} 
+                       value={machineId} 
+                       onChange={handleMachineChange} 
+                       placeholder={availableMachines.length === 0 ? "No machines found match filters" : "Select Specific Equipment / Machine..."} 
+                    />
+                </div>
+             </div>
+          </div>
+
+          {/* Section 3: LINES (Primary Action) (Moved down) */}
           <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200 shadow-sm relative">
             <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4 border-b pb-2 flex justify-between items-center">
-                <span>2. Scan / Enter Items</span>
+                <span>3. Scan / Enter Items</span>
                 <span className="text-xs font-normal text-gray-500 normal-case bg-white px-2 py-1 rounded border">Press 'Enter' to Add</span>
             </h3>
             
@@ -639,43 +676,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
                     List is empty. Scan an item to begin.
                 </div>
             )}
-          </div>
-
-          {/* Section 3: Machine Allocation */}
-          <div className="bg-white p-4 md:p-5 rounded-lg border border-gray-200">
-             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">3. Allocation Details (Machine)</h3>
-
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                
-                {/* Org Filters */}
-                <div className="space-y-3">
-                   <h4 className="text-xs font-bold text-gray-400 uppercase">Organizational Filter</h4>
-                   <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." />
-                   <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
-                </div>
-
-                {/* Tech Filters */}
-                <div className="space-y-3">
-                   <h4 className="text-xs font-bold text-gray-400 uppercase">Technical Filter</h4>
-                   <SearchableSelect label="Main Group" options={mainGroupOptions} value={filterMainGroup} onChange={handleMainGroupChange} placeholder="Filter by Group..." />
-                   <div className="grid grid-cols-2 gap-2">
-                     <SearchableSelect label="Category" disabled={!filterMainGroup} options={categoryOptions} value={filterCategory} onChange={handleCategoryChange} placeholder="Cat..." />
-                     <SearchableSelect label="Brand" options={brandOptions} value={filterBrand} onChange={handleBrandChange} placeholder="Brand..." />
-                   </div>
-                </div>
-                
-                {/* Machine Select */}
-                <div className="md:col-span-2">
-                    <SearchableSelect 
-                       label="Machine Selection" 
-                       required 
-                       options={machineOptions} 
-                       value={machineId} 
-                       onChange={handleMachineChange} 
-                       placeholder={availableMachines.length === 0 ? "No machines found match filters" : "Select Specific Equipment / Machine..."} 
-                    />
-                </div>
-             </div>
           </div>
           
           {/* Section 4: Maintenance Plan Selection */}
