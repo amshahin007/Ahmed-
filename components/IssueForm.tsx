@@ -411,6 +411,58 @@ const IssueForm: React.FC<IssueFormProps> = ({
     return Array.from(models).map(mod => ({ id: mod, label: mod }));
   }, [machines, filterMainGroup, filterSubGroup, filterCategory, filterBrand]);
 
+  
+  // --- Permission Logic for Locations, Sectors, Divisions ---
+  const allowedLocations = useMemo(() => {
+    if (currentUser.role === 'admin') return locations;
+    if (currentUser.allowedLocationIds && currentUser.allowedLocationIds.length > 0) {
+      return locations.filter(loc => currentUser.allowedLocationIds!.includes(loc.id));
+    }
+    return locations;
+  }, [locations, currentUser]);
+
+  const allowedSectors = useMemo(() => {
+    if (currentUser.role === 'admin') return sectors;
+    if (currentUser.allowedSectorIds && currentUser.allowedSectorIds.length > 0) {
+      return sectors.filter(s => currentUser.allowedSectorIds!.includes(s.id));
+    }
+    return sectors;
+  }, [sectors, currentUser]);
+
+  const allowedDivisions = useMemo(() => {
+    let divs = divisions;
+    
+    // First, filter by selected Sector (Technical requirement)
+    if (sectorId) {
+        divs = divs.filter(d => d.sectorId === sectorId);
+    } else {
+        return []; // No sector selected, no divisions (usually)
+    }
+
+    // Second, filter by User Permissions
+    if (currentUser.role !== 'admin' && currentUser.allowedDivisionIds && currentUser.allowedDivisionIds.length > 0) {
+        divs = divs.filter(d => currentUser.allowedDivisionIds!.includes(d.id));
+    }
+    
+    return divs;
+  }, [divisions, sectorId, currentUser]);
+
+
+  // --- Auto-Selection Effects ---
+  // If only one allowed sector, auto-select it
+  useEffect(() => {
+    if (allowedSectors.length === 1 && !sectorId) {
+        setSectorId(allowedSectors[0].id);
+    }
+  }, [allowedSectors, sectorId]);
+
+  // If only one allowed division (in the selected sector), auto-select it
+  useEffect(() => {
+      if (allowedDivisions.length === 1 && !divisionId) {
+          setDivisionId(allowedDivisions[0].id);
+      }
+  }, [allowedDivisions, divisionId]);
+
 
   const availableMachines = machines.filter(m => {
     if (divisionId && m.divisionId !== divisionId) return false;
@@ -422,21 +474,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
     return true;
   });
 
-  const availableDivisions = sectorId ? divisions.filter(d => d.sectorId === sectorId) : [];
-
-  // --- Permission Logic for Locations ---
-  const allowedLocations = useMemo(() => {
-    if (currentUser.role === 'admin') return locations;
-    if (currentUser.allowedLocationIds && currentUser.allowedLocationIds.length > 0) {
-      return locations.filter(loc => currentUser.allowedLocationIds!.includes(loc.id));
-    }
-    return locations;
-  }, [locations, currentUser]);
-
-
   const locationOptions: Option[] = allowedLocations.map(l => ({ id: l.id, label: l.name }));
-  const sectorOptions: Option[] = sectors.map(s => ({ id: s.id, label: s.name }));
-  const divisionOptions: Option[] = availableDivisions.map(d => ({ id: d.id, label: d.name }));
+  const sectorOptions: Option[] = allowedSectors.map(s => ({ id: s.id, label: s.name }));
+  const divisionOptions: Option[] = allowedDivisions.map(d => ({ id: d.id, label: d.name }));
   const machineOptions: Option[] = availableMachines.map(m => {
     let sub = `${m.model} (${m.id})`;
     if (m.brand) sub += ` - ${m.brand}`;

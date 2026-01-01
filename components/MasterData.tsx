@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
@@ -585,7 +586,9 @@ const MasterData: React.FC<MasterDataProps> = ({
         role: formData.role,
         email: formData.email,
         password: formData.password || (isEditing ? users.find(u => u.username === formData.username)?.password : 'password'),
-        allowedLocationIds: formData.allowedLocationIds
+        allowedLocationIds: formData.allowedLocationIds,
+        allowedSectorIds: formData.allowedSectorIds,
+        allowedDivisionIds: formData.allowedDivisionIds
       };
       isEditing ? onUpdateUser(payload) : onAddUser(payload);
     } else { // locations
@@ -1177,6 +1180,59 @@ const MasterData: React.FC<MasterDataProps> = ({
                         {locations.length === 0 && <p className="text-xs text-gray-400 p-1">No locations defined yet.</p>}
                     </div>
                     <p className="text-[10px] text-gray-400 mt-1">Users can only create issues for these locations. Admin has all access.</p>
+                 </div>
+
+                 {/* Multi-Select for Sectors */}
+                 <div>
+                    <label className={labelClass}>Allowed Sectors (Optional)</label>
+                    <div className="border border-gray-300 rounded-lg p-2 max-h-32 overflow-y-auto bg-gray-50">
+                        {sectors.map(sec => (
+                            <label key={sec.id} className="flex items-center space-x-2 p-1 hover:bg-white cursor-pointer rounded">
+                                <input 
+                                  type="checkbox"
+                                  checked={(formData.allowedSectorIds || []).includes(sec.id)}
+                                  onChange={(e) => {
+                                      const current = formData.allowedSectorIds || [];
+                                      if (e.target.checked) {
+                                          setFormData({...formData, allowedSectorIds: [...current, sec.id]});
+                                      } else {
+                                          setFormData({...formData, allowedSectorIds: current.filter((id: string) => id !== sec.id)});
+                                      }
+                                  }}
+                                  className="rounded text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700">{sec.name}</span>
+                            </label>
+                        ))}
+                        {sectors.length === 0 && <p className="text-xs text-gray-400 p-1">No sectors defined.</p>}
+                    </div>
+                 </div>
+
+                 {/* Multi-Select for Divisions */}
+                 <div>
+                    <label className={labelClass}>Allowed Divisions (Optional)</label>
+                    <div className="border border-gray-300 rounded-lg p-2 max-h-32 overflow-y-auto bg-gray-50">
+                        {divisions.map(div => (
+                            <label key={div.id} className="flex items-center space-x-2 p-1 hover:bg-white cursor-pointer rounded">
+                                <input 
+                                  type="checkbox"
+                                  checked={(formData.allowedDivisionIds || []).includes(div.id)}
+                                  onChange={(e) => {
+                                      const current = formData.allowedDivisionIds || [];
+                                      if (e.target.checked) {
+                                          setFormData({...formData, allowedDivisionIds: [...current, div.id]});
+                                      } else {
+                                          setFormData({...formData, allowedDivisionIds: current.filter((id: string) => id !== div.id)});
+                                      }
+                                  }}
+                                  className="rounded text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700">{div.name}</span>
+                            </label>
+                        ))}
+                        {divisions.length === 0 && <p className="text-xs text-gray-400 p-1">No divisions defined.</p>}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">Leave empty to allow all (unless filtered by Sector).</p>
                  </div>
               </>
             )}
