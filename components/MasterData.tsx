@@ -353,7 +353,10 @@ const MasterData: React.FC<MasterDataProps> = ({
             const workbook = XLSX.read(data, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            
+            // USE HEADER: 1 to get raw array of arrays. 
+            // This is critical for reliable column mapping.
+            const jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
             
             if (jsonData.length > 2000) {
                setProcessingStatus(`Large file detected. Processing ${jsonData.length} rows... this may take a moment.`);
@@ -377,101 +380,131 @@ const MasterData: React.FC<MasterDataProps> = ({
     event.target.value = '';
   };
 
-  const processImportData = (data: any[]) => {
-    if (data.length === 0) {
+  const processImportData = (rows: any[][]) => {
+    if (rows.length < 2) {
         setProcessingStatus(null);
         alert("File appears to be empty or contains no data rows.");
         return;
     }
 
-    // Identify available headers from the first row of data
-    // XLSX.utils.sheet_to_json uses the first row as keys
-    const fileHeaders = Object.keys(data[0]);
+    // 1. Find the Header Row
+    // Scan first 10 rows to find a row that contains our primary key keywords
+    let headerRowIndex = -1;
+    const primaryKeywords = activeTab === 'users' ? ['username', 'user'] : ['id', 'item number', 'item no', 'name', 'description'];
+    
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        const rowStr = rows[i].join(' ').toLowerCase();
+        if (primaryKeywords.some(k => rowStr.includes(k))) {
+            headerRowIndex = i;
+            break;
+        }
+    }
 
-    let addedCount = 0;
-    let updatedCount = 0;
+    if (headerRowIndex === -1) {
+        // Fallback to 0 if we can't find specific headers
+        headerRowIndex = 0; 
+    }
 
-    const toAdd: any[] = [];
-    const toUpdate: any[] = [];
+    const headers = rows[headerRowIndex].map(h => String(h).trim().toLowerCase());
+    const dataRows = rows.slice(headerRowIndex + 1);
 
+    // 2. Define Field Mappings (Column Name Candidates)
     let fieldMap: Record<string, string[]> = {};
 
     if (activeTab === 'items') {
         fieldMap = {
-            id: ['Item Number', 'ID', 'Item No'],
-            name: ['Description', 'Name', 'Item Name'],
-            category: ['Category'],
-            unit: ['Unit', 'UM', 'UOM'],
-            thirdId: ['3rd Item No', '3rd Item'],
-            description2: ['Desc Line 2', 'Description 2'],
-            fullName: ['Full Name'],
-            brand: ['Brand', 'Manufacturer'],
-            oem: ['OEM'],
-            partNumber: ['Part No', 'Part Number', 'PN']
+            id: ['item number', 'id', 'item no', 'code', 'item code'],
+            name: ['description', 'name', 'item name', 'desc', 'material name'],
+            category: ['category', 'cat', 'group'],
+            unit: ['unit', 'um', 'uom', 'measure'],
+            thirdId: ['3rd item no', '3rd item', 'third item'],
+            description2: ['desc line 2', 'description 2', 'desc 2', 'spec'],
+            fullName: ['full name', 'fullname', 'long description'],
+            brand: ['brand', 'manufacturer', 'make'],
+            oem: ['oem'],
+            partNumber: ['part no', 'part number', 'pn', 'part num']
         };
     } else if (activeTab === 'machines') {
         fieldMap = {
-            id: ['ID', 'Machine ID'],
-            name: ['Name', 'Machine Name'],
-            model: ['Model', 'Model Name'],
-            modelNo: ['Model No', 'Model Number', 'طراز'],
-            mainGroup: ['Main Group'],
-            subGroup: ['Sub Group'],
-            category: ['Category', 'إسم المعدة'],
-            brand: ['Brand'],
-            divisionId: ['Division ID', 'Division']
+            id: ['id', 'machine id', 'code'],
+            name: ['name', 'machine name', 'machine'],
+            model: ['model', 'model name'],
+            modelNo: ['model no', 'model number', 'طراز', 'type'],
+            mainGroup: ['main group', 'group'],
+            subGroup: ['sub group', 'subgroup'],
+            category: ['category', 'إسم المعدة', 'equipment name'],
+            brand: ['brand', 'manufacturer'],
+            divisionId: ['division id', 'division', 'line']
         };
     } else if (activeTab === 'locations') {
         fieldMap = {
-            id: ['ID', 'Location ID'],
-            name: ['Name', 'Location Name'],
-            email: ['Email', 'Site Email']
+            id: ['id', 'location id', 'zone id'],
+            name: ['name', 'location name', 'zone'],
+            email: ['email', 'site email', 'contact']
         };
     } else if (activeTab === 'sectors') {
-        fieldMap = { id: ['ID'], name: ['Name'] };
+        fieldMap = { id: ['id'], name: ['name', 'sector name'] };
     } else if (activeTab === 'divisions') {
-        fieldMap = { id: ['ID'], name: ['Name'], sectorId: ['Sector ID', 'Sector'] };
+        fieldMap = { id: ['id'], name: ['name', 'division name'], sectorId: ['sector id', 'sector'] };
     } else if (activeTab === 'plans') {
-        fieldMap = { id: ['ID'], name: ['Name', 'Plan Name'] };
+        fieldMap = { id: ['id'], name: ['name', 'plan name', 'plan'] };
     } else if (activeTab === 'users') {
         fieldMap = {
-            username: ['Username', 'User'],
-            name: ['Name', 'Full Name'],
-            role: ['Role'],
-            email: ['Email']
+            username: ['username', 'user', 'login'],
+            name: ['name', 'full name'],
+            role: ['role', 'permission'],
+            email: ['email']
         };
     }
 
-    // Build a map of Internal Field -> Actual Column Header in File
-    const keyMap: Record<string, string> = {};
-    Object.keys(fieldMap).forEach(key => {
-        const candidates = fieldMap[key];
-        // Case-insensitive match for headers
-        const match = fileHeaders.find(h => candidates.some(c => c.toLowerCase() === h.toLowerCase()));
-        if (match) {
-            keyMap[key] = match;
+    // 3. Map Fields to Column Indices
+    const colIndexMap: Record<string, number> = {};
+    Object.keys(fieldMap).forEach(fieldKey => {
+        const candidates = fieldMap[fieldKey];
+        // Find index of first matching header
+        const index = headers.findIndex(h => candidates.some(c => h === c));
+        if (index !== -1) {
+            colIndexMap[fieldKey] = index;
         }
     });
 
     const idKey = activeTab === 'users' ? 'username' : 'id';
     
-    // Process rows
-    data.forEach((row: any) => {
-        const getValue = (key: string) => {
-            const header = keyMap[key];
-            if (header && row[header] !== undefined) {
-                return String(row[header]).trim();
+    // Check if ID column was found
+    if (colIndexMap[idKey] === undefined) {
+         setProcessingStatus(null);
+         alert(`Could not find a column for '${idKey}'. Checked headers: ${headers.join(', ')}`);
+         return;
+    }
+
+    let addedCount = 0;
+    let updatedCount = 0;
+    const toAdd: any[] = [];
+    const toUpdate: any[] = [];
+
+    // 4. Process Rows using Indices
+    dataRows.forEach((row: any[]) => {
+        // Skip empty rows
+        if (!row || row.length === 0) return;
+
+        const getIdValue = (idx: number) => {
+            if (row[idx] !== undefined && row[idx] !== null) {
+                return String(row[idx]).trim();
             }
-            return undefined;
+            return '';
         };
 
-        const idVal = getValue(idKey);
+        const idVal = getIdValue(colIndexMap[idKey]);
         if (!idVal) return; // Skip rows without ID
 
         let payload: any = {};
-        Object.keys(fieldMap).forEach(key => {
-            const val = getValue(key);
-            if (val !== undefined) payload[key] = val;
+        
+        // Extract data based on mapped indices
+        Object.keys(colIndexMap).forEach(key => {
+            const idx = colIndexMap[key];
+            if (row[idx] !== undefined && row[idx] !== null) {
+                payload[key] = String(row[idx]).trim();
+            }
         });
 
         // Set Defaults
@@ -510,7 +543,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     
     // Show success message with stats
     setTimeout(() => {
-        alert(`Import Complete!\n\nTotal Processed: ${data.length}\nAdded: ${addedCount}\nUpdated: ${updatedCount}`);
+        alert(`Import Complete!\n\nTotal Processed: ${dataRows.length}\nAdded: ${addedCount}\nUpdated: ${updatedCount}`);
     }, 100);
   };
 
