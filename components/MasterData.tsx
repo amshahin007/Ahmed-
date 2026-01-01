@@ -881,7 +881,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     const visibleColumns = (columnSettings[activeTab] || []).filter(c => c.visible);
 
     return (
-      <div className="flex flex-col space-y-4 relative">
+      <div className="flex flex-col space-y-4 relative flex-1">
         {/* Loading Overlay for Processing */}
         {processingStatus && (
             <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center">
@@ -920,37 +920,60 @@ const MasterData: React.FC<MasterDataProps> = ({
            </div>
         )}
 
-        <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200 min-h-[400px]">
-            <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 border-b">
+        {/* 
+            TABLE WRAPPER 
+            - overflow-auto: Enables scrolling both X and Y
+            - max-h-[75vh]: Constrains height to force internal scroll so sticky works
+        */}
+        <div className="overflow-auto bg-white rounded-lg shadow border border-gray-200 max-h-[75vh] relative">
+            <table className="w-full text-left text-sm border-separate border-spacing-0">
+            <thead className="bg-gray-50">
                 <tr>
-                {visibleColumns.map((col, index) => (
-                    <th 
-                      key={col.key} 
-                      className="px-6 py-3 font-semibold text-gray-700 whitespace-nowrap cursor-move hover:bg-gray-100 select-none border-r border-transparent hover:border-gray-200 transition-colors"
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, index)}
-                      onDragEnter={(e) => handleDragEnter(e, index)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={handleDrop}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-400 cursor-grab active:cursor-grabbing">⋮⋮</span>
-                        {col.label}
-                      </div>
-                    </th>
-                ))}
-                <th className="px-6 py-3 font-semibold text-gray-700 whitespace-nowrap">Actions</th>
+                {visibleColumns.map((col, index) => {
+                    const isFirst = index === 0;
+                    return (
+                        <th 
+                        key={col.key} 
+                        className={`
+                            px-6 py-3 font-semibold text-gray-700 whitespace-nowrap 
+                            border-b border-gray-200
+                            sticky top-0 
+                            ${isFirst ? 'left-0 z-30' : 'z-20'} 
+                            bg-gray-50
+                            cursor-move hover:bg-gray-100 select-none
+                        `}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, index)}
+                        onDragEnter={(e) => handleDragEnter(e, index)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={handleDrop}
+                        >
+                        <div className="flex items-center gap-2">
+                            <span className="text-gray-400 cursor-grab active:cursor-grabbing">⋮⋮</span>
+                            {col.label}
+                        </div>
+                        </th>
+                    );
+                })}
+                <th className="sticky top-0 right-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-3 font-semibold text-gray-700 whitespace-nowrap">Actions</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
                 {paginatedData.map((row: any) => (
                 <tr key={row.id || row.username} className="hover:bg-gray-50 transition">
-                    {visibleColumns.map(col => (
-                       <td key={col.key} className="px-6 py-3 align-middle whitespace-nowrap">
-                          {renderCellContent(col.key, row)}
-                       </td>
-                    ))}
+                    {visibleColumns.map((col, index) => {
+                       const isFirst = index === 0;
+                       return (
+                           <td key={col.key} 
+                               className={`
+                                   px-6 py-3 align-middle whitespace-nowrap
+                                   ${isFirst ? 'sticky left-0 z-10 bg-white border-r border-gray-100' : ''}
+                               `}
+                           >
+                              {renderCellContent(col.key, row)}
+                           </td>
+                       );
+                    })}
 
                     <td className="px-6 py-3 align-middle whitespace-nowrap">
                        <div className="flex items-center gap-3">
@@ -1015,6 +1038,7 @@ const MasterData: React.FC<MasterDataProps> = ({
   };
 
   const renderForm = () => {
+    // ... existing renderForm code ...
     if (!showForm) return null;
 
     const commonInputClass = "w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none";
@@ -1205,7 +1229,7 @@ const MasterData: React.FC<MasterDataProps> = ({
       </div>
     );
   };
-
+  // ... rest of component
   return (
     <div className="space-y-6">
       {/* Hidden File Input for Imports */}

@@ -103,19 +103,18 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-600">
-                <thead className="bg-gray-50 text-gray-700 font-semibold border-b border-gray-200">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-auto max-h-[75vh] relative">
+            <table className="w-full text-left text-sm text-gray-600 border-separate border-spacing-0">
+                <thead className="bg-gray-50 text-gray-700 font-semibold">
                     <tr>
-                        <th className="px-6 py-4 whitespace-nowrap">Issue ID</th>
-                        <th className="px-6 py-4 whitespace-nowrap">Date</th>
-                        <th className="px-6 py-4 whitespace-nowrap">Location (Site)</th>
-                        <th className="px-6 py-4 whitespace-nowrap">Sector/Div</th>
-                        <th className="px-6 py-4 whitespace-nowrap">Machine</th>
-                        <th className="px-6 py-4 whitespace-nowrap">Item Details</th>
-                        <th className="px-6 py-4 whitespace-nowrap">Qty</th>
-                        <th className="px-6 py-4 whitespace-nowrap">Status</th>
+                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Issue ID</th>
+                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Date</th>
+                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Location (Site)</th>
+                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Sector/Div</th>
+                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Machine</th>
+                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Item Details</th>
+                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Qty</th>
+                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Status</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -123,18 +122,18 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
                         filteredHistory.map((record) => (
                             <tr key={record.id} className="hover:bg-gray-50 transition">
                                 {/* ID */}
-                                <td className="px-6 py-4 font-medium text-gray-900 align-middle whitespace-nowrap">
+                                <td className="px-6 py-4 font-medium text-gray-900 align-middle whitespace-nowrap border-b border-gray-50">
                                   {record.id}
                                 </td>
                                 
                                 {/* Date */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap">
+                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
                                   <div>{new Date(record.timestamp).toLocaleDateString()}</div>
                                   <div className="text-xs text-gray-400">{new Date(record.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                 </td>
                                 
                                 {/* Location / Site */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap">
+                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
                                     <div className="font-medium text-gray-800">{record.locationId}</div>
                                     {record.requesterEmail && (
                                       <div className="text-xs text-blue-600 mt-1">{record.requesterEmail}</div>
@@ -142,13 +141,13 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
                                 </td>
 
                                 {/* Sector / Div */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap">
+                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
                                     <div className="text-xs text-gray-500">{record.sectorName || '-'}</div>
                                     <div className="text-xs text-gray-400">{record.divisionName || '-'}</div>
                                 </td>
                                 
                                 {/* Machine & Plan */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap">
+                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
                                     <div className="text-gray-900 font-medium">{record.machineName}</div>
                                     {record.maintenancePlan && (
                                       <div className="mt-1 inline-block px-2 py-0.5 bg-orange-50 text-orange-700 text-[10px] rounded border border-orange-100 whitespace-nowrap">
@@ -158,18 +157,18 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
                                 </td>
 
                                 {/* Item Details */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap">
+                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
                                     <div className="text-gray-900 font-medium">{record.itemName}</div>
                                     <div className="text-xs text-gray-500 font-mono">{record.itemId}</div>
                                 </td>
                                 
                                 {/* Qty */}
-                                <td className="px-6 py-4 font-mono font-bold align-middle whitespace-nowrap">
+                                <td className="px-6 py-4 font-mono font-bold align-middle whitespace-nowrap border-b border-gray-50">
                                   {record.quantity}
                                 </td>
                                 
                                 {/* Status */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap">
+                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium inline-block whitespace-nowrap ${
                                         record.status === 'Completed' || record.status === 'Approved' ? 'bg-green-100 text-green-700' :
                                         record.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
@@ -195,7 +194,6 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
                     )}
                 </tbody>
             </table>
-        </div>
       </div>
       <div className="text-right text-xs text-gray-400">
         Showing {filteredHistory.length} records
