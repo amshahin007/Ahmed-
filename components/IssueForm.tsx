@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { IssueRecord, Item, Location, Machine, Sector, Division, User, MaintenancePlan } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
-import { sendIssueToSheet } from '../services/googleSheetsService';
+import { sendIssueToSheet, uploadFileToDrive } from '../services/googleSheetsService';
 import SearchableSelect, { Option } from './SearchableSelect';
 import * as XLSX from 'xlsx';
 
@@ -59,6 +59,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSubmittedBatch, setLastSubmittedBatch] = useState<IssueRecord[] | null>(null);
   const [emailStatus, setEmailStatus] = useState<string>('');
+  
+  // --- Upload State ---
+  const [uploadingToDrive, setUploadingToDrive] = useState(false);
+  const [driveLink, setDriveLink] = useState('');
 
   // --- Refs for Scanner Navigation ---
   const itemInputRef = useRef<HTMLInputElement>(null);
@@ -125,6 +129,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setDriveLink(''); // Reset drive link
     
     try {
         // Validation Checks
@@ -163,7 +168,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
         const newRecords: IssueRecord[] = [];
 
         // Determine machine name display. 
-        // Previously machine.name, now machine.category is the main name, and machine.status is just state.
         const machineDisplayName = machine 
             ? (machine.category ? machine.category : `Machine ${machine.id}`) 
             : 'Unknown Machine';
@@ -194,7 +198,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
         await new Promise(resolve => setTimeout(resolve, 800));
         
         // 1. Trigger AI Email Generation (Simulation of sending)
-        // Wrapped safely inside geminiService, but extra check here
         const emailData = await generateIssueEmail(newRecords);
         console.log(`[System] Email prepared for ${warehouseEmail}: ${emailData.subject}`);
         
@@ -208,7 +211,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
         }
 
         // 3. Save records locally
-        // Updating state in parent component
         newRecords.forEach(record => onAddIssue(record));
         
         setLastSubmittedBatch(newRecords);
@@ -231,11 +233,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
     window.print();
   };
 
-  const handleExportExcel = () => {
-    if (!lastSubmittedBatch || lastSubmittedBatch.length === 0) return;
-
-    const batchId = lastSubmittedBatch[0].id.split('-')[1]; 
-
+  const getExcelWorkbook = () => {
+    if (!lastSubmittedBatch || lastSubmittedBatch.length === 0) return null;
+    
     const headers = ["Request ID", "Date", "Location", "Sector", "Division", "Machine", "Maint. Plan", "Item Number", "Item Name", "Quantity", "Warehouse Email", "Site Email"];
     const rows = lastSubmittedBatch.map(item => [
         item.id,
@@ -255,16 +255,55 @@ const IssueForm: React.FC<IssueFormProps> = ({
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     XLSX.utils.book_append_sheet(wb, ws, "RequestSlip");
+    return wb;
+  };
+
+  const handleExportExcel = () => {
+    const wb = getExcelWorkbook();
+    if (!wb || !lastSubmittedBatch) return;
+    const batchId = lastSubmittedBatch[0].id.split('-')[1]; 
     XLSX.writeFile(wb, `Request_Slip_${batchId}.xlsx`);
+  };
+
+  const handleSaveToDrive = async () => {
+    const scriptUrl = localStorage.getItem('wf_script_url');
+    if (!scriptUrl) {
+        alert("Please configure the Web App URL in Master Data settings first.");
+        return;
+    }
+    if (!lastSubmittedBatch) return;
+
+    setUploadingToDrive(true);
+    const batchId = lastSubmittedBatch[0].id.split('-')[1];
+    const fileName = `Request_Slip_${batchId}.xlsx`;
+
+    try {
+        const wb = getExcelWorkbook();
+        if (!wb) throw new Error("Could not create workbook");
+
+        // Convert to Base64
+        const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+        
+        const url = await uploadFileToDrive(scriptUrl, fileName, wbOut);
+        
+        if (url) {
+            setDriveLink(url);
+        } else {
+            setDriveLink('saved'); // Fallback if CORS blocked reading the return
+            alert("File saved to 'WareFlow Reports' folder in your Drive!");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Failed to upload to Drive.");
+    } finally {
+        setUploadingToDrive(false);
+    }
   };
 
   // --- Scanner Handlers ---
   const handleItemKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-        // Prevent form submit
         e.preventDefault();
-        // If an item is selected (handled by SearchableSelect Enter logic), move focus
-        // We use a timeout to let state update
         setTimeout(() => {
             if (currentItemId) {
                 qtyInputRef.current?.focus();
@@ -281,21 +320,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
   };
 
 
-  // --- Filtering & Logic ---
-
-  // Helper to infer unique upstream values based on current selection
+  // --- Filtering & Logic (Remains unchanged) ---
   const inferUpstreamFilters = (
-     currentMain: string, 
-     currentSub: string, 
-     currentCat: string, 
-     currentBrand: string,
-     currentChaseNo: string,
-     currentModelNo: string
+     currentMain: string, currentSub: string, currentCat: string, currentBrand: string, currentChaseNo: string, currentModelNo: string
   ) => {
-    // Safety check for machines
     if (!machines) return;
-
-    // Get all machines that match the non-empty filters provided
     const matchingMachines = machines.filter(m => {
         if (currentMain && m.mainGroup !== currentMain) return false;
         if (currentSub && m.subGroup !== currentSub) return false;
@@ -308,7 +337,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
     if (matchingMachines.length === 0) return;
 
-    // Check uniqueness for each field
     const uniqueMains = Array.from(new Set(matchingMachines.map(m => m.mainGroup).filter(Boolean)));
     const uniqueSubs = Array.from(new Set(matchingMachines.map(m => m.subGroup).filter(Boolean)));
     const uniqueCats = Array.from(new Set(matchingMachines.map(m => m.category).filter(Boolean)));
@@ -316,7 +344,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
     const uniqueChaseNos = Array.from(new Set(matchingMachines.map(m => m.chaseNo).filter(Boolean)));
     const uniqueModelNos = Array.from(new Set(matchingMachines.map(m => m.modelNo).filter(Boolean)));
 
-    // Auto-fill if there's exactly one possibility and it's not already set
     if (uniqueMains.length === 1 && !currentMain) setFilterMainGroup(uniqueMains[0] as string);
     if (uniqueSubs.length === 1 && !currentSub) setFilterSubGroup(uniqueSubs[0] as string);
     if (uniqueCats.length === 1 && !currentCat) setFilterCategory(uniqueCats[0] as string);
@@ -325,63 +352,34 @@ const IssueForm: React.FC<IssueFormProps> = ({
     if (uniqueModelNos.length === 1 && !currentModelNo) setFilterModelNo(uniqueModelNos[0] as string);
   };
 
-  // Handlers with cascading clear logic
   const handleMainGroupChange = (val: string) => {
-    setFilterMainGroup(val);
-    setFilterSubGroup('');
-    setFilterCategory('');
-    setFilterBrand('');
-    setFilterChaseNo('');
-    setFilterModelNo('');
-    setMachineId('');
+    setFilterMainGroup(val); setFilterSubGroup(''); setFilterCategory(''); setFilterBrand(''); setFilterChaseNo(''); setFilterModelNo(''); setMachineId('');
     inferUpstreamFilters(val, '', '', '', '', '');
   };
-
   const handleSubGroupChange = (val: string) => {
-    setFilterSubGroup(val);
-    setFilterCategory('');
-    setFilterBrand('');
-    setFilterChaseNo('');
-    setFilterModelNo('');
-    setMachineId('');
+    setFilterSubGroup(val); setFilterCategory(''); setFilterBrand(''); setFilterChaseNo(''); setFilterModelNo(''); setMachineId('');
     inferUpstreamFilters(filterMainGroup, val, '', '', '', '');
   };
-
   const handleCategoryChange = (val: string) => {
-    setFilterCategory(val);
-    setFilterBrand('');
-    setFilterChaseNo('');
-    setFilterModelNo('');
-    setMachineId('');
+    setFilterCategory(val); setFilterBrand(''); setFilterChaseNo(''); setFilterModelNo(''); setMachineId('');
     inferUpstreamFilters(filterMainGroup, filterSubGroup, val, '', '', '');
   };
-
   const handleBrandChange = (val: string) => {
-    setFilterBrand(val);
-    setFilterChaseNo('');
-    setFilterModelNo('');
-    setMachineId('');
+    setFilterBrand(val); setFilterChaseNo(''); setFilterModelNo(''); setMachineId('');
     inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, val, '', '');
   };
-
   const handleChaseNoChange = (val: string) => {
-    setFilterChaseNo(val);
-    setFilterModelNo('');
-    setMachineId('');
+    setFilterChaseNo(val); setFilterModelNo(''); setMachineId('');
     inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, filterBrand, val, '');
   };
-
   const handleModelNoChange = (val: string) => {
-    setFilterModelNo(val);
-    setMachineId('');
+    setFilterModelNo(val); setMachineId('');
     inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, filterBrand, filterChaseNo, val);
   };
-
   const handleMachineChange = (val: string) => {
     setMachineId(val);
     const m = machines.find(machine => machine.id === val);
     if (m) {
-        // Auto-fill everything based on the selected machine
         if (m.mainGroup) setFilterMainGroup(m.mainGroup);
         if (m.subGroup) setFilterSubGroup(m.subGroup);
         if (m.category) setFilterCategory(m.category);
@@ -391,8 +389,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
     }
   };
 
-  // --- Calculate Options (Memoized for Performance) ---
-  
   const mainGroupOptions = useMemo(() => {
     const groups = new Set<string>();
     machines.forEach(m => { if(m.mainGroup) groups.add(m.mainGroup) });
@@ -454,8 +450,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
     return Array.from(models).map(mod => ({ id: mod, label: mod }));
   }, [machines, filterMainGroup, filterSubGroup, filterCategory, filterBrand, filterChaseNo]);
 
-  
-  // --- Permission Logic for Locations, Sectors, Divisions ---
   const allowedLocations = useMemo(() => {
     if (currentUser.role === 'admin') return locations;
     if (currentUser.allowedLocationIds && currentUser.allowedLocationIds.length > 0) {
@@ -474,38 +468,28 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
   const allowedDivisions = useMemo(() => {
     let divs = divisions;
-    
-    // First, filter by selected Sector (Technical requirement)
     if (sectorId) {
         divs = divs.filter(d => d.sectorId === sectorId);
     } else {
-        return []; // No sector selected, no divisions (usually)
+        return [];
     }
-
-    // Second, filter by User Permissions
     if (currentUser.role !== 'admin' && currentUser.allowedDivisionIds && currentUser.allowedDivisionIds.length > 0) {
         divs = divs.filter(d => currentUser.allowedDivisionIds!.includes(d.id));
     }
-    
     return divs;
   }, [divisions, sectorId, currentUser]);
 
-
-  // --- Auto-Selection Effects ---
-  // If only one allowed sector, auto-select it
   useEffect(() => {
     if (allowedSectors.length === 1 && !sectorId) {
         setSectorId(allowedSectors[0].id);
     }
   }, [allowedSectors, sectorId]);
 
-  // If only one allowed division (in the selected sector), auto-select it
   useEffect(() => {
       if (allowedDivisions.length === 1 && !divisionId) {
           setDivisionId(allowedDivisions[0].id);
       }
   }, [allowedDivisions, divisionId]);
-
 
   const availableMachines = useMemo(() => {
     return machines.filter(m => {
@@ -520,67 +504,31 @@ const IssueForm: React.FC<IssueFormProps> = ({
     });
   }, [machines, divisionId, filterMainGroup, filterSubGroup, filterCategory, filterBrand, filterChaseNo, filterModelNo]);
 
-  // Memoize large lists to avoid unnecessary re-creation on render
-  const locationOptions: Option[] = useMemo(() => 
-    allowedLocations.map(l => ({ id: l.id, label: l.name })), 
-    [allowedLocations]
-  );
-  
-  const sectorOptions: Option[] = useMemo(() => 
-    allowedSectors.map(s => ({ id: s.id, label: s.name })), 
-    [allowedSectors]
-  );
-  
-  const divisionOptions: Option[] = useMemo(() => 
-    allowedDivisions.map(d => ({ id: d.id, label: d.name })), 
-    [allowedDivisions]
-  );
-  
-  const machineOptions: Option[] = useMemo(() => 
-    availableMachines.map(m => {
-      // Use category (Equipment Name) as the primary name, since m.name is now m.status
+  const locationOptions: Option[] = useMemo(() => allowedLocations.map(l => ({ id: l.id, label: l.name })), [allowedLocations]);
+  const sectorOptions: Option[] = useMemo(() => allowedSectors.map(s => ({ id: s.id, label: s.name })), [allowedSectors]);
+  const divisionOptions: Option[] = useMemo(() => allowedDivisions.map(d => ({ id: d.id, label: d.name })), [allowedDivisions]);
+  const machineOptions: Option[] = useMemo(() => availableMachines.map(m => {
       let label = m.category || `Machine ${m.id}`;
       let sub = `Chase No: ${m.chaseNo}`;
       if (m.brand) sub += ` | Brand: ${m.brand}`;
       return { id: m.id, label: label, subLabel: sub };
-    }), 
-    [availableMachines]
-  );
+  }), [availableMachines]);
   
-  // CRITICAL OPTIMIZATION: Memoize Item Options to prevent re-rendering loops/performance hits with large lists
-  // UPDATED: Now includes Part No, Model No, and OEM in the subLabel for better visibility
-  const itemOptions: Option[] = useMemo(() => 
-    items.map(i => {
+  const itemOptions: Option[] = useMemo(() => items.map(i => {
       const parts = [];
       if (i.partNumber) parts.push(`PN: ${i.partNumber}`);
       if (i.modelNo) parts.push(`Model: ${i.modelNo}`);
       if (i.oem) parts.push(`OEM: ${i.oem}`);
-      
       const sub = parts.length > 0 ? parts.join(' | ') : i.name;
-
-      return { 
-          id: i.id, 
-          label: i.id, 
-          subLabel: sub 
-      };
-    }), 
-    [items]
-  );
+      return { id: i.id, label: i.id, subLabel: sub };
+  }), [items]);
   
-  const itemNameOptions: Option[] = useMemo(() => 
-    items.map(i => {
+  const itemNameOptions: Option[] = useMemo(() => items.map(i => {
       const parts = [i.id];
       if (i.partNumber) parts.push(`PN: ${i.partNumber}`);
       if (i.modelNo) parts.push(`Model: ${i.modelNo}`);
-      
-      return { 
-          id: i.id, 
-          label: i.name, 
-          subLabel: parts.join(' | ') 
-      };
-    }), 
-    [items]
-  );
+      return { id: i.id, label: i.name, subLabel: parts.join(' | ') };
+  }), [items]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -597,19 +545,39 @@ const IssueForm: React.FC<IssueFormProps> = ({
                <p className="opacity-90 mt-1">Notification sent to {lastSubmittedBatch[0].warehouseEmail}</p>
              </div>
              
-             <div className="p-8 space-y-4">
-                <div className="text-center text-sm bg-gray-50 p-3 rounded-lg border border-gray-100 mb-6">
+             <div className="p-8 space-y-3">
+                <div className="text-center text-sm bg-gray-50 p-3 rounded-lg border border-gray-100 mb-4">
                    <p className="font-medium text-gray-700">Request IDs generated:</p>
                    <p className="text-gray-500">{lastSubmittedBatch.length} items waiting for approval</p>
                 </div>
                 
-                <button onClick={handlePrint} className="w-full py-4 bg-gray-900 text-white rounded-xl hover:bg-black font-bold text-lg flex items-center justify-center gap-3 shadow-lg transition-transform hover:scale-[1.02]">
-                   <span className="text-2xl">🖨️</span> Print Request Slip
+                <button onClick={handlePrint} className="w-full py-3 bg-gray-900 text-white rounded-xl hover:bg-black font-bold flex items-center justify-center gap-3 shadow-lg transition-transform hover:scale-[1.02]">
+                   <span>🖨️</span> Print Request Slip
                 </button>
                 
-                <button onClick={handleExportExcel} className="w-full py-3 bg-green-100 text-green-800 rounded-xl hover:bg-green-200 font-semibold flex items-center justify-center gap-2 transition border border-green-200">
-                    <span>📊</span> Download Excel
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                    <button onClick={handleExportExcel} className="py-3 bg-green-100 text-green-800 rounded-xl hover:bg-green-200 font-semibold flex items-center justify-center gap-2 transition border border-green-200">
+                        <span>📊</span> Excel
+                    </button>
+                    
+                    <button 
+                        onClick={handleSaveToDrive} 
+                        disabled={uploadingToDrive || !!driveLink}
+                        className={`py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition border ${
+                            driveLink 
+                            ? 'bg-blue-100 text-blue-800 border-blue-200' 
+                            : 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200'
+                        }`}
+                    >
+                        {uploadingToDrive ? (
+                            <span className="animate-spin">↻</span>
+                        ) : driveLink ? (
+                            <span onClick={() => driveLink !== 'saved' && window.open(driveLink, '_blank')}>✅ Saved</span>
+                        ) : (
+                            <><span>☁️</span> Drive</>
+                        )}
+                    </button>
+                </div>
              </div>
 
              <div className="bg-gray-50 p-4 border-t border-gray-100 text-center">

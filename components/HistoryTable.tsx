@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { IssueRecord, Location } from '../types';
 import * as XLSX from 'xlsx';
+import { uploadFileToDrive } from '../services/googleSheetsService';
 
 interface HistoryTableProps {
   history: IssueRecord[];
@@ -11,6 +12,7 @@ interface HistoryTableProps {
 const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   const filteredHistory = history.filter(record => {
     const matchesSearch = 
@@ -25,8 +27,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
     return matchesSearch && matchesLocation;
   });
 
-  const downloadExcel = () => {
-    // XLSX Export implementation
+  const generateWorkbook = () => {
     const headers = [
       "ID", 
       "Date", 
@@ -62,7 +63,47 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     XLSX.utils.book_append_sheet(wb, ws, "History");
+    return wb;
+  };
+
+  const downloadExcel = () => {
+    const wb = generateWorkbook();
     XLSX.writeFile(wb, `warehouse_issues_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
+  const saveToDrive = async () => {
+      const scriptUrl = localStorage.getItem('wf_script_url');
+      if (!scriptUrl) {
+          alert("Web App URL not configured in Master Data settings.");
+          return;
+      }
+      
+      if (filteredHistory.length === 0) {
+          alert("No data to save.");
+          return;
+      }
+
+      setUploading(true);
+      try {
+          const wb = generateWorkbook();
+          const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+          const fileName = `Full_History_Backup_${new Date().toISOString().slice(0,10)}.xlsx`;
+          
+          const url = await uploadFileToDrive(scriptUrl, fileName, wbOut);
+          
+          if (url) {
+              if (confirm(`Backup saved successfully! Open file?`)) {
+                  window.open(url, '_blank');
+              }
+          } else {
+              alert("Backup saved to 'WareFlow Reports' folder in your Drive!");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Failed to upload to Drive.");
+      } finally {
+          setUploading(false);
+      }
   };
 
   return (
@@ -95,12 +136,26 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
             </select>
         </div>
 
-        <button
-            onClick={downloadExcel}
-            className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-sm whitespace-nowrap"
-        >
-            <span className="mr-2">📊</span> Download Excel
-        </button>
+        <div className="flex gap-2">
+            <button
+                onClick={downloadExcel}
+                className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-sm whitespace-nowrap"
+            >
+                <span className="mr-2">📊</span> Excel
+            </button>
+            <button
+                onClick={saveToDrive}
+                disabled={uploading}
+                className="flex items-center justify-center px-4 py-2 bg-yellow-100 text-yellow-800 border border-yellow-200 rounded-lg hover:bg-yellow-200 transition shadow-sm whitespace-nowrap"
+            >
+                {uploading ? (
+                    <span className="animate-spin mr-2">↻</span>
+                ) : (
+                    <span className="mr-2">☁️</span> 
+                )}
+                Save to Drive
+            </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-auto max-h-[75vh] relative">

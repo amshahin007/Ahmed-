@@ -64,15 +64,6 @@ export const fetchRawCSV = async (sheetId: string, gid: string): Promise<string[
 
 export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise<Item[]> => {
   const rawRows = await fetchRawCSV(sheetId, gid);
-  
-  // Convert raw rows to CSV text format expected by existing parser or just reuse parser logic
-  // Since we already have parseItemsCSV expecting string, let's reconstruct or refactor.
-  // To minimize breakage, we'll reconstruct the CSV string or call a parser that takes rows.
-  // Actually, the easiest way to maintain the specific 'fetchItemsFromSheet' contract while using fetchRawCSV
-  // is to just map the rows back to Item objects here, but MasterData now uses fetchRawCSV directly.
-  // We keep this for backward compatibility if needed, but updated MasterData will use fetchRawCSV.
-  
-  // Re-joining for the existing parser (inefficient but safe for legacy calls)
   const csvText = rawRows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
   return parseItemsCSV(csvText);
 };
@@ -167,10 +158,8 @@ export const sendIssueToSheet = async (scriptUrl: string, issue: IssueRecord) =>
     await fetch(scriptUrl, {
       method: 'POST',
       mode: 'no-cors', 
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(issue),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'log_issue', ...issue }),
     });
     console.log("Sent to Google Sheet");
   } catch (error) {
@@ -178,12 +167,68 @@ export const sendIssueToSheet = async (scriptUrl: string, issue: IssueRecord) =>
   }
 };
 
+export const uploadFileToDrive = async (scriptUrl: string, fileName: string, base64Data: string): Promise<string> => {
+    try {
+        // We use standard fetch here to try and get the URL back. 
+        // Note: This requires the Web App to be set to "Anyone" including anonymous for best results with CORS.
+        const response = await fetch(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({
+                action: 'upload_file',
+                fileName: fileName,
+                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                fileData: base64Data
+            })
+        });
+        
+        const result = await response.json();
+        if (result.status === 'success') {
+            return result.url;
+        } else {
+            throw new Error(result.message || 'Upload failed');
+        }
+    } catch (error) {
+        // If CORS fails (opaque response), we might still have uploaded it, but can't see the URL.
+        // Fallback or just log.
+        console.error("Drive Upload Error:", error);
+        return "";
+    }
+};
+
 export const APP_SCRIPT_TEMPLATE = `
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(10000); // Wait up to 10s for previous request to finish
+  lock.tryLock(10000);
 
   try {
+    var data = JSON.parse(e.postData.contents);
+
+    // --- CASE 1: UPLOAD FILE TO DRIVE ---
+    if (data.action === "upload_file") {
+        var folderName = "WareFlow Reports";
+        var folders = DriveApp.getFoldersByName(folderName);
+        var folder;
+        
+        if (folders.hasNext()) {
+            folder = folders.next();
+        } else {
+            folder = DriveApp.createFolder(folderName);
+        }
+
+        var decoded = Utilities.base64Decode(data.fileData);
+        var blob = Utilities.newBlob(decoded, data.mimeType, data.fileName);
+        var file = folder.createFile(blob);
+        
+        // Make file accessible to anyone with link (optional, depends on security needs)
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+        return ContentService.createTextOutput(JSON.stringify({
+            status: "success",
+            url: file.getUrl()
+        })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // --- CASE 2: LOG ROW TO SHEET ---
     var sheetName = "Main Issue Backup";
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = spreadsheet.getSheetByName(sheetName);
@@ -198,8 +243,10 @@ function doPost(e) {
       sheet.setFrozenRows(1);
     }
     
-    var data = JSON.parse(e.postData.contents);
-    
+    // Check if ID already exists to avoid dupes (Optional simple check)
+    // var ids = sheet.getRange(2, 1, sheet.getLastRow(), 1).getValues().flat();
+    // if (ids.indexOf(data.id) === -1) { ... }
+
     sheet.appendRow([
       data.id, data.timestamp, data.locationId, data.sectorName || "", 
       data.divisionName || "", data.machineName, data.maintenancePlan || "", 
@@ -207,9 +254,12 @@ function doPost(e) {
       data.notes || "", data.warehouseEmail || "", data.requesterEmail || ""
     ]);
     
-    return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
+    return ContentService.createTextOutput(JSON.stringify({status: "success"}))
+      .setMimeType(ContentService.MimeType.JSON);
+
   } catch(e) {
-    return ContentService.createTextOutput("Error: " + e.toString()).setMimeType(ContentService.MimeType.TEXT);
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: e.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
   }
