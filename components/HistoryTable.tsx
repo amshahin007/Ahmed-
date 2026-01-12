@@ -13,6 +13,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [driveLink, setDriveLink] = useState('');
 
   const filteredHistory = history.filter(record => {
     const matchesSearch = 
@@ -84,6 +85,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
       }
 
       setUploading(true);
+      setDriveLink('');
       try {
           const wb = generateWorkbook();
           const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
@@ -92,10 +94,11 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
           const url = await uploadFileToDrive(scriptUrl, fileName, wbOut);
           
           if (url) {
-              if (confirm(`Backup saved successfully! Open file?`)) {
-                  window.open(url, '_blank');
-              }
+              setDriveLink(url);
+              // Optional: Auto open
+              // window.open(url, '_blank');
           } else {
+              setDriveLink('saved');
               alert("Backup saved to 'WareFlow Reports' folder in your Drive!");
           }
       } catch (e) {
@@ -143,18 +146,26 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
             >
                 <span className="mr-2">📊</span> Excel
             </button>
-            <button
-                onClick={saveToDrive}
-                disabled={uploading}
-                className="flex items-center justify-center px-4 py-2 bg-yellow-100 text-yellow-800 border border-yellow-200 rounded-lg hover:bg-yellow-200 transition shadow-sm whitespace-nowrap"
-            >
-                {uploading ? (
-                    <span className="animate-spin mr-2">↻</span>
-                ) : (
-                    <span className="mr-2">☁️</span> 
-                )}
-                Save to Drive
-            </button>
+            
+            {driveLink && driveLink !== 'saved' ? (
+               <a 
+                   href={driveLink} 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm whitespace-nowrap font-bold"
+               >
+                   <span>📂</span> Open File ↗
+               </a>
+            ) : (
+               <button
+                  onClick={saveToDrive}
+                  disabled={uploading}
+                  className="flex items-center justify-center px-4 py-2 bg-yellow-100 text-yellow-800 border border-yellow-200 rounded-lg hover:bg-yellow-200 transition shadow-sm whitespace-nowrap"
+               >
+                  {uploading ? <span className="animate-spin mr-2">↻</span> : <span className="mr-2">☁️</span>}
+                  {driveLink === 'saved' ? 'Saved (Check Drive)' : 'Save to Drive'}
+               </button>
+            )}
         </div>
       </div>
 

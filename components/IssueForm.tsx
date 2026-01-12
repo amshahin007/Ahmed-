@@ -560,23 +560,28 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         <span>📊</span> Excel
                     </button>
                     
-                    <button 
-                        onClick={handleSaveToDrive} 
-                        disabled={uploadingToDrive || !!driveLink}
-                        className={`py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition border ${
-                            driveLink 
-                            ? 'bg-blue-100 text-blue-800 border-blue-200' 
-                            : 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200'
-                        }`}
-                    >
-                        {uploadingToDrive ? (
-                            <span className="animate-spin">↻</span>
-                        ) : driveLink ? (
-                            <span onClick={() => driveLink !== 'saved' && window.open(driveLink, '_blank')}>✅ Saved</span>
-                        ) : (
-                            <><span>☁️</span> Drive</>
-                        )}
-                    </button>
+                    {driveLink && driveLink !== 'saved' ? (
+                       <a 
+                          href={driveLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold flex items-center justify-center gap-2 transition shadow-md"
+                       >
+                          <span>📂</span> Open File ↗
+                       </a>
+                    ) : (
+                       <button 
+                          onClick={handleSaveToDrive} 
+                          disabled={uploadingToDrive}
+                          className={`py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition border ${
+                             uploadingToDrive ? 'bg-gray-100 text-gray-500 border-gray-200' :
+                             'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200'
+                          }`}
+                       >
+                          {uploadingToDrive ? <span className="animate-spin">↻</span> : <span>☁️</span>} 
+                          {uploadingToDrive ? 'Saving...' : 'Save to Drive'}
+                       </button>
+                    )}
                 </div>
              </div>
 
