@@ -2,56 +2,55 @@
 // COPY ALL OF THIS CODE INTO YOUR GOOGLE APPS SCRIPT EDITOR
 // (Extensions > Apps Script)
 
+// Configuration
+var FOLDER_NAME = "WareFlow Reports";
+var DB_FILE_NAME = "WareFlow Database";
+var SHEET_TAB_NAME = "Main Issue Backup";
+
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.tryLock(10000); // Wait up to 10 seconds for other processes to finish
+  lock.tryLock(10000);
 
   try {
     var data = JSON.parse(e.postData.contents);
 
-    // ==========================================
-    // ACTION 1: UPLOAD FILE TO GOOGLE DRIVE
-    // ==========================================
-    if (data.action === "upload_file") {
-        var folderName = "WareFlow Reports";
-        var folders = DriveApp.getFoldersByName(folderName);
-        var folder;
+    // --- ACTION: LOCATE OR SETUP DATA (Returns URLs) ---
+    if (data.action === "locate_data") {
+        var folder = getOrCreateFolder(FOLDER_NAME);
+        var ss = getOrCreateSpreadsheet(folder);
         
-        // Check if folder exists, otherwise create it
-        if (folders.hasNext()) {
-            folder = folders.next();
-        } else {
-            folder = DriveApp.createFolder(folderName);
-        }
+        return ContentService.createTextOutput(JSON.stringify({
+            status: "success",
+            folderUrl: folder.getUrl(),
+            sheetUrl: ss.getUrl()
+        })).setMimeType(ContentService.MimeType.JSON);
+    }
 
-        // Decode the Excel file from Base64
+    // --- ACTION: UPLOAD FILE (Excel) ---
+    if (data.action === "upload_file") {
+        var folder = getOrCreateFolder(FOLDER_NAME);
+
         var decoded = Utilities.base64Decode(data.fileData);
         var blob = Utilities.newBlob(decoded, data.mimeType, data.fileName);
-        
-        // Create the file in the specific folder
         var file = folder.createFile(blob);
         
-        // IMPORTANT: Make file accessible via link so the Web App can open it immediately
-        // You can change 'ANYONE_WITH_LINK' to 'DOMAIN' if you use Google Workspace
+        // Ensure link is accessible
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-        // Return the direct link to the file
         return ContentService.createTextOutput(JSON.stringify({
             status: "success",
             url: file.getUrl()
         })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // ==========================================
-    // ACTION 2: LOG DATA TO GOOGLE SHEET
-    // ==========================================
-    var sheetName = "Main Issue Backup";
-    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = spreadsheet.getSheetByName(sheetName);
+    // --- ACTION: LOG ISSUE (Row) ---
+    // 1. Get or Create the Spreadsheet
+    var ss = getOrCreateSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET_TAB_NAME);
     
-    // Create backup sheet if it doesn't exist
+    // 2. Setup Headers if new
     if (!sheet) {
-      sheet = spreadsheet.insertSheet(sheetName);
+      sheet = ss.insertSheet(SHEET_TAB_NAME);
       sheet.appendRow([
         "ID", "Date", "Location", "Sector", "Division", "Machine", 
         "Maint. Plan", "Item ID", "Item Name", "Quantity", "Status", 
@@ -60,7 +59,7 @@ function doPost(e) {
       sheet.setFrozenRows(1);
     }
     
-    // Append the issue record
+    // 3. Append Row
     sheet.appendRow([
       data.id, 
       data.timestamp, 
@@ -82,7 +81,6 @@ function doPost(e) {
       .setMimeType(ContentService.MimeType.JSON);
 
   } catch(e) {
-    // Error Handling
     return ContentService.createTextOutput(JSON.stringify({
         status: "error", 
         message: e.toString()
@@ -90,4 +88,40 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// --- HELPER FUNCTIONS ---
+
+function getOrCreateFolder(name) {
+  var folders = DriveApp.getFoldersByName(name);
+  if (folders.hasNext()) {
+    return folders.next();
+  } else {
+    return DriveApp.createFolder(name);
+  }
+}
+
+function getOrCreateSpreadsheet(parentFolder) {
+  // 1. Try to use the active sheet if script is bound
+  try {
+    var active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active) return active;
+  } catch(e) {}
+
+  // 2. Search for the file by name
+  var files = DriveApp.getFilesByName(DB_FILE_NAME);
+  if (files.hasNext()) {
+    return SpreadsheetApp.open(files.next());
+  }
+
+  // 3. Create new spreadsheet if not found
+  var newSS = SpreadsheetApp.create(DB_FILE_NAME);
+  
+  // Optional: Move it to the WareFlow folder to keep things tidy
+  if (parentFolder) {
+     var file = DriveApp.getFileById(newSS.getId());
+     file.moveTo(parentFolder);
+  }
+  
+  return newSS;
 }

@@ -170,8 +170,6 @@ export const sendIssueToSheet = async (scriptUrl: string, issue: IssueRecord) =>
 
 export const uploadFileToDrive = async (scriptUrl: string, fileName: string, base64Data: string): Promise<string> => {
     try {
-        // We use standard fetch here to try and get the URL back. 
-        // Note: This requires the Web App to be set to "Anyone" including anonymous for best results with CORS.
         const response = await fetch(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({
@@ -189,14 +187,36 @@ export const uploadFileToDrive = async (scriptUrl: string, fileName: string, bas
             throw new Error(result.message || 'Upload failed');
         }
     } catch (error) {
-        // If CORS fails (opaque response), we might still have uploaded it, but can't see the URL.
-        // Fallback or just log.
         console.error("Drive Upload Error:", error);
         return "";
     }
 };
 
+export const locateRemoteData = async (scriptUrl: string): Promise<{folderUrl: string, sheetUrl: string} | null> => {
+    try {
+        const response = await fetch(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'locate_data' })
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+            return { folderUrl: result.folderUrl, sheetUrl: result.sheetUrl };
+        }
+        return null;
+    } catch (error) {
+        console.error("Failed to locate data:", error);
+        return null;
+    }
+}
+
 export const APP_SCRIPT_TEMPLATE = `
+// COPY ALL OF THIS CODE INTO YOUR GOOGLE APPS SCRIPT EDITOR
+
+// Configuration
+var FOLDER_NAME = "WareFlow Reports";
+var DB_FILE_NAME = "WareFlow Database";
+var SHEET_TAB_NAME = "Main Issue Backup";
+
 function doPost(e) {
   var lock = LockService.getScriptLock();
   lock.tryLock(10000);
@@ -204,55 +224,40 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
 
-    // --- CASE 1: UPLOAD FILE TO DRIVE ---
-    if (data.action === "upload_file") {
-        var folderName = "WareFlow Reports";
-        var folders = DriveApp.getFoldersByName(folderName);
-        var folder;
-        
-        if (folders.hasNext()) {
-            folder = folders.next();
-        } else {
-            folder = DriveApp.createFolder(folderName);
-        }
+    if (data.action === "locate_data") {
+        var folder = getOrCreateFolder(FOLDER_NAME);
+        var ss = getOrCreateSpreadsheet(folder);
+        return ContentService.createTextOutput(JSON.stringify({
+            status: "success",
+            folderUrl: folder.getUrl(),
+            sheetUrl: ss.getUrl()
+        })).setMimeType(ContentService.MimeType.JSON);
+    }
 
+    if (data.action === "upload_file") {
+        var folder = getOrCreateFolder(FOLDER_NAME);
         var decoded = Utilities.base64Decode(data.fileData);
         var blob = Utilities.newBlob(decoded, data.mimeType, data.fileName);
         var file = folder.createFile(blob);
-        
-        // Make file accessible to anyone with link (optional, depends on security needs)
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
         return ContentService.createTextOutput(JSON.stringify({
             status: "success",
             url: file.getUrl()
         })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // --- CASE 2: LOG ROW TO SHEET ---
-    var sheetName = "Main Issue Backup";
-    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = spreadsheet.getSheetByName(sheetName);
+    // Default: Log Issue
+    var ss = getOrCreateSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET_TAB_NAME);
     
     if (!sheet) {
-      sheet = spreadsheet.insertSheet(sheetName);
-      sheet.appendRow([
-        "ID", "Date", "Location", "Sector", "Division", "Machine", 
-        "Maint. Plan", "Item ID", "Item Name", "Quantity", "Status", 
-        "Notes", "Warehouse Email", "Site Email"
-      ]);
-      sheet.setFrozenRows(1);
+      sheet = ss.insertSheet(SHEET_TAB_NAME);
+      sheet.appendRow(["ID", "Date", "Location", "Machine", "Item ID", "Item Name", "Quantity", "Status", "Notes"]);
     }
     
-    // Check if ID already exists to avoid dupes (Optional simple check)
-    // var ids = sheet.getRange(2, 1, sheet.getLastRow(), 1).getValues().flat();
-    // if (ids.indexOf(data.id) === -1) { ... }
-
     sheet.appendRow([
-      data.id, data.timestamp, data.locationId, data.sectorName || "", 
-      data.divisionName || "", data.machineName, data.maintenancePlan || "", 
-      data.itemId, data.itemName, data.quantity, data.status, 
-      data.notes || "", data.warehouseEmail || "", data.requesterEmail || ""
+      data.id, data.timestamp, data.locationId, data.machineName, 
+      data.itemId, data.itemName, data.quantity, data.status, data.notes || ""
     ]);
     
     return ContentService.createTextOutput(JSON.stringify({status: "success"}))
@@ -264,5 +269,26 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function getOrCreateFolder(name) {
+  var folders = DriveApp.getFoldersByName(name);
+  return folders.hasNext() ? folders.next() : DriveApp.createFolder(name);
+}
+
+function getOrCreateSpreadsheet(parentFolder) {
+  try {
+    var active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active) return active;
+  } catch(e) {}
+
+  var files = DriveApp.getFilesByName(DB_FILE_NAME);
+  if (files.hasNext()) return SpreadsheetApp.open(files.next());
+
+  var newSS = SpreadsheetApp.create(DB_FILE_NAME);
+  if (parentFolder) {
+     DriveApp.getFileById(newSS.getId()).moveTo(parentFolder);
+  }
+  return newSS;
 }
 `;

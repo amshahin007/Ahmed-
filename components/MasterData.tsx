@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
-import { fetchRawCSV, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet, DEFAULT_SCRIPT_URL } from '../services/googleSheetsService';
+import { fetchRawCSV, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet, DEFAULT_SCRIPT_URL, locateRemoteData } from '../services/googleSheetsService';
 import * as XLSX from 'xlsx';
 
 interface MasterDataProps {
@@ -128,7 +128,6 @@ const MasterData: React.FC<MasterDataProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
 
   // --- SYNC STATE MANAGEMENT (PER TAB) ---
-  // Stores { sheetId, gid } for each tab key
   const [syncConfig, setSyncConfig] = useState<Record<string, { sheetId: string; gid: string }>>(() => {
     try {
         const saved = localStorage.getItem('wf_sync_config_v2');
@@ -144,6 +143,7 @@ const MasterData: React.FC<MasterDataProps> = ({
   const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('wf_script_url') || DEFAULT_SCRIPT_URL);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [remoteLinks, setRemoteLinks] = useState<{folderUrl: string, sheetUrl: string} | null>(null);
 
   // Column Management State
   const [columnSettings, setColumnSettings] = useState<Record<Exclude<TabType, 'history'>, { key: string; label: string; visible: boolean }[]>>(() => {
@@ -192,6 +192,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     setCurrentPage(1);
     setSelectedIds(new Set());
     setSyncMsg(''); // Clear sync message on tab change
+    setRemoteLinks(null);
   }, [activeTab]);
 
   // -- Config Handlers --
@@ -228,6 +229,24 @@ const MasterData: React.FC<MasterDataProps> = ({
         [activeTab]: { sheetId: DEFAULT_SHEET_ID, gid: activeTab === 'items' ? DEFAULT_ITEMS_GID : '0' }
     }));
     setSyncMsg('Defaults restored for this tab.');
+  };
+
+  const handleLocateData = async () => {
+      if (!scriptUrl) {
+          setSyncMsg('Please ensure Web App URL is set.');
+          return;
+      }
+      setSyncLoading(true);
+      setSyncMsg('Locating storage folder and database...');
+      const result = await locateRemoteData(scriptUrl);
+      setSyncLoading(false);
+      
+      if (result) {
+          setRemoteLinks(result);
+          setSyncMsg('Data located successfully! Use the links below.');
+      } else {
+          setSyncMsg('Failed to locate data. Check URL or permissions.');
+      }
   };
 
   // --- AUTO CONFIG FROM SHEET LOGIC ---
@@ -994,6 +1013,37 @@ const MasterData: React.FC<MasterDataProps> = ({
                             />
                         </div>
 
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Web App URL (for History Export & Uploads)</label>
+                            <input 
+                                type="text" 
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
+                                value={scriptUrl}
+                                onChange={(e) => setScriptUrl(e.target.value)}
+                                placeholder="https://script.google.com/macros/s/..."
+                            />
+                        </div>
+
+                        {/* Locate Data Button */}
+                        <div className="pt-2 border-t border-gray-100">
+                             <button
+                                onClick={handleLocateData}
+                                disabled={syncLoading || !scriptUrl}
+                                className="w-full py-2 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg text-sm font-bold hover:bg-yellow-100 transition flex items-center justify-center gap-2"
+                             >
+                                {syncLoading ? <span className="animate-spin">↻</span> : <span>🔍</span>}
+                                Test Connection & Locate Data
+                             </button>
+                             
+                             {remoteLinks && (
+                                 <div className="mt-2 text-xs text-center space-y-1 bg-yellow-50 p-2 rounded border border-yellow-100">
+                                     <p className="font-bold">Found your files:</p>
+                                     <a href={remoteLinks.folderUrl} target="_blank" rel="noopener noreferrer" className="block text-blue-600 underline">📂 Open "WareFlow Reports" Folder</a>
+                                     <a href={remoteLinks.sheetUrl} target="_blank" rel="noopener noreferrer" className="block text-green-600 underline">📊 Open "WareFlow Database" Sheet</a>
+                                 </div>
+                             )}
+                        </div>
+
                         <div className="pt-2 border-t border-gray-100 grid grid-cols-2 gap-3">
                              <button
                                 onClick={handleAutoConfigFromSheet}
@@ -1009,17 +1059,6 @@ const MasterData: React.FC<MasterDataProps> = ({
                                 {syncLoading ? <span className="animate-spin">↻</span> : <span>📥</span>}
                                 Fetch All Data (Full Backup Restore)
                              </button>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Web App URL (for History Export)</label>
-                            <input 
-                                type="text" 
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
-                                value={scriptUrl}
-                                onChange={(e) => setScriptUrl(e.target.value)}
-                                placeholder="https://script.google.com/macros/s/..."
-                            />
                         </div>
                     </div>
 
@@ -1044,7 +1083,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                     </div>
 
                     {syncMsg && (
-                        <div className={`p-3 rounded-lg text-sm text-center ${syncMsg.includes('Error') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
+                        <div className={`p-3 rounded-lg text-sm text-center ${syncMsg.includes('Error') || syncMsg.includes('Failed') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
                             {syncMsg}
                         </div>
                     )}
