@@ -548,16 +548,36 @@ const IssueForm: React.FC<IssueFormProps> = ({
   );
   
   // CRITICAL OPTIMIZATION: Memoize Item Options to prevent re-rendering loops/performance hits with large lists
+  // UPDATED: Now includes Part No, Model No, and OEM in the subLabel for better visibility
   const itemOptions: Option[] = useMemo(() => 
-    items.map(i => ({ id: i.id, label: i.id, subLabel: i.name })), 
+    items.map(i => {
+      const parts = [];
+      if (i.partNumber) parts.push(`PN: ${i.partNumber}`);
+      if (i.modelNo) parts.push(`Model: ${i.modelNo}`);
+      if (i.oem) parts.push(`OEM: ${i.oem}`);
+      
+      const sub = parts.length > 0 ? parts.join(' | ') : i.name;
+
+      return { 
+          id: i.id, 
+          label: i.id, 
+          subLabel: sub 
+      };
+    }), 
     [items]
   );
   
   const itemNameOptions: Option[] = useMemo(() => 
     items.map(i => {
-      let sub = i.id;
-      if (i.partNumber) sub += ` | PN: ${i.partNumber}`;
-      return { id: i.id, label: i.name, subLabel: sub };
+      const parts = [i.id];
+      if (i.partNumber) parts.push(`PN: ${i.partNumber}`);
+      if (i.modelNo) parts.push(`Model: ${i.modelNo}`);
+      
+      return { 
+          id: i.id, 
+          label: i.name, 
+          subLabel: parts.join(' | ') 
+      };
     }), 
     [items]
   );

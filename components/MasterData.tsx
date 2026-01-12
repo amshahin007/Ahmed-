@@ -55,7 +55,8 @@ const COLUMNS_CONFIG: Record<TabType, { key: string, label: string }[]> = {
     { key: 'description2', label: 'Desc Line 2' },
     { key: 'fullName', label: 'Full Name' },
     { key: 'category', label: 'Category' },
-    { key: 'brand', label: 'Brand / Manufacturer' },
+    { key: 'brand', label: 'Brand' },
+    { key: 'modelNo', label: 'Model No (طراز)' },
     { key: 'oem', label: 'OEM' },
     { key: 'partNumber', label: 'Part No' },
     { key: 'unit', label: 'UM' }
@@ -361,10 +362,10 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     switch (activeTab) {
       case 'items':
-        headers = ['Item Number', 'Description', 'Category', 'Unit', '3rd Item No', 'Desc Line 2', 'Full Name', 'Brand', 'OEM', 'Part No'];
+        headers = ['Item Number', 'Description', 'Category', 'Unit', '3rd Item No', 'Desc Line 2', 'Full Name', 'Brand', 'OEM', 'Part No', 'Model No'];
         rows = data.map((i: Item) => [
             i.id, i.name, i.category, i.unit, 
-            i.thirdId, i.description2, i.fullName, i.brand, i.oem, i.partNumber
+            i.thirdId, i.description2, i.fullName, i.brand, i.oem, i.partNumber, i.modelNo
         ]);
         break;
       case 'machines':
@@ -497,7 +498,8 @@ const MasterData: React.FC<MasterDataProps> = ({
             fullName: ['full name', 'fullname', 'long description'],
             brand: ['brand', 'manufacturer', 'make'],
             oem: ['oem'],
-            partNumber: ['part no', 'part number', 'pn', 'part num']
+            partNumber: ['part no', 'part number', 'pn', 'part num'],
+            modelNo: ['model no', 'model', 'model number', 'طراز']
         };
     } else if (activeTab === 'machines') {
         fieldMap = {
@@ -673,6 +675,7 @@ const MasterData: React.FC<MasterDataProps> = ({
         brand: formData.brand,
         oem: formData.oem,
         partNumber: formData.partNumber,
+        modelNo: formData.modelNo,
       };
       isEditing ? onUpdateItem(payload) : onAddItem(payload);
 
@@ -739,213 +742,6 @@ const MasterData: React.FC<MasterDataProps> = ({
     setIsEditing(false);
   };
 
-  const renderSyncModal = () => {
-    if (!showSyncModal) return null;
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
-          <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
-             <div className="flex items-center gap-3">
-               <span className="text-2xl bg-green-100 p-2 rounded-lg">
-                 {activeTab === 'items' ? '📊' : '☁️'}
-               </span>
-               <h3 className="text-xl font-bold text-gray-800">
-                 {activeTab === 'items' ? 'Sync Items Data' : 'Cloud Configuration'}
-               </h3>
-             </div>
-             <button onClick={() => setShowSyncModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
-          </div>
-          
-          <div className="p-6 space-y-8">
-             {/* Section 1: Import Items - Only show if Items tab is active */}
-             {activeTab === 'items' && (
-               <div className="space-y-4">
-                 <div className="flex justify-between items-center border-b pb-2">
-                   <h4 className="font-bold text-lg text-blue-700">1. Import Items from Sheet</h4>
-                   <button 
-                     onClick={handleResetDefaults}
-                     className="text-xs text-blue-600 underline hover:text-blue-800"
-                   >
-                     Reset to Default Link
-                   </button>
-                 </div>
-                 <p className="text-sm text-gray-600">
-                   Read item master data directly from your Google Sheet. 
-                   <br/><span className="font-semibold text-red-500">Note:</span> Paste your full "Published to web" link below and the GID will update automatically.
-                 </p>
-                 
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Spreadsheet ID / URL</label>
-                      <input 
-                        className="w-full border rounded p-2 text-sm" 
-                        value={sheetId}
-                        onChange={e => handleSheetIdChange(e.target.value)}
-                        placeholder="Paste full URL or ID here..."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">GID (Tab ID)</label>
-                      <input 
-                        className="w-full border rounded p-2 text-sm" 
-                        value={gid}
-                        onChange={e => setGid(e.target.value)}
-                        placeholder="e.g. 229812258"
-                      />
-                      <p className="text-[10px] text-gray-400 mt-1">If '0', it reads the first sheet.</p>
-                    </div>
-                 </div>
-                 
-                 <button 
-                   onClick={handleSyncItems} 
-                   disabled={syncLoading}
-                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 transition flex items-center gap-2 w-full justify-center md:w-auto"
-                 >
-                   {syncLoading ? 'Syncing...' : '📥 Import Items Now'}
-                 </button>
-               </div>
-             )}
-
-             {/* Section 2: Write Config */}
-             <div className="space-y-4">
-               <h4 className="font-bold text-lg text-green-700 border-b pb-2">
-                 {activeTab === 'items' ? '2. ' : ''}Record Issues to Cloud Database
-               </h4>
-               <p className="text-sm text-gray-600">
-                 To create a cloud database for your records:
-                 <br/>
-                 1. Create a new Google Sheet named <strong className="text-black bg-yellow-100 px-1">"Main Issue Backup"</strong>.
-                 <br/>
-                 2. Open <b>Extensions &gt; Apps Script</b> in that sheet.
-                 <br/>
-                 3. Paste the code below and <b>Deploy as Web App</b> (Who has access: Anyone).
-                 <br/>
-                 4. Paste the URL below.
-               </p>
-               
-               <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Web App URL (from Apps Script Deployment)</label>
-                  <input 
-                    className="w-full border rounded p-2 text-sm font-mono text-blue-600 bg-gray-50" 
-                    value={scriptUrl}
-                    onChange={e => setScriptUrl(e.target.value)}
-                    placeholder="https://script.google.com/macros/s/..."
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Leave empty to disable auto-logging.</p>
-               </div>
-
-               {scriptUrl && (
-                  <div className="bg-green-50 p-4 rounded-lg border border-green-100 flex flex-col items-center">
-                      <p className="text-sm text-green-800 mb-2 font-medium">Bulk Actions</p>
-                      <button 
-                        onClick={handleExportHistory}
-                        disabled={syncLoading}
-                        className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 shadow-sm flex items-center justify-center gap-2"
-                      >
-                         <span>📤</span> Export All Existing History to Sheet
-                      </button>
-                  </div>
-               )}
-
-               <details className="text-sm border rounded-lg p-3 bg-gray-50">
-                 <summary className="font-medium cursor-pointer text-blue-600 hover:text-blue-800">Show Apps Script Code to Copy</summary>
-                 <div className="mt-3">
-                   <pre className="bg-gray-800 text-green-400 p-3 rounded text-xs overflow-x-auto select-all">
-                      {APP_SCRIPT_TEMPLATE}
-                   </pre>
-                 </div>
-               </details>
-             </div>
-             
-             {syncMsg && (
-                <div className={`p-3 rounded text-sm ${syncMsg.includes('Error') || syncMsg.includes('No items') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-                   {syncMsg}
-                </div>
-             )}
-          </div>
-          
-          <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
-            <button onClick={() => setShowSyncModal(false)} className="px-6 py-2 bg-gray-800 text-white rounded hover:bg-gray-900">Done</button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderCellContent = (key: string, row: any) => {
-    // Special Renderers
-    if (activeTab === 'machines' && key === 'divisionId') {
-      return divisions.find(d => d.id === row.divisionId)?.name || '-';
-    }
-    if (activeTab === 'machines' && key === 'status') {
-      const color = row.status === 'Working' ? 'bg-green-100 text-green-800' : 
-                    row.status === 'Not Working' ? 'bg-red-100 text-red-800' : 
-                    'bg-yellow-100 text-yellow-800';
-      return <span className={`px-2 py-1 rounded-full text-xs font-bold ${color}`}>{row.status}</span>;
-    }
-    if (activeTab === 'divisions' && key === 'sectorId') {
-      return sectors.find(s => s.id === row.sectorId)?.name || '-';
-    }
-    if (activeTab === 'users' && key === 'role') {
-       return (
-         <span className={`px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
-            row.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-            row.role.includes('manager') ? 'bg-orange-100 text-orange-700' :
-            'bg-blue-100 text-blue-700'
-         }`}>
-            {row.role.replace('_', ' ').toUpperCase()}
-         </span>
-       );
-    }
-    if (activeTab === 'users' && key === 'allowedLocationIds') {
-        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs whitespace-nowrap">All Access</span>;
-        if (!row.allowedLocationIds || row.allowedLocationIds.length === 0) return <span className="text-gray-400 italic text-xs whitespace-nowrap">No restrictions</span>;
-        
-        return (
-           <div className="flex gap-1">
-             {row.allowedLocationIds.map((lid: string) => (
-               <span key={lid} className="px-1.5 py-0.5 bg-gray-100 rounded border border-gray-200 text-xs whitespace-nowrap">
-                  {locations.find(l => l.id === lid)?.name || lid}
-               </span>
-             ))}
-           </div>
-        );
-    }
-
-    if (activeTab === 'users' && key === 'allowedSectorIds') {
-        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs whitespace-nowrap">All Access</span>;
-        if (!row.allowedSectorIds || row.allowedSectorIds.length === 0) return <span className="text-gray-400 italic text-xs whitespace-nowrap">No restrictions</span>;
-        
-        return (
-           <div className="flex gap-1">
-             {row.allowedSectorIds.map((sid: string) => (
-               <span key={sid} className="px-1.5 py-0.5 bg-indigo-100 rounded border border-indigo-200 text-xs text-indigo-800 whitespace-nowrap">
-                  {sectors.find(s => s.id === sid)?.name || sid}
-               </span>
-             ))}
-           </div>
-        );
-    }
-
-    if (activeTab === 'users' && key === 'allowedDivisionIds') {
-        if (row.role === 'admin') return <span className="text-green-600 font-bold text-xs whitespace-nowrap">All Access</span>;
-        if (!row.allowedDivisionIds || row.allowedDivisionIds.length === 0) return <span className="text-gray-400 italic text-xs whitespace-nowrap">No restrictions</span>;
-        
-        return (
-           <div className="flex gap-1">
-             {row.allowedDivisionIds.map((did: string) => (
-               <span key={did} className="px-1.5 py-0.5 bg-pink-100 rounded border border-pink-200 text-xs text-pink-800 whitespace-nowrap">
-                  {divisions.find(d => d.id === did)?.name || did}
-               </span>
-             ))}
-           </div>
-        );
-    }
-    
-    // Default Text Render
-    return <span className="text-gray-700 whitespace-nowrap">{row[key] || '-'}</span>;
-  };
-
   const renderTable = () => {
     let data: any[] = [];
     switch (activeTab) {
@@ -958,440 +754,391 @@ const MasterData: React.FC<MasterDataProps> = ({
       case 'users': data = users; break;
     }
 
-    // Pagination Logic
-    const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE) || 1;
+    const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedData = data.slice(startIndex, endIndex);
-
-    const visibleColumns = (columnSettings[activeTab] || []).filter(c => c.visible);
-
-    // Calculate selection state for header checkbox
-    const allPageSelected = paginatedData.length > 0 && paginatedData.every(row => selectedIds.has(row.id || row.username));
-    
-    // Check if ALL data across ALL pages is selected
-    const allDataSelected = data.length > 0 && selectedIds.size === data.length;
-
-    const handleSelectAllData = () => {
-        const newSet = new Set(data.map(item => item.id || item.username));
-        setSelectedIds(newSet);
-    };
-
-    const handleClearSelection = () => {
-        setSelectedIds(new Set());
-    };
+    const currentItems = data.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    const visibleColumns = columnSettings[activeTab].filter(c => c.visible);
 
     return (
-      <div className="flex flex-col space-y-4 relative flex-1">
-        {/* Loading Overlay for Processing */}
-        {processingStatus && (
-            <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center">
-                <div className="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center animate-bounce-in max-w-sm text-center">
-                    <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <h3 className="text-lg font-bold text-gray-800">Processing Upload</h3>
-                    <p className="text-gray-600 mt-2 font-medium">{processingStatus}</p>
-                    <p className="text-xs text-gray-400 mt-2">Please do not close this window.</p>
-                </div>
-            </div>
-        )}
-
-        {/* Columns Management Tool (Hidden by default) */}
-        {showColumnMenu && (
-           <div className="absolute z-10 bg-white border border-gray-200 rounded-lg shadow-xl p-4 right-0 top-0 mt-2 w-64 max-h-96 overflow-y-auto animate-fade-in-up">
-              <div className="flex justify-between items-center mb-2 border-b pb-2">
-                 <h4 className="font-bold text-sm text-gray-700">Manage Columns</h4>
-                 <button onClick={() => setShowColumnMenu(false)} className="text-gray-400 hover:text-gray-600">&times;</button>
-              </div>
-              <div className="space-y-2">
-                 {(columnSettings[activeTab] || []).map(col => (
-                    <label key={col.key} className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded select-none">
-                       <input 
-                         type="checkbox" 
-                         checked={col.visible} 
-                         onChange={() => toggleColumnVisibility(col.key)}
-                         className="rounded text-blue-600 focus:ring-blue-500"
-                       />
-                       <span>{col.label}</span>
-                    </label>
-                 ))}
-              </div>
-              <div className="mt-3 pt-2 border-t text-xs text-gray-400">
-                Drag headers in table to reorder.
-              </div>
-           </div>
-        )}
-
-        {/* --- SELECT ALL DATA BANNER --- */}
-        {(selectedIds.size > 0 && (allPageSelected || allDataSelected)) && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center justify-center text-sm text-blue-800 animate-fade-in-up shadow-sm">
-                {allDataSelected ? (
-                    <span className="flex items-center gap-2">
-                        <span>✅ All <b>{data.length}</b> items in <b>{activeTab}</b> are selected.</span>
-                        <button 
-                            onClick={handleClearSelection} 
-                            className="font-semibold text-red-600 hover:text-red-800 hover:underline ml-2"
-                        >
-                            Clear Selection
-                        </button>
-                    </span>
-                ) : (
-                    <span className="flex items-center gap-1 flex-wrap justify-center">
-                        <span>All <b>{paginatedData.length}</b> items on this page are selected.</span>
-                        {data.length > paginatedData.length && (
-                            <button 
-                                onClick={handleSelectAllData}
-                                className="font-bold text-blue-700 underline hover:text-blue-900 ml-1"
-                            >
-                                Select all {data.length} items in {activeTab}
-                            </button>
-                        )}
-                    </span>
-                )}
-            </div>
-        )}
-
-        {/* 
-            TABLE WRAPPER 
-            - overflow-auto: Enables scrolling both X and Y
-            - max-h-[75vh]: Constrains height to force internal scroll so sticky works
-        */}
-        <div className="overflow-auto bg-white rounded-lg shadow border border-gray-200 max-h-[75vh] relative">
-            <table className="w-full text-left text-sm border-separate border-spacing-0">
-            <thead className="bg-gray-50">
-                <tr>
-                {/* Checkbox Header */}
-                <th className="sticky top-0 left-0 z-30 bg-gray-50 border-b border-r border-gray-200 px-4 py-3 w-12 text-center">
-                    <input 
-                        type="checkbox" 
-                        checked={allPageSelected}
-                        onChange={() => handleSelectAllPage(paginatedData)}
-                        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
-                    />
-                </th>
-
-                {visibleColumns.map((col, index) => {
-                    // Adjust sticky index since checkbox is now first
-                    return (
-                        <th 
-                        key={col.key} 
-                        className={`
-                            px-6 py-3 font-semibold text-gray-700 whitespace-nowrap 
-                            border-b border-gray-200
-                            sticky top-0 z-20
-                            bg-gray-50
-                            cursor-move hover:bg-gray-100 select-none
-                        `}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, index)}
-                        onDragEnter={(e) => handleDragEnter(e, index)}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={handleDrop}
-                        >
-                        <div className="flex items-center gap-2">
-                            <span className="text-gray-400 cursor-grab active:cursor-grabbing">⋮⋮</span>
-                            {col.label}
-                        </div>
-                        </th>
-                    );
-                })}
-                <th className="sticky top-0 right-0 z-30 bg-gray-50 border-b border-l border-gray-200 px-6 py-3 font-semibold text-gray-700 whitespace-nowrap shadow-sm">Actions</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-                {paginatedData.map((row: any) => {
-                    const id = row.id || row.username;
-                    const isSelected = selectedIds.has(id);
-                    return (
-                        <tr key={id} className={`group transition ${isSelected ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
-                            {/* Checkbox Cell */}
-                            <td className={`sticky left-0 z-10 border-r border-gray-100 px-4 py-3 text-center align-middle ${isSelected ? 'bg-blue-50' : 'bg-white group-hover:bg-gray-50'}`}>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full">
+            <div className="overflow-auto flex-1">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-gray-50 text-gray-700 font-semibold border-b border-gray-200">
+                        <tr>
+                            <th className="px-4 py-3 w-10 text-center">
                                 <input 
                                     type="checkbox" 
-                                    checked={isSelected}
-                                    onChange={() => toggleSelection(id)}
-                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                    checked={currentItems.length > 0 && currentItems.every(i => selectedIds.has(i.id || i.username))}
+                                    onChange={() => handleSelectAllPage(currentItems)}
+                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                 />
-                            </td>
-
-                            {visibleColumns.map((col, index) => {
-                            return (
-                                <td key={col.key} 
-                                    className="px-6 py-3 align-middle whitespace-nowrap"
+                            </th>
+                            {visibleColumns.map((col, index) => (
+                                <th 
+                                    key={col.key} 
+                                    className="px-4 py-3 cursor-move hover:bg-gray-100 select-none"
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, index)}
+                                    onDragEnter={(e) => handleDragEnter(e, index)}
+                                    onDragEnd={handleDrop}
+                                    onDragOver={(e) => e.preventDefault()}
                                 >
-                                    {renderCellContent(col.key, row)}
-                                </td>
-                            );
-                            })}
-
-                            <td className={`sticky right-0 z-10 border-l border-gray-100 px-6 py-3 align-middle whitespace-nowrap shadow-sm ${isSelected ? 'bg-blue-50' : 'bg-white group-hover:bg-gray-50'}`}>
-                            <div className="flex items-center gap-3">
-                                <button 
-                                    onClick={() => handleEdit(row)}
-                                    className="text-blue-600 hover:text-blue-900 font-medium hover:underline"
-                                >
-                                    Edit
-                                </button>
-                                <button 
-                                    onClick={() => handleDeleteSingle(id)}
-                                    className="text-red-600 hover:text-red-900 font-medium hover:underline text-xs"
-                                >
-                                    Remove
-                                </button>
-                            </div>
-                            </td>
+                                    {col.label}
+                                </th>
+                            ))}
+                            <th className="px-4 py-3 text-right bg-gray-50 sticky right-0 shadow-sm border-l">Actions</th>
                         </tr>
-                    );
-                })}
-                {data.length === 0 && (
-                <tr>
-                    <td colSpan={visibleColumns.length + 2} className="px-6 py-8 text-center text-gray-400">
-                    No records found.
-                    </td>
-                </tr>
-                )}
-            </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {currentItems.map((item, idx) => {
+                            const itemId = item.id || item.username;
+                            return (
+                                <tr key={itemId} className="hover:bg-blue-50 transition-colors">
+                                    <td className="px-4 py-2 text-center">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={selectedIds.has(itemId)}
+                                            onChange={() => toggleSelection(itemId)}
+                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                    </td>
+                                    {visibleColumns.map(col => (
+                                        <td key={col.key} className="px-4 py-2 text-gray-600">
+                                            {Array.isArray(item[col.key]) 
+                                                ? item[col.key].join(', ') 
+                                                : (item[col.key] || '-')}
+                                        </td>
+                                    ))}
+                                    <td className="px-4 py-2 text-right sticky right-0 bg-white group-hover:bg-blue-50 border-l border-gray-100 flex items-center justify-end gap-2">
+                                        <button 
+                                            onClick={() => handleEdit(item)}
+                                            className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+                                            title="Edit"
+                                        >
+                                            ✏️
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDeleteSingle(itemId)}
+                                            className="p-1 text-red-600 hover:bg-red-100 rounded"
+                                            title="Delete"
+                                        >
+                                            🗑️
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                        {currentItems.length === 0 && (
+                            <tr>
+                                <td colSpan={visibleColumns.length + 2} className="px-6 py-12 text-center text-gray-400">
+                                    No records found in {activeTab}.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
 
-        {/* Pagination Controls */}
-        {data.length > ITEMS_PER_PAGE && (
-            <div className="flex justify-between items-center px-4">
-                <div className="text-sm text-gray-500">
-                    Showing {startIndex + 1} to {Math.min(endIndex, data.length)} of {data.length} entries
-                </div>
-                <div className="flex items-center gap-2">
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="p-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
                     <button 
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
-                        className="p-2 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600"
+                        onClick={() => setCurrentPage(p => p - 1)}
+                        className="px-3 py-1 border rounded bg-white disabled:opacity-50 hover:bg-gray-100"
                     >
-                        ⬅️
+                        Previous
                     </button>
-                    <span className="text-sm font-medium text-gray-700">
-                        Page {currentPage} of {totalPages}
+                    <span className="text-sm text-gray-600">
+                        Page {currentPage} of {totalPages} ({data.length} items)
                     </span>
                     <button 
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages}
-                        className="p-2 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-gray-600"
+                        onClick={() => setCurrentPage(p => p + 1)}
+                        className="px-3 py-1 border rounded bg-white disabled:opacity-50 hover:bg-gray-100"
                     >
-                        ➡️
+                        Next
                     </button>
                 </div>
-            </div>
-        )}
-      </div>
+            )}
+        </div>
     );
   };
 
   const renderForm = () => {
-    // ... existing renderForm code ...
     if (!showForm) return null;
 
-    const commonInputClass = "w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none";
-    const labelClass = "block text-sm font-medium text-gray-700 mb-1";
+    return (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                    <h2 className="text-xl font-bold text-gray-800">
+                        {isEditing ? 'Edit' : 'Add New'} {activeTab.slice(0, -1)}
+                    </h2>
+                    <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
+                        ✕
+                    </button>
+                </div>
+                
+                <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                    {activeTab === 'items' && (
+                        <>
+                           <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Item Number (ID)</label>
+                                    <input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Category</label>
+                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} />
+                                </div>
+                           </div>
+                           <div>
+                               <label className="block text-sm font-medium text-gray-700">Description (Name)</label>
+                               <input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                           </div>
+                           <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Unit (UM)</label>
+                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.unit || ''} onChange={e => setFormData({...formData, unit: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Part No</label>
+                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.partNumber || ''} onChange={e => setFormData({...formData, partNumber: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Model No</label>
+                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.modelNo || ''} onChange={e => setFormData({...formData, modelNo: e.target.value})} />
+                                </div>
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Brand</label>
+                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">OEM</label>
+                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.oem || ''} onChange={e => setFormData({...formData, oem: e.target.value})} />
+                                </div>
+                           </div>
+                        </>
+                    )}
+
+                    {activeTab === 'machines' && (
+                        <>
+                           <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Machine ID</label>
+                                    <input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Local No</label>
+                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.machineLocalNo || ''} onChange={e => setFormData({...formData, machineLocalNo: e.target.value})} />
+                                </div>
+                           </div>
+                           <div>
+                                <label className="block text-sm font-medium text-gray-700">Equipment Name (Category)</label>
+                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} />
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Status</label>
+                                    <select className="w-full px-3 py-2 border rounded-lg" value={formData.status || 'Working'} onChange={e => setFormData({...formData, status: e.target.value})}>
+                                        <option value="Working">Working</option>
+                                        <option value="Not Working">Not Working</option>
+                                        <option value="Outside Maintenance">Outside Maintenance</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Division</label>
+                                    <SearchableSelect 
+                                        label="" 
+                                        options={divisions.map(d => ({id: d.id, label: d.name}))} 
+                                        value={formData.divisionId || ''} 
+                                        onChange={(val) => setFormData({...formData, divisionId: val})} 
+                                    />
+                                </div>
+                           </div>
+                        </>
+                    )}
+
+                    {activeTab === 'locations' && (
+                        <>
+                           <div>
+                                <label className="block text-sm font-medium text-gray-700">Location ID</label>
+                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} />
+                           </div>
+                           <div>
+                                <label className="block text-sm font-medium text-gray-700">Name</label>
+                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                           </div>
+                           <div>
+                                <label className="block text-sm font-medium text-gray-700">Email</label>
+                                <input type="email" className="w-full px-3 py-2 border rounded-lg" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
+                           </div>
+                        </>
+                    )}
+
+                    {activeTab === 'users' && (
+                         <>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Username</label>
+                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.username || ''} onChange={e => setFormData({...formData, username: e.target.value})} disabled={isEditing} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Full Name</label>
+                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Role</label>
+                                    <select className="w-full px-3 py-2 border rounded-lg" value={formData.role || 'user'} onChange={e => setFormData({...formData, role: e.target.value})}>
+                                        <option value="admin">Admin</option>
+                                        <option value="warehouse_manager">Warehouse Manager</option>
+                                        <option value="warehouse_supervisor">Warehouse Supervisor</option>
+                                        <option value="maintenance_manager">Maintenance Manager</option>
+                                        <option value="maintenance_engineer">Maintenance Engineer</option>
+                                        <option value="user">User (Operator)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Email</label>
+                                    <input required type="email" className="w-full px-3 py-2 border rounded-lg" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Password</label>
+                                <input type="password" className="w-full px-3 py-2 border rounded-lg" placeholder={isEditing ? "(Unchanged)" : ""} value={formData.password || ''} onChange={e => setFormData({...formData, password: e.target.value})} />
+                            </div>
+                         </>
+                    )}
+                    
+                    {(activeTab === 'sectors' || activeTab === 'plans' || activeTab === 'divisions') && (
+                        <>
+                           <div>
+                                <label className="block text-sm font-medium text-gray-700">ID</label>
+                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} />
+                           </div>
+                           <div>
+                                <label className="block text-sm font-medium text-gray-700">Name</label>
+                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                           </div>
+                           {activeTab === 'divisions' && (
+                               <div>
+                                    <label className="block text-sm font-medium text-gray-700">Sector</label>
+                                    <SearchableSelect 
+                                        label="" 
+                                        options={sectors.map(s => ({id: s.id, label: s.name}))} 
+                                        value={formData.sectorId || ''} 
+                                        onChange={(val) => setFormData({...formData, sectorId: val})} 
+                                    />
+                               </div>
+                           )}
+                        </>
+                    )}
+                    
+                    <div className="pt-4 flex justify-end gap-3">
+                        <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
+                        <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+  };
+
+  const renderSyncModal = () => {
+    if (!showSyncModal) return null;
 
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-          <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
-            <h3 className="text-xl font-bold text-gray-800">
-              {isEditing ? 'Edit' : 'Add New'} {activeTab === 'items' ? 'Item' : activeTab === 'users' ? 'User' : activeTab.slice(0, -1)}
-            </h3>
-            <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
-          </div>
-          
-          <form onSubmit={handleSave} className="p-6 space-y-4">
-            
-            {/* ID Field */}
-            {activeTab !== 'users' && (
-              <div>
-                <label className={labelClass}>ID {isEditing && <span className="text-xs text-gray-400">(Read-only)</span>}</label>
-                <input
-                  type="text"
-                  className={`${commonInputClass} ${isEditing ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                  value={formData.id || ''}
-                  onChange={e => setFormData({ ...formData, id: e.target.value })}
-                  placeholder={isEditing ? '' : 'Leave empty to auto-generate'}
-                  disabled={isEditing}
-                />
-              </div>
-            )}
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+                <div className="bg-gradient-to-r from-green-600 to-green-700 p-6 text-white">
+                    <h2 className="text-xl font-bold flex items-center">
+                        <span className="mr-2 text-2xl">☁️</span> Google Sheets Sync
+                    </h2>
+                    <p className="text-green-100 text-sm mt-1 opacity-90">
+                        Connect your spreadsheet for data synchronization.
+                    </p>
+                </div>
+                
+                <div className="p-6 space-y-6">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Google Sheet ID / URL</label>
+                            <input 
+                                type="text" 
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
+                                value={sheetId}
+                                onChange={(e) => handleSheetIdChange(e.target.value)}
+                                placeholder="Paste Sheet ID or URL..."
+                            />
+                        </div>
+                        {activeTab === 'items' && (
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Items Tab GID</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
+                                    value={gid}
+                                    onChange={(e) => setGid(e.target.value)}
+                                    placeholder="e.g. 0 or 123456"
+                                />
+                                <p className="text-xs text-gray-400 mt-1">Found in URL as &gid=...</p>
+                            </div>
+                        )}
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Web App URL (for History Export)</label>
+                            <input 
+                                type="text" 
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
+                                value={scriptUrl}
+                                onChange={(e) => setScriptUrl(e.target.value)}
+                                placeholder="https://script.google.com/macros/s/..."
+                            />
+                        </div>
+                    </div>
 
-            {/* MACHINES */}
-            {activeTab === 'machines' && (
-              <>
-                <div>
-                   <label className={labelClass}>Machine Local No</label>
-                   <input className={commonInputClass} value={formData.machineLocalNo || ''} onChange={e => setFormData({...formData, machineLocalNo: e.target.value})} />
-                </div>
-                <div>
-                   <label className={labelClass}>Status</label>
-                   <select 
-                      className={commonInputClass}
-                      value={formData.status || 'Working'}
-                      onChange={e => setFormData({...formData, status: e.target.value})}
-                   >
-                     <option value="Working">Working</option>
-                     <option value="Not Working">Not Working</option>
-                     <option value="Outside Maintenance">Outside Maintenance</option>
-                   </select>
-                </div>
-                <div>
-                   <label className={labelClass}>Chase No (Model)</label>
-                   <input className={commonInputClass} value={formData.chaseNo || ''} onChange={e => setFormData({...formData, chaseNo: e.target.value})} />
-                </div>
-                <div>
-                   <label className={labelClass}>Model No (طراز المعده)</label>
-                   <input className={commonInputClass} value={formData.modelNo || ''} onChange={e => setFormData({...formData, modelNo: e.target.value})} />
-                </div>
-                <div>
-                    <label className={labelClass}>Division</label>
-                    <select 
-                      className={commonInputClass}
-                      value={formData.divisionId || ''}
-                      onChange={e => setFormData({...formData, divisionId: e.target.value})}
-                    >
-                        <option value="">Select Division...</option>
-                        {divisions.map(d => (
-                            <option key={d.id} value={d.id}>{d.name}</option>
-                        ))}
-                    </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                       <label className={labelClass}>Main Group</label>
-                       <input className={commonInputClass} value={formData.mainGroup || ''} onChange={e => setFormData({...formData, mainGroup: e.target.value})} />
+                    <div className="space-y-3 pt-4 border-t border-gray-100">
+                        {activeTab === 'items' && (
+                            <button 
+                                onClick={handleSyncItems}
+                                disabled={syncLoading}
+                                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm flex items-center justify-center gap-2"
+                            >
+                                {syncLoading ? <span className="animate-spin">↻</span> : <span>⬇️</span>}
+                                Import Items from Cloud
+                            </button>
+                        )}
+                        
+                        <button 
+                            onClick={handleExportHistory}
+                            disabled={syncLoading || !scriptUrl}
+                            className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg font-bold shadow-sm flex items-center justify-center gap-2"
+                        >
+                            {syncLoading ? <span className="animate-spin">↻</span> : <span>⬆️</span>}
+                            Export History to Cloud
+                        </button>
                     </div>
-                    <div>
-                       <label className={labelClass}>Sub Group</label>
-                       <input className={commonInputClass} value={formData.subGroup || ''} onChange={e => setFormData({...formData, subGroup: e.target.value})} />
-                    </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                       <label className={labelClass}>إسم المعدة</label>
-                       <input className={commonInputClass} value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} />
-                    </div>
-                    <div>
-                       <label className={labelClass}>Brand</label>
-                       <input className={commonInputClass} value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} />
+
+                    {syncMsg && (
+                        <div className={`p-3 rounded-lg text-sm text-center ${syncMsg.includes('Error') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
+                            {syncMsg}
+                        </div>
+                    )}
+
+                    <div className="flex justify-between items-center text-xs text-gray-400 pt-2">
+                        <button onClick={handleResetDefaults} className="hover:text-gray-600 underline">Restore Defaults</button>
+                        <button onClick={() => setShowSyncModal(false)} className="font-bold text-gray-600 hover:text-gray-900">Close</button>
                     </div>
                 </div>
-              </>
-            )}
-
-            {/* Other forms handled similarly but kept compact for this response */}
-            {activeTab === 'items' && (
-              <>
-                 <div><label className={labelClass}>Description / Name</label><input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
-                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className={labelClass}>Category</label><input className={commonInputClass} value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} placeholder="General" /></div>
-                    <div><label className={labelClass}>Unit (UM)</label><input className={commonInputClass} value={formData.unit || ''} onChange={e => setFormData({...formData, unit: e.target.value})} placeholder="pcs" /></div>
-                 </div>
-                 <div><label className={labelClass}>Full Name</label><input className={commonInputClass} value={formData.fullName || ''} onChange={e => setFormData({...formData, fullName: e.target.value})} /></div>
-                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className={labelClass}>2nd Item No</label><input className={commonInputClass} value={formData.secondId || ''} onChange={e => setFormData({...formData, secondId: e.target.value})} /></div>
-                    <div><label className={labelClass}>3rd Item No</label><input className={commonInputClass} value={formData.thirdId || ''} onChange={e => setFormData({...formData, thirdId: e.target.value})} /></div>
-                 </div>
-                 <div><label className={labelClass}>Desc Line 2</label><input className={commonInputClass} value={formData.description2 || ''} onChange={e => setFormData({...formData, description2: e.target.value})} /></div>
-                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className={labelClass}>Brand</label><input className={commonInputClass} value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} /></div>
-                    <div><label className={labelClass}>Part Number</label><input className={commonInputClass} value={formData.partNumber || ''} onChange={e => setFormData({...formData, partNumber: e.target.value})} /></div>
-                 </div>
-                 <div><label className={labelClass}>OEM</label><input className={commonInputClass} value={formData.oem || ''} onChange={e => setFormData({...formData, oem: e.target.value})} /></div>
-              </>
-            )}
-
-             {activeTab === 'locations' && (
-              <>
-                 <div><label className={labelClass}>Location Name</label><input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
-                 <div><label className={labelClass}>Site Email</label><input type="email" className={commonInputClass} value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
-              </>
-            )}
-
-            {activeTab === 'sectors' && (
-              <><div><label className={labelClass}>Sector Name</label><input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div></>
-            )}
-
-            {activeTab === 'divisions' && (
-              <>
-                 <div><label className={labelClass}>Division Name</label><input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
-                 <div><label className={labelClass}>Parent Sector</label><select required className={commonInputClass} value={formData.sectorId || ''} onChange={e => setFormData({...formData, sectorId: e.target.value})}><option value="">Select Sector...</option>{sectors.map(s => (<option key={s.id} value={s.id}>{s.name}</option>))}</select></div>
-              </>
-            )}
-
-            {activeTab === 'plans' && (
-              <><div><label className={labelClass}>Maintenance Plan Name</label><input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div></>
-            )}
-
-            {activeTab === 'users' && (
-              <>
-                 <div><label className={labelClass}>Username</label><input required className={`${commonInputClass} ${isEditing ? 'bg-gray-100 cursor-not-allowed' : ''}`} value={formData.username || ''} onChange={e => setFormData({...formData, username: e.target.value})} disabled={isEditing} /></div>
-                 <div><label className={labelClass}>Full Name</label><input required className={commonInputClass} value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
-                 <div><label className={labelClass}>Email</label><input required type="email" className={commonInputClass} value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
-                 <div><label className={labelClass}>Role</label><select required className={commonInputClass} value={formData.role || 'user'} onChange={e => setFormData({...formData, role: e.target.value})}><option value="user">User (Operator)</option><option value="admin">Admin</option><option value="warehouse_manager">Warehouse Manager</option><option value="warehouse_supervisor">Warehouse Supervisor</option><option value="maintenance_manager">Maintenance Manager</option><option value="maintenance_engineer">Maintenance Engineer</option></select></div>
-                 <div><label className={labelClass}>Password</label><input type="password" className={commonInputClass} value={formData.password || ''} onChange={e => setFormData({...formData, password: e.target.value})} placeholder={isEditing ? 'Leave blank to keep current' : 'Enter password'} /></div>
-                 <div>
-                    <label className={labelClass}>Allowed Locations (Optional)</label>
-                    <div className="border border-gray-300 rounded-lg p-2 max-h-32 overflow-y-auto bg-gray-50">
-                        {locations.map(loc => (
-                            <label key={loc.id} className="flex items-center space-x-2 p-1 hover:bg-white cursor-pointer rounded">
-                                <input type="checkbox" checked={(formData.allowedLocationIds || []).includes(loc.id)} onChange={(e) => { const current = formData.allowedLocationIds || []; if (e.target.checked) { setFormData({...formData, allowedLocationIds: [...current, loc.id]}); } else { setFormData({...formData, allowedLocationIds: current.filter((id: string) => id !== loc.id)}); } }} className="rounded text-blue-600 focus:ring-blue-500" />
-                                <span className="text-sm text-gray-700">{loc.name}</span>
-                            </label>
-                        ))}
-                    </div>
-                 </div>
-                 <div>
-                    <label className={labelClass}>Allowed Sectors (Optional)</label>
-                    <div className="border border-gray-300 rounded-lg p-2 max-h-32 overflow-y-auto bg-gray-50">
-                        {sectors.map(sec => (
-                            <label key={sec.id} className="flex items-center space-x-2 p-1 hover:bg-white cursor-pointer rounded">
-                                <input type="checkbox" checked={(formData.allowedSectorIds || []).includes(sec.id)} onChange={(e) => { const current = formData.allowedSectorIds || []; if (e.target.checked) { setFormData({...formData, allowedSectorIds: [...current, sec.id]}); } else { setFormData({...formData, allowedSectorIds: current.filter((id: string) => id !== sec.id)}); } }} className="rounded text-blue-600 focus:ring-blue-500" />
-                                <span className="text-sm text-gray-700">{sec.name}</span>
-                            </label>
-                        ))}
-                    </div>
-                 </div>
-                 <div>
-                    <label className={labelClass}>Allowed Divisions (Optional)</label>
-                    <div className="border border-gray-300 rounded-lg p-2 max-h-32 overflow-y-auto bg-gray-50">
-                        {divisions.map(div => (
-                            <label key={div.id} className="flex items-center space-x-2 p-1 hover:bg-white cursor-pointer rounded">
-                                <input type="checkbox" checked={(formData.allowedDivisionIds || []).includes(div.id)} onChange={(e) => { const current = formData.allowedDivisionIds || []; if (e.target.checked) { setFormData({...formData, allowedDivisionIds: [...current, div.id]}); } else { setFormData({...formData, allowedDivisionIds: current.filter((id: string) => id !== div.id)}); } }} className="rounded text-blue-600 focus:ring-blue-500" />
-                                <span className="text-sm text-gray-700">{div.name}</span>
-                            </label>
-                        ))}
-                    </div>
-                 </div>
-              </>
-            )}
-
-            <div className="pt-4 flex justify-end gap-3 border-t border-gray-100 mt-4">
-               <button 
-                 type="button"
-                 onClick={() => setShowForm(false)}
-                 className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-               >
-                 Cancel
-               </button>
-               <button 
-                 type="submit"
-                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition transform hover:-translate-y-0.5"
-               >
-                 {isEditing ? 'Update' : 'Create'} {activeTab === 'users' ? 'User' : 'Record'}
-               </button>
             </div>
-          </form>
         </div>
-      </div>
     );
   };
 
   return (
     <div className="space-y-6">
-      {/* Hidden File Input for Imports */}
       <input 
         type="file" 
         accept=".csv,.txt,.xlsx,.xls" 

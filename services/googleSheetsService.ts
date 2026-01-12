@@ -121,6 +121,7 @@ const parseItemsCSV = (csvText: string): Item[] => {
   const partNoIdx = findIdx(['part no', 'part number', 'pn']);
   const umIdx = findIdx(['um', 'unit', 'uom']);
   const catIdx = findIdx(['category', 'family', 'group']); 
+  const modelIdx = findIdx(['model no', 'model', 'model number', 'طراز']);
 
   const items: Item[] = [];
 
@@ -158,6 +159,7 @@ const parseItemsCSV = (csvText: string): Item[] => {
       fullName: fullNameIdx > -1 ? cleanValues[fullNameIdx] : undefined,
       oem: oemIdx > -1 ? cleanValues[oemIdx] : undefined,
       partNumber: partNoIdx > -1 ? cleanValues[partNoIdx] : undefined,
+      modelNo: modelIdx > -1 ? cleanValues[modelIdx] : undefined,
     });
   }
   return items;

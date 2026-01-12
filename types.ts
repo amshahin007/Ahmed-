@@ -13,6 +13,7 @@ export interface Item {
   brand?: string;          // "Brand"
   oem?: string;            // "OEM"
   partNumber?: string;     // "Part No"
+  modelNo?: string;        // "Model No (طراز المعده)" - NEW
 }
 
 export interface Sector {
