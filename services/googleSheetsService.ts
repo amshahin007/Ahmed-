@@ -156,10 +156,11 @@ const parseItemsCSV = (csvText: string): Item[] => {
 
 export const sendIssueToSheet = async (scriptUrl: string, issue: IssueRecord) => {
   try {
+    // We do NOT use Content-Type: application/json to avoid preflight OPTIONS request on some browsers
+    // We send plain text (which happens to be JSON) and parse it in the script
     await fetch(scriptUrl, {
       method: 'POST',
       mode: 'no-cors', 
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'log_issue', ...issue }),
     });
     console.log("Sent to Google Sheet");
@@ -194,6 +195,7 @@ export const uploadFileToDrive = async (scriptUrl: string, fileName: string, bas
 
 export const locateRemoteData = async (scriptUrl: string): Promise<{folderUrl: string, sheetUrl: string, error?: string} | null> => {
     try {
+        // Standard POST request, treating body as text/plain to attempt simple request if possible
         const response = await fetch(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'locate_data' })
@@ -220,7 +222,8 @@ export const locateRemoteData = async (scriptUrl: string): Promise<{folderUrl: s
         }
     } catch (error) {
         console.error("Failed to locate data:", error);
-        return { folderUrl: '', sheetUrl: '', error: (error as Error).message };
+        // Propagate error message (e.g. "Failed to fetch")
+        throw new Error((error as Error).message);
     }
 }
 
@@ -237,7 +240,9 @@ function doPost(e) {
   lock.tryLock(10000);
 
   try {
-    var data = JSON.parse(e.postData.contents);
+    // Handle text/plain or application/json payloads
+    var postData = e.postData.contents;
+    var data = JSON.parse(postData);
 
     if (data.action === "locate_data") {
         var folder = getOrCreateFolder(FOLDER_NAME);

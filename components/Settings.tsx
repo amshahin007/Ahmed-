@@ -16,18 +16,35 @@ const Settings: React.FC = () => {
   }, []);
 
   const handleSave = () => {
-    localStorage.setItem('wf_script_url_v3', scriptUrl);
-    setStatusType('success');
-    setStatusMsg('URL Saved successfully!');
-    setTimeout(() => setStatusMsg(''), 3000);
+    if (validateUrl(scriptUrl)) {
+        localStorage.setItem('wf_script_url_v3', scriptUrl);
+        setStatusType('success');
+        setStatusMsg('URL Saved successfully!');
+        setTimeout(() => setStatusMsg(''), 3000);
+    }
+  };
+
+  const validateUrl = (url: string) => {
+    if (!url) {
+        setStatusType('error');
+        setStatusMsg('Please enter a URL first.');
+        return false;
+    }
+    if (!url.includes('script.google.com')) {
+        setStatusType('error');
+        setStatusMsg('❌ Invalid Domain. Must be "script.google.com".');
+        return false;
+    }
+    if (!url.endsWith('/exec')) {
+        setStatusType('error');
+        setStatusMsg('❌ Invalid Ending. URL must end with "/exec". (Did you copy the Editor link?)');
+        return false;
+    }
+    return true;
   };
 
   const handleTestConnection = async () => {
-    if (!scriptUrl) {
-        setStatusType('error');
-        setStatusMsg('Please enter a URL first.');
-        return;
-    }
+    if (!validateUrl(scriptUrl)) return;
 
     setLoading(true);
     setStatusMsg('Testing connection to Google...');
@@ -40,11 +57,15 @@ const Settings: React.FC = () => {
             setStatusMsg('✅ Connection Successful! Found "WareFlow Reports" folder.');
         } else {
             setStatusType('error');
-            setStatusMsg(`❌ Connection Failed: ${result?.error || 'Unknown error'}`);
+            setStatusMsg(`❌ Script Error: ${result?.error || 'Unknown error'}`);
         }
-    } catch (e) {
+    } catch (e: any) {
         setStatusType('error');
-        setStatusMsg('❌ Network Error: Could not reach the script.');
+        if (e.message === 'Failed to fetch') {
+            setStatusMsg('❌ Connection Blocked. Check Deploy Settings: "Who has access" MUST be "Anyone".');
+        } else {
+            setStatusMsg(`❌ Network Error: ${e.message}`);
+        }
     } finally {
         setLoading(false);
     }
@@ -82,7 +103,7 @@ const Settings: React.FC = () => {
                         type="text" 
                         value={scriptUrl}
                         onChange={(e) => setScriptUrl(e.target.value)}
-                        placeholder="https://script.google.com/macros/s/..."
+                        placeholder="https://script.google.com/macros/s/.../exec"
                         className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
                     />
                     <button 
@@ -94,15 +115,20 @@ const Settings: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-gray-600 flex-1 mr-4">
                         <p>Status: <span className={`font-bold ${statusType === 'success' ? 'text-green-600' : statusType === 'error' ? 'text-red-600' : 'text-gray-800'}`}>
                             {statusMsg || 'Ready'}
                         </span></p>
+                        {statusMsg.includes('Connection Blocked') && (
+                            <p className="text-xs text-red-500 mt-1">
+                                💡 Fix: Go to Script &gt; Deploy &gt; Manage Deployments &gt; Edit &gt; Set <strong>Who has access</strong> to <strong>Anyone</strong>.
+                            </p>
+                        )}
                     </div>
                     <button 
                         onClick={handleTestConnection}
                         disabled={loading}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm font-medium flex items-center gap-2"
+                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm font-medium flex items-center gap-2 whitespace-nowrap"
                     >
                         {loading ? <span className="animate-spin">↻</span> : <span>🔍</span>}
                         Test Connection
@@ -114,7 +140,7 @@ const Settings: React.FC = () => {
             <div className="pt-6 border-t border-gray-100">
                 <h3 className="text-lg font-bold text-gray-800 mb-2">Backend Script Code</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                    If you are seeing "Ensure you have updated the code" errors, copy the latest code below and redeploy your Google Apps Script.
+                    If you are seeing "Script is outdated" or "Connection Blocked", update your script below.
                 </p>
 
                 <div className="relative">
@@ -132,13 +158,15 @@ const Settings: React.FC = () => {
                 </div>
                 
                 <div className="mt-4 text-sm text-gray-500 bg-blue-50 p-3 rounded border border-blue-100">
-                    <strong>How to update:</strong>
+                    <strong>Deployment Steps (Must follow exactly):</strong>
                     <ol className="list-decimal list-inside mt-1 space-y-1 ml-1">
-                        <li>Go to your Google Sheet extensions &gt; Apps Script.</li>
+                        <li>Go to your Google Sheet &gt; Extensions &gt; Apps Script.</li>
                         <li>Paste the code above into the editor (replace everything).</li>
-                        <li>Click <strong>Deploy</strong> &gt; <strong>New Deployment</strong>.</li>
-                        <li>Select "Web App", Execute as "Me", Access "Anyone".</li>
-                        <li>Copy the <strong>New URL</strong> and paste it in the field above.</li>
+                        <li>Click <strong>Deploy</strong> (blue button) &gt; <strong>New Deployment</strong>.</li>
+                        <li>Click the ⚙️ icon &gt; select <strong>Web App</strong>.</li>
+                        <li>Set <strong>Execute as: Me</strong>.</li>
+                        <li>Set <strong>Who has access: Anyone</strong> (Critical!).</li>
+                        <li>Click <strong>Deploy</strong>, copy the URL ending in <code>/exec</code>, and paste it above.</li>
                     </ol>
                 </div>
             </div>
