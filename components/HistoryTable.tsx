@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { IssueRecord, Location } from '../types';
 import * as XLSX from 'xlsx';
-import { uploadFileToDrive } from '../services/googleSheetsService';
+import { uploadFileToDrive, DEFAULT_SCRIPT_URL } from '../services/googleSheetsService';
 
 interface HistoryTableProps {
   history: IssueRecord[];
@@ -37,7 +37,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
       "Sector", 
       "Division", 
       "Machine", 
-      "Maint. Plan",
+      "Maint. Plan", 
       "Item Number", 
       "Item Name", 
       "Quantity", 
@@ -73,7 +73,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
   };
 
   const saveToDrive = async () => {
-      const scriptUrl = localStorage.getItem('wf_script_url');
+      // Fallback to default if not in localStorage
+      const scriptUrl = localStorage.getItem('wf_script_url') || DEFAULT_SCRIPT_URL;
       if (!scriptUrl) {
           alert("Web App URL not configured in Master Data settings.");
           return;

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
-import { fetchRawCSV, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet } from '../services/googleSheetsService';
+import { fetchRawCSV, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet, DEFAULT_SCRIPT_URL } from '../services/googleSheetsService';
 import * as XLSX from 'xlsx';
 
 interface MasterDataProps {
@@ -141,7 +141,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     };
   });
 
-  const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('wf_script_url') || '');
+  const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('wf_script_url') || DEFAULT_SCRIPT_URL);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
 

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { IssueRecord, Item, Location, Machine, Sector, Division, User, MaintenancePlan } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
-import { sendIssueToSheet, uploadFileToDrive } from '../services/googleSheetsService';
+import { sendIssueToSheet, uploadFileToDrive, DEFAULT_SCRIPT_URL } from '../services/googleSheetsService';
 import SearchableSelect, { Option } from './SearchableSelect';
 import * as XLSX from 'xlsx';
 
@@ -202,7 +202,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
         console.log(`[System] Email prepared for ${warehouseEmail}: ${emailData.subject}`);
         
         // 2. Check for Google Sheet Script URL
-        const scriptUrl = localStorage.getItem('wf_script_url');
+        const scriptUrl = localStorage.getItem('wf_script_url') || DEFAULT_SCRIPT_URL;
         if (scriptUrl) {
             console.log("Syncing with Google Sheet...");
             // Non-blocking sync
@@ -266,7 +266,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   };
 
   const handleSaveToDrive = async () => {
-    const scriptUrl = localStorage.getItem('wf_script_url');
+    const scriptUrl = localStorage.getItem('wf_script_url') || DEFAULT_SCRIPT_URL;
     if (!scriptUrl) {
         alert("Please configure the Web App URL in Master Data settings first.");
         return;
