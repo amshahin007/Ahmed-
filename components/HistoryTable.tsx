@@ -74,7 +74,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
 
   const saveToDrive = async () => {
       // Fallback to default if not in localStorage
-      const scriptUrl = localStorage.getItem('wf_script_url') || DEFAULT_SCRIPT_URL;
+      const scriptUrl = localStorage.getItem('wf_script_url_v2') || DEFAULT_SCRIPT_URL;
       if (!scriptUrl) {
           alert("Web App URL not configured in Master Data settings.");
           return;
