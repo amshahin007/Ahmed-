@@ -1076,15 +1076,15 @@ const MasterData: React.FC<MasterDataProps> = ({
                         </div>
                         {activeTab === 'items' && (
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Items Tab GID</label>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Items Tab GID (Number)</label>
                                 <input 
                                     type="text" 
                                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
                                     value={gid}
                                     onChange={(e) => setGid(e.target.value)}
-                                    placeholder="e.g. 0 or 123456"
+                                    placeholder="e.g. 0 (Not the tab name)"
                                 />
-                                <p className="text-xs text-gray-400 mt-1">Found in URL as &gid=...</p>
+                                <p className="text-xs text-gray-400 mt-1">Look at your browser URL: .../edit#gid=<b>12345</b></p>
                             </div>
                         )}
                         <div>
