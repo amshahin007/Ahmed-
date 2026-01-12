@@ -97,8 +97,6 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
           
           if (url) {
               setDriveLink(url);
-              // Optional: Auto open
-              // window.open(url, '_blank');
           } else {
               setDriveLink('saved');
               alert("Backup saved to 'WareFlow Reports' folder in your Drive! Click 'Open Folder' to view it.");
@@ -119,7 +117,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
           if (result && result.folderUrl) {
               window.open(result.folderUrl, '_blank');
           } else {
-              alert("Could not locate 'WareFlow Reports' folder. Please check your Script URL.");
+              const msg = result?.error || "Could not locate 'WareFlow Reports' folder.";
+              alert(msg + "\n\nTip: Ensure you have updated the Code in Apps Script and deployed as 'New Version'.");
           }
       } catch (e) {
           console.error(e);

@@ -192,20 +192,35 @@ export const uploadFileToDrive = async (scriptUrl: string, fileName: string, bas
     }
 };
 
-export const locateRemoteData = async (scriptUrl: string): Promise<{folderUrl: string, sheetUrl: string} | null> => {
+export const locateRemoteData = async (scriptUrl: string): Promise<{folderUrl: string, sheetUrl: string, error?: string} | null> => {
     try {
         const response = await fetch(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'locate_data' })
         });
-        const result = await response.json();
-        if (result.status === 'success') {
-            return { folderUrl: result.folderUrl, sheetUrl: result.sheetUrl };
+        
+        // Handle HTML response error (e.g. from 404 or auth page)
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") === -1) {
+             const text = await response.text();
+             console.error("Received non-JSON response from Script:", text.substring(0, 500));
+             return { folderUrl: '', sheetUrl: '', error: 'Script returned HTML. Check Script URL and deployment.' };
         }
-        return null;
+
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            if (!result.folderUrl) {
+                // If status is success but no folderUrl, the script code is likely old and hit the default 'log issue' path
+                return { folderUrl: '', sheetUrl: '', error: 'Script is outdated. Please update code in Apps Script.' };
+            }
+            return { folderUrl: result.folderUrl, sheetUrl: result.sheetUrl };
+        } else {
+             return { folderUrl: '', sheetUrl: '', error: result.message || 'Unknown script error' };
+        }
     } catch (error) {
         console.error("Failed to locate data:", error);
-        return null;
+        return { folderUrl: '', sheetUrl: '', error: (error as Error).message };
     }
 }
 
