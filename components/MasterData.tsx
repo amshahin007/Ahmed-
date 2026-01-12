@@ -216,7 +216,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             ...prev,
             [activeTab]: {
                 sheetId: extractedId || currentForTab.sheetId,
-                gid: extractedGid || currentForTab.gid // Only update GID if found in URL, otherwise keep existing
+                gid: extractedGid || currentForTab.gid 
             }
         };
     });
@@ -228,6 +228,64 @@ const MasterData: React.FC<MasterDataProps> = ({
         [activeTab]: { sheetId: DEFAULT_SHEET_ID, gid: activeTab === 'items' ? DEFAULT_ITEMS_GID : '0' }
     }));
     setSyncMsg('Defaults restored for this tab.');
+  };
+
+  // --- AUTO CONFIG FROM SHEET LOGIC ---
+  const handleAutoConfigFromSheet = async () => {
+      const currentId = syncConfig[activeTab]?.sheetId || '';
+      if (!currentId) {
+          setSyncMsg("Error: Enter Sheet ID first.");
+          return;
+      }
+
+      const cleanId = extractSheetIdFromUrl(currentId);
+      
+      if (!confirm(`This will try to read the FIRST tab (GID=0) of the sheet to find GID mappings for ALL tabs.\n\nEnsure your first tab has two columns:\nColumn A: Tab Name (e.g. 'items', 'machines')\nColumn B: GID (e.g. '123456')`)) {
+          return;
+      }
+
+      setSyncLoading(true);
+      setSyncMsg("Reading Master Config (GID=0)...");
+
+      try {
+          // Fetch GID 0 (Default first tab)
+          const rows = await fetchRawCSV(cleanId, '0');
+          
+          if (!rows || rows.length === 0) {
+              throw new Error("Config tab is empty or unreadable.");
+          }
+
+          const newConfig = { ...syncConfig };
+          let foundCount = 0;
+
+          rows.forEach(row => {
+              if (row.length < 2) return;
+              const key = row[0].toString().toLowerCase().trim();
+              const val = row[1].toString().trim();
+
+              // Check if key matches one of our supported tabs
+              if (['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users'].includes(key) && val) {
+                  newConfig[key] = {
+                      sheetId: cleanId, // Assume all data is in the same workbook
+                      gid: val
+                  };
+                  foundCount++;
+              }
+          });
+
+          if (foundCount === 0) {
+             setSyncMsg("No valid config rows found. Check spelling in Column A (items, machines, etc).");
+          } else {
+             setSyncConfig(newConfig);
+             setSyncMsg(`Success! Configured ${foundCount} tabs automatically.`);
+          }
+
+      } catch (e) {
+          console.error(e);
+          setSyncMsg("Auto-Config Failed: " + (e as Error).message);
+      } finally {
+          setSyncLoading(false);
+      }
   };
 
   const handleAddNew = () => {
@@ -870,6 +928,18 @@ const MasterData: React.FC<MasterDataProps> = ({
                             <p className="text-xs text-gray-400 mt-1">
                                 The number after <code>#gid=</code> in the URL for this specific tab.
                             </p>
+                        </div>
+
+                        <div className="pt-2 border-t border-gray-100">
+                             <button
+                                onClick={handleAutoConfigFromSheet}
+                                className="w-full py-2 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-sm font-medium hover:bg-purple-100 transition flex items-center justify-center gap-2"
+                             >
+                                <span>⚡</span> Auto-Configure All Tabs from Master Sheet
+                             </button>
+                             <p className="text-[10px] text-gray-400 mt-1 text-center">
+                                Reads GID=0 (first tab). Requires columns: 'items', 'machines', etc in Col A, GIDs in Col B.
+                             </p>
                         </div>
 
                         <div>
