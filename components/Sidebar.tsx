@@ -41,7 +41,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
     { 
       id: 'master-data', 
       label: 'Master Data', 
-      icon: '⚙️', 
+      icon: '🗄️', 
       roles: ['admin'] 
     },
     { 
@@ -49,6 +49,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
       label: 'AI Assistant', 
       icon: '✨', 
       roles: ['admin', 'warehouse_manager', 'maintenance_manager'] 
+    },
+    { 
+      id: 'settings', 
+      label: 'Settings', 
+      icon: '⚙️', 
+      roles: ['admin', 'warehouse_manager', 'maintenance_manager', 'warehouse_supervisor', 'user'] 
     },
   ];
 

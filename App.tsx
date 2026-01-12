@@ -8,6 +8,7 @@ import HistoryTable from './components/HistoryTable';
 import MasterData from './components/MasterData';
 import StockApproval from './components/StockApproval';
 import AiAssistant from './components/AiAssistant';
+import Settings from './components/Settings';
 import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import * as storageService from './services/storageService';
@@ -291,6 +292,8 @@ const App: React.FC = () => {
         );
       case 'ai-assistant':
         return <AiAssistant />;
+      case 'settings':
+        return <Settings />;
       default:
         return <Dashboard history={history} />;
     }
