@@ -332,45 +332,67 @@ const MasterData: React.FC<MasterDataProps> = ({
     setSyncMsg(`Export Complete! Sent ${successCount} records.`);
   };
 
-  const handleExportDataToExcel = () => {
+  const handleExportDataToExcel = (onlySelected: boolean = false) => {
     let headers: string[] = [];
     let rows: any[][] = [];
     const timestamp = new Date().toISOString().slice(0, 10);
 
+    // Determine data source
+    let data: any[] = [];
+    switch (activeTab) {
+      case 'items': data = items; break;
+      case 'machines': data = machines; break;
+      case 'locations': data = locations; break;
+      case 'sectors': data = sectors; break;
+      case 'divisions': data = divisions; break;
+      case 'plans': data = plans; break;
+      case 'users': data = users; break;
+    }
+
+    // Filter if specific selection requested
+    if (onlySelected && selectedIds.size > 0) {
+        data = data.filter(d => selectedIds.has(d.id || d.username));
+    }
+
+    if (data.length === 0) {
+        alert("No data to export.");
+        return;
+    }
+
     switch (activeTab) {
       case 'items':
         headers = ['Item Number', 'Description', 'Category', 'Unit', '3rd Item No', 'Desc Line 2', 'Full Name', 'Brand', 'OEM', 'Part No'];
-        rows = items.map(i => [
+        rows = data.map((i: Item) => [
             i.id, i.name, i.category, i.unit, 
             i.thirdId, i.description2, i.fullName, i.brand, i.oem, i.partNumber
         ]);
         break;
       case 'machines':
         headers = ['ID', 'Machine Local No', 'Status', 'Chase No', 'Model No', 'Main Group', 'Sub Group', 'إسم المعدة', 'Brand', 'Division ID'];
-        rows = machines.map(m => [
+        rows = data.map((m: Machine) => [
             m.id, m.machineLocalNo || '', m.status, m.chaseNo, m.modelNo,
             m.mainGroup, m.subGroup, m.category, m.brand, m.divisionId
         ]);
         break;
       case 'locations':
         headers = ['ID', 'Name', 'Email'];
-        rows = locations.map(l => [l.id, l.name, l.email]);
+        rows = data.map((l: Location) => [l.id, l.name, l.email]);
         break;
       case 'sectors':
         headers = ['ID', 'Name'];
-        rows = sectors.map(s => [s.id, s.name]);
+        rows = data.map((s: Sector) => [s.id, s.name]);
         break;
       case 'divisions':
         headers = ['ID', 'Name', 'Sector ID'];
-        rows = divisions.map(d => [d.id, d.name, d.sectorId]);
+        rows = data.map((d: Division) => [d.id, d.name, d.sectorId]);
         break;
       case 'plans':
         headers = ['ID', 'Plan Name'];
-        rows = plans.map(p => [p.id, p.name]);
+        rows = data.map((p: MaintenancePlan) => [p.id, p.name]);
         break;
       case 'users':
         headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations', 'Allowed Sectors', 'Allowed Divisions'];
-        rows = users.map(u => [
+        rows = data.map((u: User) => [
             u.username, u.name, u.role, u.email, 
             (u.allowedLocationIds || []).join(';'),
             (u.allowedSectorIds || []).join(';'),
@@ -379,16 +401,11 @@ const MasterData: React.FC<MasterDataProps> = ({
         break;
     }
 
-    if (rows.length === 0) {
-        alert("No data to export.");
-        return;
-    }
-
     // Generate Excel File
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     XLSX.utils.book_append_sheet(wb, ws, "MasterData");
-    XLSX.writeFile(wb, `WareFlow_${activeTab}_Master_${timestamp}.xlsx`);
+    XLSX.writeFile(wb, `WareFlow_${activeTab}_${onlySelected ? 'Selected' : 'All'}_${timestamp}.xlsx`);
   };
 
   // --- Import Logic ---
@@ -961,7 +978,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     };
 
     const handleClearSelection = () => {
-        setSelectedIds(newSet());
+        setSelectedIds(new Set());
     };
 
     return (
@@ -1402,13 +1419,22 @@ const MasterData: React.FC<MasterDataProps> = ({
         
         <div className="flex gap-2">
            {selectedIds.size > 0 ? (
-               <button
-                 onClick={handleBulkDelete}
-                 className="flex items-center px-4 py-2 bg-red-600 text-white border border-red-700 rounded-lg hover:bg-red-700 shadow-sm transition animate-fade-in-up"
-               >
-                 <span className="mr-2">🗑️</span>
-                 Delete Selected ({selectedIds.size})
-               </button>
+               <>
+                 <button
+                   onClick={() => handleExportDataToExcel(true)}
+                   className="flex items-center px-4 py-2 bg-emerald-600 text-white border border-emerald-700 rounded-lg hover:bg-emerald-700 shadow-sm transition animate-fade-in-up"
+                 >
+                   <span className="mr-2">📥</span>
+                   Export Selected ({selectedIds.size})
+                 </button>
+                 <button
+                   onClick={handleBulkDelete}
+                   className="flex items-center px-4 py-2 bg-red-600 text-white border border-red-700 rounded-lg hover:bg-red-700 shadow-sm transition animate-fade-in-up"
+                 >
+                   <span className="mr-2">🗑️</span>
+                   Delete Selected ({selectedIds.size})
+                 </button>
+               </>
            ) : (
                <>
                 <button
@@ -1420,7 +1446,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                 </button>
 
                 <button
-                    onClick={handleExportDataToExcel}
+                    onClick={() => handleExportDataToExcel(false)}
                     className="flex items-center px-4 py-2 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-200 shadow-sm transition"
                 >
                     <span className="mr-2 text-lg">📥</span>
