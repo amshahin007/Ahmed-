@@ -169,6 +169,23 @@ export const sendIssueToSheet = async (scriptUrl: string, issue: IssueRecord) =>
   }
 };
 
+export const backupTabToSheet = async (scriptUrl: string, tabName: string, rows: any[][]) => {
+    try {
+        const response = await fetch(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'backup_tab', 
+                tabName: tabName,
+                rows: rows 
+            })
+        });
+        return await response.json();
+    } catch (error) {
+        console.error("Backup Error:", error);
+        throw error;
+    }
+};
+
 export const uploadFileToDrive = async (scriptUrl: string, fileName: string, base64Data: string): Promise<string> => {
     try {
         const response = await fetch(scriptUrl, {
@@ -240,9 +257,39 @@ function doPost(e) {
   lock.tryLock(10000);
 
   try {
-    // Handle text/plain or application/json payloads
-    var postData = e.postData.contents;
-    var data = JSON.parse(postData);
+    var data = JSON.parse(e.postData.contents);
+
+    // --- ACTION: BACKUP FULL TABLE (Clears tab and writes new data) ---
+    if (data.action === "backup_tab") {
+        var ss = getOrCreateSpreadsheet();
+        var tabName = data.tabName;
+        var rows = data.rows; 
+        
+        if (!tabName || !rows || !Array.isArray(rows)) {
+             return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Invalid data format"}));
+        }
+
+        var sheet = ss.getSheetByName(tabName);
+        if (!sheet) {
+            sheet = ss.insertSheet(tabName);
+        } else {
+            sheet.clear();
+        }
+        
+        if (rows.length > 0) {
+            // Ensure data is rectangular (same length) to avoid setValues error
+            var width = rows[0].length;
+            var safeRows = rows.map(function(r) {
+               var row = r.slice(0, width);
+               while(row.length < width) row.push("");
+               return row;
+            });
+            sheet.getRange(1, 1, safeRows.length, width).setValues(safeRows);
+        }
+        
+        return ContentService.createTextOutput(JSON.stringify({status: "success", count: rows.length}))
+            .setMimeType(ContentService.MimeType.JSON);
+    }
 
     if (data.action === "locate_data") {
         var folder = getOrCreateFolder(FOLDER_NAME);
@@ -266,7 +313,7 @@ function doPost(e) {
         })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Default: Log Issue
+    // Default: Log Issue (Append Row)
     var ss = getOrCreateSpreadsheet();
     var sheet = ss.getSheetByName(SHEET_TAB_NAME);
     

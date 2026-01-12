@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
-import { fetchRawCSV, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet, DEFAULT_SCRIPT_URL, locateRemoteData } from '../services/googleSheetsService';
+import { fetchRawCSV, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet, DEFAULT_SCRIPT_URL, locateRemoteData, backupTabToSheet } from '../services/googleSheetsService';
 import * as XLSX from 'xlsx';
 
 interface MasterDataProps {
@@ -305,6 +305,77 @@ const MasterData: React.FC<MasterDataProps> = ({
       } finally {
           setSyncLoading(false);
       }
+  };
+
+  const prepareTabForBackup = (tabName: string): any[][] => {
+      let data: any[] = [];
+      let columns: {key: string, label: string}[] = [];
+
+      // Get data and columns based on tab
+      switch(tabName) {
+          case 'items': data = items; columns = COLUMNS_CONFIG['items']; break;
+          case 'machines': data = machines; columns = COLUMNS_CONFIG['machines']; break;
+          case 'locations': data = locations; columns = COLUMNS_CONFIG['locations']; break;
+          case 'sectors': data = sectors; columns = COLUMNS_CONFIG['sectors']; break;
+          case 'divisions': data = divisions; columns = COLUMNS_CONFIG['divisions']; break;
+          case 'plans': data = plans; columns = COLUMNS_CONFIG['plans']; break;
+          case 'users': data = users; columns = COLUMNS_CONFIG['users']; break;
+      }
+      
+      if (data.length === 0) return [];
+
+      const headers = columns.map(c => c.label);
+      const rows = data.map(item => columns.map(col => {
+          const val = item[col.key];
+          return Array.isArray(val) ? val.join(';') : (val === undefined || val === null ? "" : String(val));
+      }));
+
+      return [headers, ...rows];
+  };
+
+  const handleCloudBackup = async () => {
+    if (!scriptUrl) {
+      setSyncMsg("Error: Configure Web App URL first.");
+      return;
+    }
+    
+    if(!confirm("⚠️ Backup All Master Data?\n\nThis will OVERWRITE the data in your Google Sheet (tabs: items, machines, etc.) with the data currently in this app.\n\nEnsure your Script is updated to the latest version.")) {
+        return;
+    }
+
+    setSyncLoading(true);
+    setSyncMsg("Starting Full Backup...");
+    
+    const tabsToBackup = ['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users'];
+    let successCount = 0;
+    let errors: string[] = [];
+
+    for (const tab of tabsToBackup) {
+        try {
+            setSyncMsg(`Backing up ${tab}...`);
+            const rows = prepareTabForBackup(tab);
+            
+            if (rows.length > 0) {
+                await backupTabToSheet(scriptUrl, tab, rows);
+                successCount++;
+            } else {
+                console.warn(`Skipping empty tab: ${tab}`);
+            }
+            // Small delay to prevent rate limiting
+            await new Promise(r => setTimeout(r, 500));
+
+        } catch (e: any) {
+            console.error(`Backup failed for ${tab}`, e);
+            errors.push(`${tab}: ${e.message}`);
+        }
+    }
+
+    setSyncLoading(false);
+    if (errors.length > 0) {
+        setSyncMsg(`Backup Finished. ${successCount} tabs saved. Errors: ${errors.join(', ')}`);
+    } else {
+        setSyncMsg(`✅ Full Backup Complete! ${successCount} tabs updated.`);
+    }
   };
 
   const handleAddNew = () => {
@@ -1042,6 +1113,18 @@ const MasterData: React.FC<MasterDataProps> = ({
                                      <a href={remoteLinks.sheetUrl} target="_blank" rel="noopener noreferrer" className="block text-green-600 underline">📊 Open "WareFlow Database" Sheet</a>
                                  </div>
                              )}
+                        </div>
+
+                        {/* New Master Data Backup Button */}
+                        <div className="pt-2 border-t border-gray-100">
+                             <button
+                                onClick={handleCloudBackup}
+                                disabled={syncLoading || !scriptUrl}
+                                className="w-full py-3 bg-red-600 text-white rounded-lg font-bold shadow-sm hover:bg-red-700 transition flex items-center justify-center gap-2"
+                             >
+                                {syncLoading ? <span className="animate-spin">↻</span> : <span>💾</span>}
+                                Backup All Master Data to Cloud (Overwrite)
+                             </button>
                         </div>
 
                         <div className="pt-2 border-t border-gray-100 grid grid-cols-2 gap-3">
