@@ -1,5 +1,4 @@
 
-
 import { Item, IssueRecord } from '../types';
 
 // Updated Default ID and GID based on user request
@@ -29,20 +28,21 @@ export const extractGidFromUrl = (url: string): string | null => {
 export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise<Item[]> => {
   let url = '';
   const cleanId = sheetId.trim();
-  const cleanGid = gid ? gid.trim() : '';
+  const cleanGid = gid ? gid.trim() : '0';
   
   // Determine URL format based on ID type
   if (cleanId.startsWith('2PACX')) {
-      // Published Sheet
+      // Published Sheet (File > Share > Publish to web)
       // The user provided structure: .../pub?gid=...&single=true&output=csv
       url = `https://docs.google.com/spreadsheets/d/e/${cleanId}/pub?output=csv`;
       
-      if (cleanGid) {
+      if (cleanGid && cleanGid !== '0') {
          url += `&gid=${cleanGid}&single=true`;
       }
   } else {
-      // Standard Sheet ID
-      url = `https://docs.google.com/spreadsheets/d/${cleanId}/export?format=csv&gid=${cleanGid}`;
+      // Standard Sheet ID (File > Share > Anyone with the link)
+      // Use gviz/tq endpoint which handles CORS better than /export
+      url = `https://docs.google.com/spreadsheets/d/${cleanId}/gviz/tq?tqx=out:csv&gid=${cleanGid}`;
   }
   
   // Add timestamp to prevent caching
@@ -51,9 +51,15 @@ export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise
   try {
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`Failed to fetch. Status: ${response.status}. Check if sheet is published/public.`);
+      throw new Error(`Failed to fetch. Status: ${response.status}. Check if sheet is "Public" or "Published to Web".`);
     }
     const text = await response.text();
+
+    // Check if the response is HTML (Login page or 404), which indicates access issues
+    if (text.trim().toLowerCase().startsWith('<!doctype html') || text.includes('<html')) {
+        throw new Error('Received HTML instead of CSV. The sheet is likely private. Please set access to "Anyone with the link" or "Publish to Web".');
+    }
+
     return parseItemsCSV(text);
   } catch (error) {
     console.error("Sheet Sync Error:", error);
@@ -123,12 +129,14 @@ const parseItemsCSV = (csvText: string): Item[] => {
     if (!line) continue;
     
     const values = parseCSVLine(line);
-    if (values.length < 2) continue;
+    // Relaxed length check, just need enough for ID
+    if (values.length < 1) continue;
 
     const cleanValues = values.map(v => v.replace(/^"|"$/g, ''));
 
     // Fallbacks
     const idVal = idIdx > -1 ? cleanValues[idIdx] : cleanValues[0];
+    if (!idVal) continue;
     
     // Name logic priority
     let nameVal = '';
@@ -137,22 +145,20 @@ const parseItemsCSV = (csvText: string): Item[] => {
     else if (desc2Idx > -1 && cleanValues[desc2Idx]) nameVal = cleanValues[desc2Idx];
     else nameVal = cleanValues[1] || 'Unknown';
 
-    if (idVal) {
-      items.push({
-        id: idVal,
-        name: nameVal,
-        category: catIdx > -1 ? cleanValues[catIdx] : 'General',
-        unit: umIdx > -1 ? cleanValues[umIdx] : 'pcs',
-        
-        // Extended Fields
-        secondId: id2Idx > -1 ? cleanValues[id2Idx] : undefined,
-        thirdId: id3Idx > -1 ? cleanValues[id3Idx] : undefined,
-        description2: desc2Idx > -1 ? cleanValues[desc2Idx] : undefined,
-        fullName: fullNameIdx > -1 ? cleanValues[fullNameIdx] : undefined,
-        oem: oemIdx > -1 ? cleanValues[oemIdx] : undefined,
-        partNumber: partNoIdx > -1 ? cleanValues[partNoIdx] : undefined,
-      });
-    }
+    items.push({
+      id: idVal,
+      name: nameVal,
+      category: catIdx > -1 ? cleanValues[catIdx] : 'General',
+      unit: umIdx > -1 ? cleanValues[umIdx] : 'pcs',
+      
+      // Extended Fields
+      secondId: id2Idx > -1 ? cleanValues[id2Idx] : undefined,
+      thirdId: id3Idx > -1 ? cleanValues[id3Idx] : undefined,
+      description2: desc2Idx > -1 ? cleanValues[desc2Idx] : undefined,
+      fullName: fullNameIdx > -1 ? cleanValues[fullNameIdx] : undefined,
+      oem: oemIdx > -1 ? cleanValues[oemIdx] : undefined,
+      partNumber: partNoIdx > -1 ? cleanValues[partNoIdx] : undefined,
+    });
   }
   return items;
 };
