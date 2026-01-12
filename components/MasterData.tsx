@@ -42,12 +42,12 @@ interface MasterDataProps {
   onBulkImport: (tab: string, added: any[], updated: any[]) => void;
 }
 
-type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions' | 'users' | 'plans';
+type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions' | 'users' | 'plans' | 'history';
 
 const ITEMS_PER_PAGE = 80;
 
 // Base configuration for columns
-const COLUMNS_CONFIG: Record<TabType, { key: string, label: string }[]> = {
+const COLUMNS_CONFIG: Record<Exclude<TabType, 'history'>, { key: string, label: string }[]> = {
   items: [
     { key: 'id', label: 'Item Number' },
     { key: 'thirdId', label: '3rd Item No' },
@@ -109,7 +109,7 @@ const MasterData: React.FC<MasterDataProps> = ({
   onDeleteItems, onDeleteMachines, onDeleteLocations, onDeleteSectors, onDeleteDivisions, onDeletePlans, onDeleteUsers,
   onBulkImport
 }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('items');
+  const [activeTab, setActiveTab] = useState<Exclude<TabType, 'history'>>('items');
   const [showForm, setShowForm] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -146,9 +146,9 @@ const MasterData: React.FC<MasterDataProps> = ({
   const [syncMsg, setSyncMsg] = useState('');
 
   // Column Management State
-  const [columnSettings, setColumnSettings] = useState<Record<TabType, { key: string; label: string; visible: boolean }[]>>(() => {
+  const [columnSettings, setColumnSettings] = useState<Record<Exclude<TabType, 'history'>, { key: string; label: string; visible: boolean }[]>>(() => {
     const defaults: Record<string, any> = {};
-    (Object.keys(COLUMNS_CONFIG) as TabType[]).forEach(tab => {
+    (Object.keys(COLUMNS_CONFIG) as Exclude<TabType, 'history'>[]).forEach(tab => {
       defaults[tab] = COLUMNS_CONFIG[tab].map(c => ({ ...c, visible: true }));
     });
     const saved = localStorage.getItem('wf_column_settings');
@@ -196,11 +196,11 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   // -- Config Handlers --
   
-  const updateSyncConfig = (field: 'sheetId' | 'gid', value: string) => {
+  const updateSyncConfig = (tabKey: string, field: 'sheetId' | 'gid', value: string) => {
       setSyncConfig(prev => ({
           ...prev,
-          [activeTab]: {
-              ...(prev[activeTab] || { sheetId: '', gid: '' }),
+          [tabKey]: {
+              ...(prev[tabKey] || { sheetId: '', gid: '' }),
               [field]: value
           }
       }));
@@ -264,7 +264,7 @@ const MasterData: React.FC<MasterDataProps> = ({
               const val = row[1].toString().trim();
 
               // Check if key matches one of our supported tabs
-              if (['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users'].includes(key) && val) {
+              if (['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users', 'history'].includes(key) && val) {
                   newConfig[key] = {
                       sheetId: cleanId, // Assume all data is in the same workbook
                       gid: val
@@ -349,15 +349,15 @@ const MasterData: React.FC<MasterDataProps> = ({
       setSelectedIds(newSet);
   };
 
-  // Generalized Cloud Sync
-  const handleSyncData = async () => {
+  // Generalized Cloud Sync (Single Tab)
+  const handleSyncData = async (targetTab: string = activeTab) => {
     setSyncLoading(true);
-    setSyncMsg(`Fetching ${activeTab} data...`);
+    setSyncMsg(`Fetching ${targetTab} data...`);
     
-    const config = syncConfig[activeTab] || { sheetId: '', gid: '' };
+    const config = syncConfig[targetTab] || { sheetId: '', gid: '' };
 
     if (!config.sheetId) {
-        setSyncMsg("Error: Please provide a Google Sheet ID or URL.");
+        setSyncMsg(`Error: No Sheet ID for ${targetTab}.`);
         setSyncLoading(false);
         return;
     }
@@ -366,20 +366,51 @@ const MasterData: React.FC<MasterDataProps> = ({
       const cleanId = extractSheetIdFromUrl(config.sheetId);
       const currentGid = config.gid || '0';
       
-      // Get Raw Rows (Array of strings)
       const rawRows = await fetchRawCSV(cleanId, currentGid);
       
       if (!rawRows || rawRows.length < 2) {
-        setSyncMsg('No data found. Check ID/GID or if sheet is empty.');
+        setSyncMsg(`No data found for ${targetTab}. Check ID/GID.`);
       } else {
-         processImportData(rawRows);
-         setSyncMsg(`Sync Complete! Check lists for updates.`);
+         processImportData(rawRows, targetTab);
+         setSyncMsg(`${targetTab} Sync Complete!`);
       }
     } catch (e) {
-      setSyncMsg('Error: ' + (e as Error).message);
+      setSyncMsg(`Error syncing ${targetTab}: ` + (e as Error).message);
     } finally {
-      setSyncLoading(false);
+      if (targetTab === activeTab) setSyncLoading(false); // Only unset if single sync
     }
+  };
+
+  const handleFullSync = async () => {
+      const tabs: string[] = ['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users', 'history'];
+      setSyncLoading(true);
+      let successCount = 0;
+      let errors = [];
+
+      for (const tab of tabs) {
+          if (syncConfig[tab]?.sheetId && syncConfig[tab]?.gid) {
+              setSyncMsg(`Restoring ${tab}...`);
+              try {
+                  const cleanId = extractSheetIdFromUrl(syncConfig[tab].sheetId);
+                  const rawRows = await fetchRawCSV(cleanId, syncConfig[tab].gid);
+                  if (rawRows && rawRows.length > 1) {
+                      processImportData(rawRows, tab);
+                      successCount++;
+                  }
+              } catch (e) {
+                  errors.push(`${tab}: ${(e as Error).message}`);
+              }
+              // Small delay to prevent rate limits
+              await new Promise(r => setTimeout(r, 200));
+          }
+      }
+      
+      setSyncLoading(false);
+      if (errors.length > 0) {
+          setSyncMsg(`Restored ${successCount} tabs. Errors: ${errors.join(', ')}`);
+      } else {
+          setSyncMsg(`Full Restore Complete! ${successCount} tabs updated.`);
+      }
   };
 
   const handleExportHistory = async () => {
@@ -507,7 +538,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             } else {
                setProcessingStatus(`Analyzing ${jsonData.length} rows...`);
             }
-            setTimeout(() => { processImportData(jsonData); }, 50);
+            setTimeout(() => { processImportData(jsonData, activeTab); }, 50);
         } catch (error) {
             console.error("Error parsing file:", error);
             setProcessingStatus(null);
@@ -519,16 +550,19 @@ const MasterData: React.FC<MasterDataProps> = ({
     event.target.value = '';
   };
 
-  const processImportData = (rows: any[][]) => {
+  const processImportData = (rows: any[][], targetTab: string) => {
     if (!rows || rows.length < 2) {
-        setProcessingStatus(null);
-        // Only alert if this came from a manual file import, to avoid annoying alerts on empty sheet syncs that might just need config
-        if (processingStatus) alert("File/Sheet appears to be empty or contains no data rows.");
+        if (targetTab === activeTab) {
+             setProcessingStatus(null);
+             if (processingStatus) alert("File/Sheet appears to be empty.");
+        }
         return;
     }
 
     let headerRowIndex = -1;
-    const primaryKeywords = activeTab === 'users' ? ['username', 'user'] : ['id', 'item number', 'item no', 'name', 'description'];
+    const primaryKeywords = targetTab === 'users' ? ['username', 'user'] : 
+                            targetTab === 'history' ? ['id', 'date', 'location'] :
+                            ['id', 'item number', 'item no', 'name', 'description'];
     
     for (let i = 0; i < Math.min(rows.length, 10); i++) {
         const rowStr = rows[i].join(' ').toLowerCase();
@@ -544,7 +578,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     const dataRows = rows.slice(headerRowIndex + 1);
 
     let fieldMap: Record<string, string[]> = {};
-    if (activeTab === 'items') {
+    if (targetTab === 'items') {
         fieldMap = {
             id: ['item number', 'id', 'item no', 'code', 'item code'],
             name: ['description', 'name', 'item name', 'desc', 'material name'],
@@ -558,7 +592,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             partNumber: ['part no', 'part number', 'pn', 'part num'],
             modelNo: ['model no', 'model', 'model number', 'طراز']
         };
-    } else if (activeTab === 'machines') {
+    } else if (targetTab === 'machines') {
         fieldMap = {
             id: ['id', 'machine id', 'code'],
             machineLocalNo: ['local no', 'local number', 'local id', 'machine local no', 'asset no'],
@@ -571,24 +605,41 @@ const MasterData: React.FC<MasterDataProps> = ({
             brand: ['brand', 'manufacturer'],
             divisionId: ['division id', 'division', 'line']
         };
-    } else if (activeTab === 'locations') {
+    } else if (targetTab === 'locations') {
         fieldMap = {
             id: ['id', 'location id', 'zone id'],
             name: ['name', 'location name', 'zone'],
             email: ['email', 'site email', 'contact']
         };
-    } else if (activeTab === 'sectors') {
+    } else if (targetTab === 'sectors') {
         fieldMap = { id: ['id'], name: ['name', 'sector name'] };
-    } else if (activeTab === 'divisions') {
+    } else if (targetTab === 'divisions') {
         fieldMap = { id: ['id'], name: ['name', 'division name'], sectorId: ['sector id', 'sector'] };
-    } else if (activeTab === 'plans') {
+    } else if (targetTab === 'plans') {
         fieldMap = { id: ['id'], name: ['name', 'plan name', 'plan'] };
-    } else if (activeTab === 'users') {
+    } else if (targetTab === 'users') {
         fieldMap = {
             username: ['username', 'user', 'login'],
             name: ['name', 'full name'],
             role: ['role', 'permission'],
             email: ['email']
+        };
+    } else if (targetTab === 'history') {
+        fieldMap = {
+            id: ['id', 'issue id'],
+            timestamp: ['date', 'timestamp', 'time'],
+            locationId: ['location', 'site', 'location id'],
+            sectorName: ['sector'],
+            divisionName: ['division'],
+            machineName: ['machine'],
+            maintenancePlan: ['maint. plan', 'plan', 'maintenance plan'],
+            itemId: ['item id', 'item number'],
+            itemName: ['item name', 'item'],
+            quantity: ['quantity', 'qty'],
+            status: ['status'],
+            notes: ['notes', 'remarks'],
+            warehouseEmail: ['warehouse email'],
+            requesterEmail: ['site email', 'requester email']
         };
     }
 
@@ -599,11 +650,12 @@ const MasterData: React.FC<MasterDataProps> = ({
         if (index !== -1) colIndexMap[fieldKey] = index;
     });
 
-    const idKey = activeTab === 'users' ? 'username' : 'id';
+    const idKey = targetTab === 'users' ? 'username' : 'id';
     
-    if (colIndexMap[idKey] === undefined) {
+    // Only warn if not history (history ID might be generated if missing, but better to have)
+    if (colIndexMap[idKey] === undefined && targetTab !== 'history') {
          setProcessingStatus(null);
-         alert(`Could not find a column for '${idKey}'. Checked headers: ${headers.join(', ')}`);
+         if (targetTab === activeTab) alert(`Could not find a column for '${idKey}'. Checked headers: ${headers.join(', ')}`);
          return;
     }
 
@@ -619,8 +671,8 @@ const MasterData: React.FC<MasterDataProps> = ({
             return '';
         };
 
-        const idVal = getIdValue(colIndexMap[idKey]);
-        if (!idVal) return; 
+        const idVal = colIndexMap[idKey] !== undefined ? getIdValue(colIndexMap[idKey]) : '';
+        if (!idVal && targetTab !== 'history') return; 
 
         let payload: any = {};
         Object.keys(colIndexMap).forEach(key => {
@@ -628,26 +680,29 @@ const MasterData: React.FC<MasterDataProps> = ({
             if (row[idx] !== undefined && row[idx] !== null) payload[key] = String(row[idx]).trim();
         });
 
-        if (activeTab === 'items') {
+        if (targetTab === 'items') {
              if (!payload.category) payload.category = 'General';
              if (!payload.unit) payload.unit = 'pcs';
-        } else if (activeTab === 'machines') {
+        } else if (targetTab === 'machines') {
              if (!payload.status) payload.status = 'Working';
              if (!payload.chaseNo) payload.chaseNo = 'Unknown';
-        } else if (activeTab === 'users') {
-             if (!payload.password) payload.password = 'password';
-             if (!payload.role) payload.role = 'user';
+        } else if (targetTab === 'history') {
+             if (!payload.id) return; // Skip invalid history lines
+             if (!payload.timestamp) payload.timestamp = new Date().toISOString();
+             // Ensure quantity is number
+             payload.quantity = Number(payload.quantity) || 0;
         }
 
-        const list = activeTab === 'items' ? items : 
-                     activeTab === 'machines' ? machines :
-                     activeTab === 'locations' ? locations :
-                     activeTab === 'sectors' ? sectors :
-                     activeTab === 'divisions' ? divisions :
-                     activeTab === 'plans' ? plans : users;
+        const list = targetTab === 'items' ? items : 
+                     targetTab === 'machines' ? machines :
+                     targetTab === 'locations' ? locations :
+                     targetTab === 'sectors' ? sectors :
+                     targetTab === 'divisions' ? divisions :
+                     targetTab === 'plans' ? plans : 
+                     targetTab === 'users' ? users : history;
         
         // @ts-ignore
-        const exists = list.find((item: any) => item[idKey] === idVal);
+        const exists = list.find((item: any) => item[idKey] === (payload[idKey] || idVal));
 
         if (exists) {
             toUpdate.push({ ...exists, ...payload });
@@ -658,78 +713,158 @@ const MasterData: React.FC<MasterDataProps> = ({
         }
     });
 
-    onBulkImport(activeTab, toAdd, toUpdate);
+    onBulkImport(targetTab, toAdd, toUpdate);
     setProcessingStatus(null);
     
-    if (processingStatus) {
+    if (targetTab === activeTab && processingStatus) {
          setTimeout(() => { alert(`Import Complete!\n\nTotal Processed: ${dataRows.length}\nAdded: ${addedCount}\nUpdated: ${updatedCount}`); }, 100);
     }
   };
 
-  const toggleColumnVisibility = (key: string) => {
+  // --- Drag & Drop Handlers for Columns ---
+  const handleDragStart = (e: React.DragEvent<HTMLTableHeaderCellElement>, position: number) => {
+    dragItem.current = position;
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLTableHeaderCellElement>, position: number) => {
+    dragOverItem.current = position;
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLTableHeaderCellElement>) => {
+    if (dragItem.current === null || dragOverItem.current === null) return;
+    
+    // We are reordering the 'visibleColumns' list visually
+    // We need to apply this reordering to 'columnSettings'
+    const currentColumns = [...columnSettings[activeTab]];
+    const visibleCols = currentColumns.filter(c => c.visible);
+    
+    // Get the item being dragged and the target item from visible list
+    const itemToMove = visibleCols[dragItem.current];
+    const itemTarget = visibleCols[dragOverItem.current];
+    
+    // Find their actual indices in the main list
+    const realFromIndex = currentColumns.findIndex(c => c.key === itemToMove.key);
+    const realToIndex = currentColumns.findIndex(c => c.key === itemTarget.key);
+    
+    // Perform move in main list
+    currentColumns.splice(realFromIndex, 1);
+    currentColumns.splice(realToIndex, 0, itemToMove);
+
+    dragItem.current = null;
+    dragOverItem.current = null;
+    
     setColumnSettings(prev => ({
-      ...prev,
-      [activeTab]: prev[activeTab].map(col => 
-        col.key === key ? { ...col, visible: !col.visible } : col
-      )
+        ...prev,
+        [activeTab]: currentColumns
     }));
   };
 
-  const handleDragStart = (e: React.DragEvent<HTMLTableHeaderCellElement>, position: number) => { dragItem.current = position; };
-  const handleDragEnter = (e: React.DragEvent<HTMLTableHeaderCellElement>, position: number) => { dragOverItem.current = position; };
-  const handleDrop = (e: React.DragEvent<HTMLTableHeaderCellElement>) => {
+  // --- Form Handlers ---
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const copyListItems = [...columnSettings[activeTab]];
-    const dragItemContent = copyListItems[dragItem.current!];
-    copyListItems.splice(dragItem.current!, 1);
-    copyListItems.splice(dragOverItem.current!, 0, dragItemContent);
-    dragItem.current = null; dragOverItem.current = null;
-    setColumnSettings(prev => ({ ...prev, [activeTab]: copyListItems }));
+    
+    const payload = { ...formData };
+    
+    // Handle array conversions for Users
+    if (activeTab === 'users') {
+        ['allowedLocationIds', 'allowedSectorIds', 'allowedDivisionIds'].forEach(key => {
+            if (typeof payload[key] === 'string') {
+                payload[key] = payload[key].split(',').map((s: string) => s.trim()).filter(Boolean);
+            }
+        });
+    }
+
+    if (isEditing) {
+        switch(activeTab) {
+            case 'items': onUpdateItem(payload); break;
+            case 'machines': onUpdateMachine(payload); break;
+            case 'locations': onUpdateLocation(payload); break;
+            case 'sectors': onUpdateSector(payload); break;
+            case 'divisions': onUpdateDivision(payload); break;
+            case 'plans': onUpdatePlan(payload); break;
+            case 'users': onUpdateUser(payload); break;
+        }
+    } else {
+        switch(activeTab) {
+            case 'items': onAddItem(payload); break;
+            case 'machines': onAddMachine(payload); break;
+            case 'locations': onAddLocation(payload); break;
+            case 'sectors': onAddSector(payload); break;
+            case 'divisions': onAddDivision(payload); break;
+            case 'plans': onAddPlan(payload); break;
+            case 'users': onAddUser(payload); break;
+        }
+    }
+    setShowForm(false);
   };
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    const timestamp = Date.now().toString().slice(-4);
-    
-    if (activeTab === 'items') {
-      const payload: Item = {
-        id: formData.id || `ITM-${timestamp}`,
-        name: formData.name, category: formData.category || 'General', unit: formData.unit || 'pcs',
-        secondId: formData.secondId, thirdId: formData.thirdId, description2: formData.description2,
-        fullName: formData.fullName, brand: formData.brand, oem: formData.oem, partNumber: formData.partNumber, modelNo: formData.modelNo,
-      };
-      isEditing ? onUpdateItem(payload) : onAddItem(payload);
-    } else if (activeTab === 'machines') {
-      const payload: Machine = {
-        id: formData.id || `M-${timestamp}`, machineLocalNo: formData.machineLocalNo, status: formData.status || 'Working',
-        chaseNo: formData.chaseNo, modelNo: formData.modelNo, divisionId: formData.divisionId,
-        mainGroup: formData.mainGroup, subGroup: formData.subGroup, category: formData.category, brand: formData.brand
-      };
-      isEditing ? onUpdateMachine(payload) : onAddMachine(payload);
-    } else if (activeTab === 'sectors') {
-      const payload: Sector = { id: formData.id || `SEC-${timestamp}`, name: formData.name };
-      isEditing ? onUpdateSector(payload) : onAddSector(payload);
-    } else if (activeTab === 'divisions') {
-      const payload: Division = { id: formData.id || `DIV-${timestamp}`, name: formData.name, sectorId: formData.sectorId };
-      isEditing ? onUpdateDivision(payload) : onAddDivision(payload);
-    } else if (activeTab === 'plans') {
-        const payload: MaintenancePlan = { id: formData.id || `MP-${timestamp}`, name: formData.name };
-        isEditing ? onUpdatePlan(payload) : onAddPlan(payload);
-    } else if (activeTab === 'users') {
-      const payload: User = {
-        username: formData.username, name: formData.name, role: formData.role, email: formData.email,
-        password: formData.password || (isEditing ? users.find(u => u.username === formData.username)?.password : 'password'),
-        allowedLocationIds: formData.allowedLocationIds as string[], allowedSectorIds: formData.allowedSectorIds as string[], allowedDivisionIds: formData.allowedDivisionIds as string[]
-      };
-      isEditing ? onUpdateUser(payload) : onAddUser(payload);
-    } else { 
-      const payload: Location = { id: formData.id || `WH-${timestamp}`, name: formData.name, email: formData.email };
-      isEditing ? onUpdateLocation(payload) : onAddLocation(payload);
-    }
-    setShowForm(false); setFormData({}); setIsEditing(false);
+  const renderForm = () => {
+    if (!showForm) return null;
+
+    const fields = COLUMNS_CONFIG[activeTab];
+
+    return (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-fade-in-up">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                    <h3 className="text-xl font-bold text-gray-800">
+                        {isEditing ? 'Edit' : 'Add New'} {activeTab.slice(0, -1)}
+                    </h3>
+                    <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 transition">
+                        ✕
+                    </button>
+                </div>
+                
+                <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {fields.map(field => {
+                            const val = formData[field.key];
+                            // Handle array display for users
+                            const displayVal = Array.isArray(val) ? val.join(', ') : (val || '');
+                            
+                            return (
+                                <div key={field.key} className={field.key === 'name' || field.key === 'fullName' ? "md:col-span-2 space-y-1" : "space-y-1"}>
+                                    <label className="block text-sm font-medium text-gray-700">{field.label}</label>
+                                    <input 
+                                        type="text" 
+                                        value={displayVal}
+                                        onChange={(e) => setFormData({...formData, [field.key]: e.target.value})}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                                        placeholder={`Enter ${field.label}`}
+                                        disabled={isEditing && (field.key === 'id' || field.key === 'username')}
+                                        required={field.key === 'id' || field.key === 'username'}
+                                    />
+                                    {activeTab === 'users' && field.key.includes('Ids') && (
+                                        <p className="text-xs text-gray-400">Comma separated IDs</p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="pt-6 mt-6 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white">
+                        <button 
+                            type="button" 
+                            onClick={() => setShowForm(false)} 
+                            className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit" 
+                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm font-medium transition"
+                        >
+                            {isEditing ? 'Save Changes' : 'Create Record'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
   };
 
   const renderTable = () => {
+    // Only render standard master data tables. History is handled by HistoryTable.tsx
     let data: any[] = [];
     switch (activeTab) {
       case 'items': data = items; break;
@@ -800,86 +935,6 @@ const MasterData: React.FC<MasterDataProps> = ({
     );
   };
 
-  const renderForm = () => {
-      // ... (Existing Render Form logic, kept same but wrapped in xml for context if needed, usually short is better) ...
-      // Assuming full content replacement, I will include the form rendering block here.
-      if (!showForm) return null;
-      return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-gray-800">{isEditing ? 'Edit' : 'Add New'} {activeTab.slice(0, -1)}</h2>
-                    <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">✕</button>
-                </div>
-                <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                    {activeTab === 'items' && (
-                        <>
-                           <div className="grid grid-cols-2 gap-4">
-                                <div><label className="block text-sm font-medium text-gray-700">Item Number (ID)</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} /></div>
-                                <div><label className="block text-sm font-medium text-gray-700">Category</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} /></div>
-                           </div>
-                           <div><label className="block text-sm font-medium text-gray-700">Description (Name)</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
-                           <div className="grid grid-cols-3 gap-4">
-                                <div><label className="block text-sm font-medium text-gray-700">Unit (UM)</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.unit || ''} onChange={e => setFormData({...formData, unit: e.target.value})} /></div>
-                                <div><label className="block text-sm font-medium text-gray-700">Part No</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.partNumber || ''} onChange={e => setFormData({...formData, partNumber: e.target.value})} /></div>
-                                <div><label className="block text-sm font-medium text-gray-700">Model No</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.modelNo || ''} onChange={e => setFormData({...formData, modelNo: e.target.value})} /></div>
-                           </div>
-                           <div className="grid grid-cols-2 gap-4">
-                                <div><label className="block text-sm font-medium text-gray-700">Brand</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} /></div>
-                                <div><label className="block text-sm font-medium text-gray-700">OEM</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.oem || ''} onChange={e => setFormData({...formData, oem: e.target.value})} /></div>
-                           </div>
-                        </>
-                    )}
-                    {activeTab === 'machines' && (
-                        <>
-                           <div className="grid grid-cols-2 gap-4">
-                                <div><label className="block text-sm font-medium text-gray-700">Machine ID</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} /></div>
-                                <div><label className="block text-sm font-medium text-gray-700">Local No</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.machineLocalNo || ''} onChange={e => setFormData({...formData, machineLocalNo: e.target.value})} /></div>
-                           </div>
-                           <div><label className="block text-sm font-medium text-gray-700">Equipment Name (Category)</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} /></div>
-                           <div className="grid grid-cols-2 gap-4">
-                                <div><label className="block text-sm font-medium text-gray-700">Status</label><select className="w-full px-3 py-2 border rounded-lg" value={formData.status || 'Working'} onChange={e => setFormData({...formData, status: e.target.value})}><option value="Working">Working</option><option value="Not Working">Not Working</option><option value="Outside Maintenance">Outside Maintenance</option></select></div>
-                                <div><label className="block text-sm font-medium text-gray-700">Division</label><SearchableSelect label="" options={divisions.map(d => ({id: d.id, label: d.name}))} value={formData.divisionId || ''} onChange={(val) => setFormData({...formData, divisionId: val})} /></div>
-                           </div>
-                        </>
-                    )}
-                    {activeTab === 'locations' && (
-                        <>
-                           <div><label className="block text-sm font-medium text-gray-700">Location ID</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} /></div>
-                           <div><label className="block text-sm font-medium text-gray-700">Name</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
-                           <div><label className="block text-sm font-medium text-gray-700">Email</label><input type="email" className="w-full px-3 py-2 border rounded-lg" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
-                        </>
-                    )}
-                    {activeTab === 'users' && (
-                         <>
-                            <div><label className="block text-sm font-medium text-gray-700">Username</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.username || ''} onChange={e => setFormData({...formData, username: e.target.value})} disabled={isEditing} /></div>
-                            <div><label className="block text-sm font-medium text-gray-700">Full Name</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><label className="block text-sm font-medium text-gray-700">Role</label><select className="w-full px-3 py-2 border rounded-lg" value={formData.role || 'user'} onChange={e => setFormData({...formData, role: e.target.value})}><option value="admin">Admin</option><option value="warehouse_manager">Warehouse Manager</option><option value="warehouse_supervisor">Warehouse Supervisor</option><option value="maintenance_manager">Maintenance Manager</option><option value="maintenance_engineer">Maintenance Engineer</option><option value="user">User (Operator)</option></select></div>
-                                <div><label className="block text-sm font-medium text-gray-700">Email</label><input required type="email" className="w-full px-3 py-2 border rounded-lg" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
-                            </div>
-                            <div><label className="block text-sm font-medium text-gray-700">Password</label><input type="password" className="w-full px-3 py-2 border rounded-lg" placeholder={isEditing ? "(Unchanged)" : ""} value={formData.password || ''} onChange={e => setFormData({...formData, password: e.target.value})} /></div>
-                         </>
-                    )}
-                    {(activeTab === 'sectors' || activeTab === 'plans' || activeTab === 'divisions') && (
-                        <>
-                           <div><label className="block text-sm font-medium text-gray-700">ID</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} /></div>
-                           <div><label className="block text-sm font-medium text-gray-700">Name</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
-                           {activeTab === 'divisions' && (
-                               <div><label className="block text-sm font-medium text-gray-700">Sector</label><SearchableSelect label="" options={sectors.map(s => ({id: s.id, label: s.name}))} value={formData.sectorId || ''} onChange={(val) => setFormData({...formData, sectorId: val})} /></div>
-                           )}
-                        </>
-                    )}
-                    <div className="pt-4 flex justify-end gap-3">
-                        <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-                        <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm">Save</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-  };
-
   const renderSyncModal = () => {
     if (!showSyncModal) return null;
 
@@ -893,7 +948,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                         <span className="mr-2 text-2xl">☁️</span> Google Sheets Sync
                     </h2>
                     <p className="text-green-100 text-sm mt-1 opacity-90">
-                        Connect your spreadsheet for <b>{activeTab.toUpperCase()}</b>.
+                        Connect your spreadsheet for <b>{activeTab.toUpperCase()}</b> or restore full backup.
                     </p>
                 </div>
                 
@@ -922,24 +977,38 @@ const MasterData: React.FC<MasterDataProps> = ({
                                 type="text" 
                                 className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
                                 value={currentConfig.gid}
-                                onChange={(e) => updateSyncConfig('gid', e.target.value)}
+                                onChange={(e) => updateSyncConfig(activeTab, 'gid', e.target.value)}
                                 placeholder="e.g. 0 or 12345"
                             />
-                            <p className="text-xs text-gray-400 mt-1">
-                                The number after <code>#gid=</code> in the URL for this specific tab.
-                            </p>
                         </div>
 
+                        {/* History GID Input separately if needed for full restore */}
                         <div className="pt-2 border-t border-gray-100">
+                             <label className="block text-sm font-bold text-gray-700 mb-1 capitalize">History / Issue Log GID</label>
+                             <input 
+                                type="text" 
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
+                                value={syncConfig['history']?.gid || ''}
+                                onChange={(e) => updateSyncConfig('history', 'gid', e.target.value)}
+                                placeholder="GID for History tab (for full restore)"
+                            />
+                        </div>
+
+                        <div className="pt-2 border-t border-gray-100 grid grid-cols-2 gap-3">
                              <button
                                 onClick={handleAutoConfigFromSheet}
-                                className="w-full py-2 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-sm font-medium hover:bg-purple-100 transition flex items-center justify-center gap-2"
+                                className="col-span-2 py-2 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-sm font-medium hover:bg-purple-100 transition flex items-center justify-center gap-2"
                              >
-                                <span>⚡</span> Auto-Configure All Tabs from Master Sheet
+                                <span>⚡</span> Auto-Configure All Tabs (Master Config)
                              </button>
-                             <p className="text-[10px] text-gray-400 mt-1 text-center">
-                                Reads GID=0 (first tab). Requires columns: 'items', 'machines', etc in Col A, GIDs in Col B.
-                             </p>
+                             
+                             <button
+                                onClick={handleFullSync}
+                                className="col-span-2 py-3 bg-indigo-600 text-white rounded-lg font-bold shadow-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2"
+                             >
+                                {syncLoading ? <span className="animate-spin">↻</span> : <span>📥</span>}
+                                Fetch All Data (Full Backup Restore)
+                             </button>
                         </div>
 
                         <div>
@@ -956,12 +1025,12 @@ const MasterData: React.FC<MasterDataProps> = ({
 
                     <div className="space-y-3 pt-4 border-t border-gray-100">
                         <button 
-                            onClick={handleSyncData}
+                            onClick={() => handleSyncData(activeTab)}
                             disabled={syncLoading}
                             className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm flex items-center justify-center gap-2 capitalize"
                         >
                             {syncLoading ? <span className="animate-spin">↻</span> : <span>⬇️</span>}
-                            Import {activeTab} from Cloud
+                            Import Only {activeTab}
                         </button>
                         
                         <button 

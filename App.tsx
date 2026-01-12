@@ -197,6 +197,7 @@ const App: React.FC = () => {
         case 'sectors': updateIdBasedState(setSectors); break;
         case 'divisions': updateIdBasedState(setDivisions); break;
         case 'plans': updateIdBasedState(setPlans); break;
+        case 'history': updateIdBasedState(setHistory); break; // Added History Import Support
         case 'users': 
             setUsersList(prev => {
                 const updateMap = new Map(updated.map((u: any) => [u.username, u]));
