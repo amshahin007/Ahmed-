@@ -127,16 +127,18 @@ const MasterData: React.FC<MasterDataProps> = ({
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Sync State
-  const [sheetId, setSheetId] = useState(localStorage.getItem('wf_sheet_id') || DEFAULT_SHEET_ID);
-  
-  // Manage GIDs per Tab
-  const [tabGids, setTabGids] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('wf_tab_gids');
-    const initial = saved ? JSON.parse(saved) : {};
-    // Ensure Items GID has default if not present
-    if (!initial['items']) initial['items'] = DEFAULT_ITEMS_GID;
-    return initial;
+  // --- SYNC STATE MANAGEMENT (PER TAB) ---
+  // Stores { sheetId, gid } for each tab key
+  const [syncConfig, setSyncConfig] = useState<Record<string, { sheetId: string; gid: string }>>(() => {
+    try {
+        const saved = localStorage.getItem('wf_sync_config_v2');
+        if (saved) return JSON.parse(saved);
+    } catch(e) { console.error(e); }
+    
+    // Default fallback
+    return {
+        items: { sheetId: DEFAULT_SHEET_ID, gid: DEFAULT_ITEMS_GID }
+    };
   });
 
   const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('wf_script_url') || '');
@@ -178,8 +180,10 @@ const MasterData: React.FC<MasterDataProps> = ({
   const dragOverItem = useRef<number | null>(null);
 
   // Save config when changed
-  useEffect(() => { localStorage.setItem('wf_sheet_id', sheetId); }, [sheetId]);
-  useEffect(() => { localStorage.setItem('wf_tab_gids', JSON.stringify(tabGids)); }, [tabGids]);
+  useEffect(() => { 
+      localStorage.setItem('wf_sync_config_v2', JSON.stringify(syncConfig)); 
+  }, [syncConfig]);
+  
   useEffect(() => { localStorage.setItem('wf_script_url', scriptUrl); }, [scriptUrl]);
   useEffect(() => { localStorage.setItem('wf_column_settings', JSON.stringify(columnSettings)); }, [columnSettings]);
 
@@ -187,24 +191,43 @@ const MasterData: React.FC<MasterDataProps> = ({
   useEffect(() => {
     setCurrentPage(1);
     setSelectedIds(new Set());
+    setSyncMsg(''); // Clear sync message on tab change
   }, [activeTab]);
 
-  const handleSheetIdChange = (val: string) => {
-    setSheetId(val);
-    const extractedGid = extractGidFromUrl(val);
-    if (extractedGid) {
-        setTabGids(prev => ({ ...prev, [activeTab]: extractedGid }));
-    }
-  };
+  // -- Config Handlers --
   
-  const handleGidChange = (val: string) => {
-      setTabGids(prev => ({ ...prev, [activeTab]: val }));
+  const updateSyncConfig = (field: 'sheetId' | 'gid', value: string) => {
+      setSyncConfig(prev => ({
+          ...prev,
+          [activeTab]: {
+              ...(prev[activeTab] || { sheetId: '', gid: '' }),
+              [field]: value
+          }
+      }));
+  };
+
+  const handleSheetUrlPaste = (val: string) => {
+    const extractedId = extractSheetIdFromUrl(val);
+    const extractedGid = extractGidFromUrl(val);
+
+    setSyncConfig(prev => {
+        const currentForTab = prev[activeTab] || { sheetId: '', gid: '' };
+        return {
+            ...prev,
+            [activeTab]: {
+                sheetId: extractedId || currentForTab.sheetId,
+                gid: extractedGid || currentForTab.gid // Only update GID if found in URL, otherwise keep existing
+            }
+        };
+    });
   };
 
   const handleResetDefaults = () => {
-    setSheetId(DEFAULT_SHEET_ID);
-    setTabGids(prev => ({ ...prev, items: DEFAULT_ITEMS_GID }));
-    setSyncMsg('Defaults restored.');
+    setSyncConfig(prev => ({
+        ...prev,
+        [activeTab]: { sheetId: DEFAULT_SHEET_ID, gid: activeTab === 'items' ? DEFAULT_ITEMS_GID : '0' }
+    }));
+    setSyncMsg('Defaults restored for this tab.');
   };
 
   const handleAddNew = () => {
@@ -272,9 +295,18 @@ const MasterData: React.FC<MasterDataProps> = ({
   const handleSyncData = async () => {
     setSyncLoading(true);
     setSyncMsg(`Fetching ${activeTab} data...`);
+    
+    const config = syncConfig[activeTab] || { sheetId: '', gid: '' };
+
+    if (!config.sheetId) {
+        setSyncMsg("Error: Please provide a Google Sheet ID or URL.");
+        setSyncLoading(false);
+        return;
+    }
+
     try {
-      const cleanId = extractSheetIdFromUrl(sheetId);
-      const currentGid = tabGids[activeTab] || '0';
+      const cleanId = extractSheetIdFromUrl(config.sheetId);
+      const currentGid = config.gid || '0';
       
       // Get Raw Rows (Array of strings)
       const rawRows = await fetchRawCSV(cleanId, currentGid);
@@ -282,9 +314,6 @@ const MasterData: React.FC<MasterDataProps> = ({
       if (!rawRows || rawRows.length < 2) {
         setSyncMsg('No data found. Check ID/GID or if sheet is empty.');
       } else {
-         // Reuse the existing robust import processor!
-         // processImportData expects array of arrays (which rawRows is, mostly)
-         // rawRows comes from parseCSVLine which returns string[]
          processImportData(rawRows);
          setSyncMsg(`Sync Complete! Check lists for updates.`);
       }
@@ -604,8 +633,6 @@ const MasterData: React.FC<MasterDataProps> = ({
     e.preventDefault();
     const timestamp = Date.now().toString().slice(-4);
     
-    // ... (Payload logic maintained as is, reduced for brevity in prompt context but fully preserved in output) ...
-    // Reuse existing payload logic blocks for items, machines, etc.
     if (activeTab === 'items') {
       const payload: Item = {
         id: formData.id || `ITM-${timestamp}`,
@@ -798,6 +825,8 @@ const MasterData: React.FC<MasterDataProps> = ({
   const renderSyncModal = () => {
     if (!showSyncModal) return null;
 
+    const currentConfig = syncConfig[activeTab] || { sheetId: '', gid: '' };
+
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
@@ -806,35 +835,40 @@ const MasterData: React.FC<MasterDataProps> = ({
                         <span className="mr-2 text-2xl">☁️</span> Google Sheets Sync
                     </h2>
                     <p className="text-green-100 text-sm mt-1 opacity-90">
-                        Connect your spreadsheet for data synchronization.
+                        Connect your spreadsheet for <b>{activeTab.toUpperCase()}</b>.
                     </p>
                 </div>
                 
                 <div className="p-6 space-y-6">
                     <div className="space-y-4">
+                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
+                            <p className="text-sm text-blue-800">
+                                💡 <b>Tip:</b> Paste the full Google Sheet URL below to automatically extract the ID and GID.
+                            </p>
+                        </div>
+
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">Google Sheet ID / URL</label>
                             <input 
                                 type="text" 
                                 className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
-                                value={sheetId}
-                                onChange={(e) => handleSheetIdChange(e.target.value)}
+                                value={currentConfig.sheetId}
+                                onChange={(e) => handleSheetUrlPaste(e.target.value)}
                                 placeholder="Paste Sheet ID or URL..."
                             />
                         </div>
                         
-                        {/* Dynamic GID Input for the Active Tab */}
-                        <div className="bg-gray-50 p-3 rounded border border-gray-200">
-                            <label className="block text-sm font-bold text-blue-700 mb-1 capitalize">{activeTab} Tab GID (Number)</label>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1 capitalize">{activeTab} Tab GID (Number)</label>
                             <input 
                                 type="text" 
-                                className="w-full px-3 py-2 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
-                                value={tabGids[activeTab] || ''}
-                                onChange={(e) => handleGidChange(e.target.value)}
-                                placeholder={`e.g. 12345 (GID for ${activeTab} tab)`}
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
+                                value={currentConfig.gid}
+                                onChange={(e) => updateSyncConfig('gid', e.target.value)}
+                                placeholder="e.g. 0 or 12345"
                             />
-                            <p className="text-xs text-gray-500 mt-1">
-                                Open the "<b>{activeTab}</b>" tab in Google Sheets and copy the number after <code>#gid=</code> in the URL.
+                            <p className="text-xs text-gray-400 mt-1">
+                                The number after <code>#gid=</code> in the URL for this specific tab.
                             </p>
                         </div>
 
