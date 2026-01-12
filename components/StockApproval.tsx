@@ -111,7 +111,7 @@ const StockApproval: React.FC<StockApprovalProps> = ({ history, locations, onUpd
                 )}
             </div>
          ) : (
-            <div className="overflow-auto max-h-[70vh]">
+            <div className="overflow-auto max-h-[70vh] rounded-lg border border-gray-200">
                 <table className="w-full text-left border-separate border-spacing-0">
                     <thead>
                         <tr className="bg-gray-50 text-sm uppercase text-gray-500 font-semibold tracking-wider">
@@ -120,7 +120,7 @@ const StockApproval: React.FC<StockApprovalProps> = ({ history, locations, onUpd
                             <th className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 p-4 whitespace-nowrap">Item Details</th>
                             <th className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 p-4 w-32 whitespace-nowrap">Qty Request</th>
                             <th className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 p-4 w-48 whitespace-nowrap">Notes</th>
-                            <th className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 p-4 text-center whitespace-nowrap">Actions</th>
+                            <th className="sticky top-0 right-0 z-20 bg-gray-50 border-b border-l border-gray-200 p-4 text-center whitespace-nowrap shadow-sm">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -129,7 +129,7 @@ const StockApproval: React.FC<StockApprovalProps> = ({ history, locations, onUpd
                             const currentNotes = getEditedValue(issue.id, 'notes', issue.notes || '');
                             
                             return (
-                                <tr key={issue.id} className="hover:bg-blue-50 transition-colors group">
+                                <tr key={issue.id} className="group hover:bg-blue-50 transition-colors">
                                     <td className="p-4 align-middle whitespace-nowrap border-b border-gray-50">
                                         <div className="text-gray-900 font-medium">{issue.id}</div>
                                         <div className="text-xs text-gray-500">{new Date(issue.timestamp).toLocaleDateString()}</div>
@@ -164,7 +164,7 @@ const StockApproval: React.FC<StockApprovalProps> = ({ history, locations, onUpd
                                             className="w-full text-sm px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                                         />
                                     </td>
-                                    <td className="p-4 align-middle text-center space-y-2 whitespace-nowrap border-b border-gray-50">
+                                    <td className="sticky right-0 z-10 p-4 align-middle text-center space-y-2 whitespace-nowrap border-b border-gray-50 border-l border-gray-100 shadow-sm bg-white group-hover:bg-blue-50">
                                         <button 
                                             onClick={() => processAction(issue, 'Approved')}
                                             className="w-full px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 shadow-sm transition flex items-center justify-center gap-1"

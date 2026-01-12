@@ -17,6 +17,22 @@ const getAiClient = () => {
   }
 };
 
+export const askGemini = async (prompt: string): Promise<string> => {
+  const ai = getAiClient();
+  if (!ai) return "AI Insights unavailable: Missing API Key.";
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+    });
+    return response.text || "No response generated.";
+  } catch (error) {
+    console.error("Gemini Generic Error:", error);
+    return "Unable to generate text at this time. Please check your connection or API key.";
+  }
+};
+
 export const generateDashboardInsights = async (history: IssueRecord[]): Promise<string> => {
   const ai = getAiClient();
   if (!ai) return "AI Insights unavailable: Missing API Key.";

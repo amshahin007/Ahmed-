@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { User } from '../types';
 
@@ -42,6 +43,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
       label: 'Master Data', 
       icon: '⚙️', 
       roles: ['admin'] 
+    },
+    { 
+      id: 'ai-assistant', 
+      label: 'AI Assistant', 
+      icon: '✨', 
+      roles: ['admin', 'warehouse_manager', 'maintenance_manager'] 
     },
   ];
 

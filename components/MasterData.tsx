@@ -414,7 +414,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             
             // USE HEADER: 1 to get raw array of arrays. 
             // This is critical for reliable column mapping.
-            const jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
             
             if (jsonData.length > 2000) {
                setProcessingStatus(`Large file detected. Processing ${jsonData.length} rows... this may take a moment.`);
@@ -703,9 +703,9 @@ const MasterData: React.FC<MasterDataProps> = ({
         role: formData.role,
         email: formData.email,
         password: formData.password || (isEditing ? users.find(u => u.username === formData.username)?.password : 'password'),
-        allowedLocationIds: formData.allowedLocationIds,
-        allowedSectorIds: formData.allowedSectorIds,
-        allowedDivisionIds: formData.allowedDivisionIds
+        allowedLocationIds: formData.allowedLocationIds as string[],
+        allowedSectorIds: formData.allowedSectorIds as string[],
+        allowedDivisionIds: formData.allowedDivisionIds as string[]
       };
       isEditing ? onUpdateUser(payload) : onAddUser(payload);
     } else { // locations
@@ -961,7 +961,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     };
 
     const handleClearSelection = () => {
-        setSelectedIds(new Set());
+        setSelectedIds(newSet());
     };
 
     return (
@@ -1085,9 +1085,9 @@ const MasterData: React.FC<MasterDataProps> = ({
                     const id = row.id || row.username;
                     const isSelected = selectedIds.has(id);
                     return (
-                        <tr key={id} className={`transition ${isSelected ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
+                        <tr key={id} className={`group transition ${isSelected ? 'bg-blue-50' : 'bg-white hover:bg-gray-50'}`}>
                             {/* Checkbox Cell */}
-                            <td className="sticky left-0 z-10 bg-inherit border-r border-gray-100 px-4 py-3 text-center align-middle">
+                            <td className={`sticky left-0 z-10 border-r border-gray-100 px-4 py-3 text-center align-middle ${isSelected ? 'bg-blue-50' : 'bg-white group-hover:bg-gray-50'}`}>
                                 <input 
                                     type="checkbox" 
                                     checked={isSelected}
@@ -1106,7 +1106,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                             );
                             })}
 
-                            <td className="sticky right-0 z-10 bg-inherit border-l border-gray-100 px-6 py-3 align-middle whitespace-nowrap shadow-sm">
+                            <td className={`sticky right-0 z-10 border-l border-gray-100 px-6 py-3 align-middle whitespace-nowrap shadow-sm ${isSelected ? 'bg-blue-50' : 'bg-white group-hover:bg-gray-50'}`}>
                             <div className="flex items-center gap-3">
                                 <button 
                                     onClick={() => handleEdit(row)}
@@ -1371,7 +1371,7 @@ const MasterData: React.FC<MasterDataProps> = ({
       </div>
     );
   };
-  // ... rest of component
+
   return (
     <div className="space-y-6">
       {/* Hidden File Input for Imports */}
