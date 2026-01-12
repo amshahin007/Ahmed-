@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { IssueRecord, Location } from '../types';
 import * as XLSX from 'xlsx';
-import { uploadFileToDrive, DEFAULT_SCRIPT_URL } from '../services/googleSheetsService';
+import { uploadFileToDrive, DEFAULT_SCRIPT_URL, locateRemoteData } from '../services/googleSheetsService';
 
 interface HistoryTableProps {
   history: IssueRecord[];
@@ -14,6 +14,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
   const [selectedLocation, setSelectedLocation] = useState('');
   const [uploading, setUploading] = useState(false);
   const [driveLink, setDriveLink] = useState('');
+  const [locatingFolder, setLocatingFolder] = useState(false);
 
   const filteredHistory = history.filter(record => {
     const matchesSearch = 
@@ -100,13 +101,31 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
               // window.open(url, '_blank');
           } else {
               setDriveLink('saved');
-              alert("Backup saved to 'WareFlow Reports' folder in your Drive!");
+              alert("Backup saved to 'WareFlow Reports' folder in your Drive! Click 'Open Folder' to view it.");
           }
       } catch (e) {
           console.error(e);
           alert("Failed to upload to Drive.");
       } finally {
           setUploading(false);
+      }
+  };
+
+  const openDriveFolder = async () => {
+      const scriptUrl = localStorage.getItem('wf_script_url_v2') || DEFAULT_SCRIPT_URL;
+      setLocatingFolder(true);
+      try {
+          const result = await locateRemoteData(scriptUrl);
+          if (result && result.folderUrl) {
+              window.open(result.folderUrl, '_blank');
+          } else {
+              alert("Could not locate 'WareFlow Reports' folder. Please check your Script URL.");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Failed to connect to Google Drive.");
+      } finally {
+          setLocatingFolder(false);
       }
   };
 
@@ -141,6 +160,17 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
         </div>
 
         <div className="flex gap-2">
+            {/* Open Folder Button */}
+            <button
+                onClick={openDriveFolder}
+                disabled={locatingFolder}
+                className="flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition shadow-sm whitespace-nowrap"
+                title="Open Google Drive Folder"
+            >
+                {locatingFolder ? <span className="animate-spin">↻</span> : <span>📂</span>}
+                <span className="hidden sm:inline ml-2">Open Folder</span>
+            </button>
+
             <button
                 onClick={downloadExcel}
                 className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-sm whitespace-nowrap"
