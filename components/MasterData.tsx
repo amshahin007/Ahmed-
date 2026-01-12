@@ -140,7 +140,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     };
   });
 
-  const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('wf_script_url_v2') || DEFAULT_SCRIPT_URL);
+  const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   const [remoteLinks, setRemoteLinks] = useState<{folderUrl: string, sheetUrl: string} | null>(null);
@@ -184,7 +184,7 @@ const MasterData: React.FC<MasterDataProps> = ({
       localStorage.setItem('wf_sync_config_v2', JSON.stringify(syncConfig)); 
   }, [syncConfig]);
   
-  useEffect(() => { localStorage.setItem('wf_script_url_v2', scriptUrl); }, [scriptUrl]);
+  useEffect(() => { localStorage.setItem('wf_script_url_v3', scriptUrl); }, [scriptUrl]);
   useEffect(() => { localStorage.setItem('wf_column_settings', JSON.stringify(columnSettings)); }, [columnSettings]);
 
   // Reset pagination and selection when tab changes

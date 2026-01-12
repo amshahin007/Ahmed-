@@ -202,7 +202,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
         console.log(`[System] Email prepared for ${warehouseEmail}: ${emailData.subject}`);
         
         // 2. Check for Google Sheet Script URL
-        const scriptUrl = localStorage.getItem('wf_script_url_v2') || DEFAULT_SCRIPT_URL;
+        const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
         if (scriptUrl) {
             console.log("Syncing with Google Sheet...");
             // Non-blocking sync
@@ -266,7 +266,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   };
 
   const handleSaveToDrive = async () => {
-    const scriptUrl = localStorage.getItem('wf_script_url_v2') || DEFAULT_SCRIPT_URL;
+    const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
     if (!scriptUrl) {
         alert("Please configure the Web App URL in Master Data settings first.");
         return;

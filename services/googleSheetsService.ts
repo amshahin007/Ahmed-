@@ -4,7 +4,7 @@ import { Item, IssueRecord } from '../types';
 // Updated Default ID and GID based on user request
 export const DEFAULT_SHEET_ID = '2PACX-1vSMVlbr82tagYILVNamzhxIriPF3LAXrMaAHlRlp1-0F98Pfbu6orN0fTh6HDAh2vZP6WUH6LN2spNv';
 export const DEFAULT_ITEMS_GID = '229812258'; 
-export const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwCP1qASbZ1teDGhCxhp_8cCOoUOWGIu6ZbT832EVjN_JqaFA7_2wJTVnaTn-Gct-H9pg/exec';
+export const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxz6P8ZHgg8cN9cJBEL425BcdrjvBUqm59R_IxAwnDrb0MQ8c9iqaU1toNUN6GsAg4vQw/exec';
 
 export const extractSheetIdFromUrl = (url: string): string => {
   if (!url) return '';
