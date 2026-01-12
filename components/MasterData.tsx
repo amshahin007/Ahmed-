@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
-import { fetchItemsFromSheet, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet } from '../services/googleSheetsService';
+import { fetchRawCSV, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet } from '../services/googleSheetsService';
 import * as XLSX from 'xlsx';
 
 interface MasterDataProps {
@@ -64,8 +64,8 @@ const COLUMNS_CONFIG: Record<TabType, { key: string, label: string }[]> = {
   machines: [
     { key: 'id', label: 'ID' },
     { key: 'machineLocalNo', label: 'Machine Local No' },
-    { key: 'status', label: 'Status' }, // Replaced Name
-    { key: 'chaseNo', label: 'Chase No' }, // Replaced Model
+    { key: 'status', label: 'Status' }, 
+    { key: 'chaseNo', label: 'Chase No' }, 
     { key: 'modelNo', label: 'Model No (طراز)' },
     { key: 'category', label: 'إسم المعدة' },
     { key: 'mainGroup', label: 'Main Group' },
@@ -129,38 +129,38 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   // Sync State
   const [sheetId, setSheetId] = useState(localStorage.getItem('wf_sheet_id') || DEFAULT_SHEET_ID);
-  const [gid, setGid] = useState(localStorage.getItem('wf_items_gid') || DEFAULT_ITEMS_GID);
+  
+  // Manage GIDs per Tab
+  const [tabGids, setTabGids] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('wf_tab_gids');
+    const initial = saved ? JSON.parse(saved) : {};
+    // Ensure Items GID has default if not present
+    if (!initial['items']) initial['items'] = DEFAULT_ITEMS_GID;
+    return initial;
+  });
+
   const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('wf_script_url') || '');
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
 
   // Column Management State
   const [columnSettings, setColumnSettings] = useState<Record<TabType, { key: string; label: string; visible: boolean }[]>>(() => {
-    // 1. Generate fresh defaults from config
     const defaults: Record<string, any> = {};
     (Object.keys(COLUMNS_CONFIG) as TabType[]).forEach(tab => {
       defaults[tab] = COLUMNS_CONFIG[tab].map(c => ({ ...c, visible: true }));
     });
-
     const saved = localStorage.getItem('wf_column_settings');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // 2. Smart Merge: 
-        // - Preserve visibility and order from saved state
-        // - FORCE update labels from fresh config (fixes stale "Category" label)
-        // - Add any new columns defined in code
         const merged: Record<string, any> = { ...defaults };
         Object.keys(defaults).forEach(key => {
             if (parsed[key]) {
                 const savedKeys = new Set(parsed[key].map((c: any) => c.key));
-                
-                // Update labels of existing columns
                 const updatedSavedColumns = parsed[key].map((savedCol: any) => {
                     const freshCol = defaults[key].find((d: any) => d.key === savedCol.key);
                     return freshCol ? { ...savedCol, label: freshCol.label } : savedCol;
                 });
-
                 const newColumns = defaults[key].filter((c: any) => !savedKeys.has(c.key));
                 merged[key] = [...updatedSavedColumns, ...newColumns];
             }
@@ -179,13 +179,9 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   // Save config when changed
   useEffect(() => { localStorage.setItem('wf_sheet_id', sheetId); }, [sheetId]);
-  useEffect(() => { localStorage.setItem('wf_items_gid', gid); }, [gid]);
+  useEffect(() => { localStorage.setItem('wf_tab_gids', JSON.stringify(tabGids)); }, [tabGids]);
   useEffect(() => { localStorage.setItem('wf_script_url', scriptUrl); }, [scriptUrl]);
-  
-  // Save column settings when changed
-  useEffect(() => {
-    localStorage.setItem('wf_column_settings', JSON.stringify(columnSettings));
-  }, [columnSettings]);
+  useEffect(() => { localStorage.setItem('wf_column_settings', JSON.stringify(columnSettings)); }, [columnSettings]);
 
   // Reset pagination and selection when tab changes
   useEffect(() => {
@@ -197,13 +193,17 @@ const MasterData: React.FC<MasterDataProps> = ({
     setSheetId(val);
     const extractedGid = extractGidFromUrl(val);
     if (extractedGid) {
-      setGid(extractedGid);
+        setTabGids(prev => ({ ...prev, [activeTab]: extractedGid }));
     }
+  };
+  
+  const handleGidChange = (val: string) => {
+      setTabGids(prev => ({ ...prev, [activeTab]: val }));
   };
 
   const handleResetDefaults = () => {
     setSheetId(DEFAULT_SHEET_ID);
-    setGid(DEFAULT_ITEMS_GID);
+    setTabGids(prev => ({ ...prev, items: DEFAULT_ITEMS_GID }));
     setSyncMsg('Defaults restored.');
   };
 
@@ -231,7 +231,7 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     if (confirm(`Are you sure you want to delete ${ids.length} records? This cannot be undone.`)) {
         handleDeleteImplementation(ids);
-        setSelectedIds(new Set()); // Clear selection
+        setSelectedIds(new Set()); 
     }
   };
 
@@ -257,11 +257,9 @@ const MasterData: React.FC<MasterDataProps> = ({
       setSelectedIds(newSet);
   };
 
-  // Select all items ON THE CURRENT PAGE
   const handleSelectAllPage = (pageItems: any[]) => {
       const allSelected = pageItems.every(item => selectedIds.has(item.id || item.username));
       const newSet = new Set(selectedIds);
-      
       if (allSelected) {
           pageItems.forEach(item => newSet.delete(item.id || item.username));
       } else {
@@ -270,30 +268,25 @@ const MasterData: React.FC<MasterDataProps> = ({
       setSelectedIds(newSet);
   };
 
-  const handleSyncItems = async () => {
+  // Generalized Cloud Sync
+  const handleSyncData = async () => {
     setSyncLoading(true);
-    setSyncMsg('Fetching data...');
+    setSyncMsg(`Fetching ${activeTab} data...`);
     try {
       const cleanId = extractSheetIdFromUrl(sheetId);
-      const newItems = await fetchItemsFromSheet(cleanId, gid);
+      const currentGid = tabGids[activeTab] || '0';
       
-      if (newItems.length === 0) {
-        setSyncMsg('No items found. Check ID/GID or CSV headers.');
+      // Get Raw Rows (Array of strings)
+      const rawRows = await fetchRawCSV(cleanId, currentGid);
+      
+      if (!rawRows || rawRows.length < 2) {
+        setSyncMsg('No data found. Check ID/GID or if sheet is empty.');
       } else {
-        const toAdd: any[] = [];
-        const toUpdate: any[] = [];
-        
-        newItems.forEach(newItem => {
-          const exists = items.find(i => i.id === newItem.id);
-          if (exists) {
-            toUpdate.push(newItem);
-          } else {
-            toAdd.push(newItem);
-          }
-        });
-        
-        onBulkImport('items', toAdd, toUpdate);
-        setSyncMsg(`Success! Added: ${toAdd.length}, Updated: ${toUpdate.length}`);
+         // Reuse the existing robust import processor!
+         // processImportData expects array of arrays (which rawRows is, mostly)
+         // rawRows comes from parseCSVLine which returns string[]
+         processImportData(rawRows);
+         setSyncMsg(`Sync Complete! Check lists for updates.`);
       }
     } catch (e) {
       setSyncMsg('Error: ' + (e as Error).message);
@@ -311,8 +304,7 @@ const MasterData: React.FC<MasterDataProps> = ({
       setSyncMsg("No history to export.");
       return;
     }
-    
-    if (!confirm(`Are you sure you want to export ${history.length} historical records to the Google Sheet? This may take a moment.`)) return;
+    if (!confirm(`Are you sure you want to export ${history.length} historical records to the Google Sheet?`)) return;
 
     setSyncLoading(true);
     setSyncMsg(`Starting export of ${history.length} records...`);
@@ -337,9 +329,8 @@ const MasterData: React.FC<MasterDataProps> = ({
     let headers: string[] = [];
     let rows: any[][] = [];
     const timestamp = new Date().toISOString().slice(0, 10);
-
-    // Determine data source
     let data: any[] = [];
+    
     switch (activeTab) {
       case 'items': data = items; break;
       case 'machines': data = machines; break;
@@ -350,11 +341,9 @@ const MasterData: React.FC<MasterDataProps> = ({
       case 'users': data = users; break;
     }
 
-    // Filter if specific selection requested
     if (onlySelected && selectedIds.size > 0) {
         data = data.filter(d => selectedIds.has(d.id || d.username));
     }
-
     if (data.length === 0) {
         alert("No data to export.");
         return;
@@ -402,14 +391,12 @@ const MasterData: React.FC<MasterDataProps> = ({
         break;
     }
 
-    // Generate Excel File
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     XLSX.utils.book_append_sheet(wb, ws, "MasterData");
     XLSX.writeFile(wb, `WareFlow_${activeTab}_${onlySelected ? 'Selected' : 'All'}_${timestamp}.xlsx`);
   };
 
-  // --- Import Logic ---
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
@@ -417,21 +404,15 @@ const MasterData: React.FC<MasterDataProps> = ({
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     setProcessingStatus(`Reading ${file.name}...`);
-
     const reader = new FileReader();
     reader.onload = (e) => {
-      // Small timeout to allow React to render the "Reading file..." state
       setTimeout(() => {
         const data = e.target?.result;
         try {
             const workbook = XLSX.read(data, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
-            
-            // USE HEADER: 1 to get raw array of arrays. 
-            // This is critical for reliable column mapping.
             const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
             
             if (jsonData.length > 2000) {
@@ -439,12 +420,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             } else {
                setProcessingStatus(`Analyzing ${jsonData.length} rows...`);
             }
-
-            // Another timeout to render the row count message before heavy processing
-            setTimeout(() => {
-                processImportData(jsonData);
-            }, 50);
-
+            setTimeout(() => { processImportData(jsonData); }, 50);
         } catch (error) {
             console.error("Error parsing file:", error);
             setProcessingStatus(null);
@@ -457,14 +433,13 @@ const MasterData: React.FC<MasterDataProps> = ({
   };
 
   const processImportData = (rows: any[][]) => {
-    if (rows.length < 2) {
+    if (!rows || rows.length < 2) {
         setProcessingStatus(null);
-        alert("File appears to be empty or contains no data rows.");
+        // Only alert if this came from a manual file import, to avoid annoying alerts on empty sheet syncs that might just need config
+        if (processingStatus) alert("File/Sheet appears to be empty or contains no data rows.");
         return;
     }
 
-    // 1. Find the Header Row
-    // Scan first 10 rows to find a row that contains our primary key keywords
     let headerRowIndex = -1;
     const primaryKeywords = activeTab === 'users' ? ['username', 'user'] : ['id', 'item number', 'item no', 'name', 'description'];
     
@@ -476,17 +451,12 @@ const MasterData: React.FC<MasterDataProps> = ({
         }
     }
 
-    if (headerRowIndex === -1) {
-        // Fallback to 0 if we can't find specific headers
-        headerRowIndex = 0; 
-    }
+    if (headerRowIndex === -1) headerRowIndex = 0; 
 
     const headers = rows[headerRowIndex].map(h => String(h).trim().toLowerCase());
     const dataRows = rows.slice(headerRowIndex + 1);
 
-    // 2. Define Field Mappings (Column Name Candidates)
     let fieldMap: Record<string, string[]> = {};
-
     if (activeTab === 'items') {
         fieldMap = {
             id: ['item number', 'id', 'item no', 'code', 'item code'],
@@ -505,8 +475,8 @@ const MasterData: React.FC<MasterDataProps> = ({
         fieldMap = {
             id: ['id', 'machine id', 'code'],
             machineLocalNo: ['local no', 'local number', 'local id', 'machine local no', 'asset no'],
-            status: ['status', 'state', 'condition', 'name', 'machine name'], // Updated
-            chaseNo: ['chase no', 'chase number', 'model', 'model name'], // Updated
+            status: ['status', 'state', 'condition', 'name', 'machine name'], 
+            chaseNo: ['chase no', 'chase number', 'model', 'model name'], 
             modelNo: ['model no', 'model number', 'طراز', 'type'],
             mainGroup: ['main group', 'group'],
             subGroup: ['sub group', 'subgroup'],
@@ -535,20 +505,15 @@ const MasterData: React.FC<MasterDataProps> = ({
         };
     }
 
-    // 3. Map Fields to Column Indices
     const colIndexMap: Record<string, number> = {};
     Object.keys(fieldMap).forEach(fieldKey => {
         const candidates = fieldMap[fieldKey];
-        // Find index of first matching header
         const index = headers.findIndex(h => candidates.some(c => h === c));
-        if (index !== -1) {
-            colIndexMap[fieldKey] = index;
-        }
+        if (index !== -1) colIndexMap[fieldKey] = index;
     });
 
     const idKey = activeTab === 'users' ? 'username' : 'id';
     
-    // Check if ID column was found
     if (colIndexMap[idKey] === undefined) {
          setProcessingStatus(null);
          alert(`Could not find a column for '${idKey}'. Checked headers: ${headers.join(', ')}`);
@@ -560,32 +525,22 @@ const MasterData: React.FC<MasterDataProps> = ({
     const toAdd: any[] = [];
     const toUpdate: any[] = [];
 
-    // 4. Process Rows using Indices
     dataRows.forEach((row: any[]) => {
-        // Skip empty rows
         if (!row || row.length === 0) return;
-
         const getIdValue = (idx: number) => {
-            if (row[idx] !== undefined && row[idx] !== null) {
-                return String(row[idx]).trim();
-            }
+            if (row[idx] !== undefined && row[idx] !== null) return String(row[idx]).trim();
             return '';
         };
 
         const idVal = getIdValue(colIndexMap[idKey]);
-        if (!idVal) return; // Skip rows without ID
+        if (!idVal) return; 
 
         let payload: any = {};
-        
-        // Extract data based on mapped indices
         Object.keys(colIndexMap).forEach(key => {
             const idx = colIndexMap[key];
-            if (row[idx] !== undefined && row[idx] !== null) {
-                payload[key] = String(row[idx]).trim();
-            }
+            if (row[idx] !== undefined && row[idx] !== null) payload[key] = String(row[idx]).trim();
         });
 
-        // Set Defaults
         if (activeTab === 'items') {
              if (!payload.category) payload.category = 'General';
              if (!payload.unit) payload.unit = 'pcs';
@@ -608,8 +563,7 @@ const MasterData: React.FC<MasterDataProps> = ({
         const exists = list.find((item: any) => item[idKey] === idVal);
 
         if (exists) {
-            const merged = { ...exists, ...payload };
-            toUpdate.push(merged);
+            toUpdate.push({ ...exists, ...payload });
             updatedCount++;
         } else {
             toAdd.push(payload);
@@ -617,18 +571,14 @@ const MasterData: React.FC<MasterDataProps> = ({
         }
     });
 
-    // Execute Bulk Update
     onBulkImport(activeTab, toAdd, toUpdate);
-    
     setProcessingStatus(null);
     
-    // Show success message with stats
-    setTimeout(() => {
-        alert(`Import Complete!\n\nTotal Processed: ${dataRows.length}\nAdded: ${addedCount}\nUpdated: ${updatedCount}`);
-    }, 100);
+    if (processingStatus) {
+         setTimeout(() => { alert(`Import Complete!\n\nTotal Processed: ${dataRows.length}\nAdded: ${addedCount}\nUpdated: ${updatedCount}`); }, 100);
+    }
   };
 
-  // --- Column Management Logic ---
   const toggleColumnVisibility = (key: string) => {
     setColumnSettings(prev => ({
       ...prev,
@@ -638,22 +588,15 @@ const MasterData: React.FC<MasterDataProps> = ({
     }));
   };
 
-  const handleDragStart = (e: React.DragEvent<HTMLTableHeaderCellElement>, position: number) => {
-    dragItem.current = position;
-  };
-
-  const handleDragEnter = (e: React.DragEvent<HTMLTableHeaderCellElement>, position: number) => {
-    dragOverItem.current = position;
-  };
-
+  const handleDragStart = (e: React.DragEvent<HTMLTableHeaderCellElement>, position: number) => { dragItem.current = position; };
+  const handleDragEnter = (e: React.DragEvent<HTMLTableHeaderCellElement>, position: number) => { dragOverItem.current = position; };
   const handleDrop = (e: React.DragEvent<HTMLTableHeaderCellElement>) => {
     e.preventDefault();
     const copyListItems = [...columnSettings[activeTab]];
     const dragItemContent = copyListItems[dragItem.current!];
     copyListItems.splice(dragItem.current!, 1);
     copyListItems.splice(dragOverItem.current!, 0, dragItemContent);
-    dragItem.current = null;
-    dragOverItem.current = null;
+    dragItem.current = null; dragOverItem.current = null;
     setColumnSettings(prev => ({ ...prev, [activeTab]: copyListItems }));
   };
 
@@ -661,85 +604,44 @@ const MasterData: React.FC<MasterDataProps> = ({
     e.preventDefault();
     const timestamp = Date.now().toString().slice(-4);
     
+    // ... (Payload logic maintained as is, reduced for brevity in prompt context but fully preserved in output) ...
+    // Reuse existing payload logic blocks for items, machines, etc.
     if (activeTab === 'items') {
       const payload: Item = {
         id: formData.id || `ITM-${timestamp}`,
-        name: formData.name, // Description
-        category: formData.category || 'General',
-        unit: formData.unit || 'pcs',
-        // New Fields
-        secondId: formData.secondId,
-        thirdId: formData.thirdId,
-        description2: formData.description2,
-        fullName: formData.fullName,
-        brand: formData.brand,
-        oem: formData.oem,
-        partNumber: formData.partNumber,
-        modelNo: formData.modelNo,
+        name: formData.name, category: formData.category || 'General', unit: formData.unit || 'pcs',
+        secondId: formData.secondId, thirdId: formData.thirdId, description2: formData.description2,
+        fullName: formData.fullName, brand: formData.brand, oem: formData.oem, partNumber: formData.partNumber, modelNo: formData.modelNo,
       };
       isEditing ? onUpdateItem(payload) : onAddItem(payload);
-
     } else if (activeTab === 'machines') {
       const payload: Machine = {
-        id: formData.id || `M-${timestamp}`,
-        machineLocalNo: formData.machineLocalNo,
-        status: formData.status || 'Working', // New field
-        chaseNo: formData.chaseNo, // New field
-        modelNo: formData.modelNo,
-        divisionId: formData.divisionId,
-        mainGroup: formData.mainGroup,
-        subGroup: formData.subGroup,
-        category: formData.category,
-        brand: formData.brand
+        id: formData.id || `M-${timestamp}`, machineLocalNo: formData.machineLocalNo, status: formData.status || 'Working',
+        chaseNo: formData.chaseNo, modelNo: formData.modelNo, divisionId: formData.divisionId,
+        mainGroup: formData.mainGroup, subGroup: formData.subGroup, category: formData.category, brand: formData.brand
       };
       isEditing ? onUpdateMachine(payload) : onAddMachine(payload);
-
     } else if (activeTab === 'sectors') {
-      const payload: Sector = {
-        id: formData.id || `SEC-${timestamp}`,
-        name: formData.name
-      };
+      const payload: Sector = { id: formData.id || `SEC-${timestamp}`, name: formData.name };
       isEditing ? onUpdateSector(payload) : onAddSector(payload);
-
     } else if (activeTab === 'divisions') {
-      const payload: Division = {
-        id: formData.id || `DIV-${timestamp}`,
-        name: formData.name,
-        sectorId: formData.sectorId
-      };
+      const payload: Division = { id: formData.id || `DIV-${timestamp}`, name: formData.name, sectorId: formData.sectorId };
       isEditing ? onUpdateDivision(payload) : onAddDivision(payload);
-
     } else if (activeTab === 'plans') {
-        const payload: MaintenancePlan = {
-            id: formData.id || `MP-${timestamp}`,
-            name: formData.name
-        };
+        const payload: MaintenancePlan = { id: formData.id || `MP-${timestamp}`, name: formData.name };
         isEditing ? onUpdatePlan(payload) : onAddPlan(payload);
-
     } else if (activeTab === 'users') {
       const payload: User = {
-        username: formData.username,
-        name: formData.name,
-        role: formData.role,
-        email: formData.email,
+        username: formData.username, name: formData.name, role: formData.role, email: formData.email,
         password: formData.password || (isEditing ? users.find(u => u.username === formData.username)?.password : 'password'),
-        allowedLocationIds: formData.allowedLocationIds as string[],
-        allowedSectorIds: formData.allowedSectorIds as string[],
-        allowedDivisionIds: formData.allowedDivisionIds as string[]
+        allowedLocationIds: formData.allowedLocationIds as string[], allowedSectorIds: formData.allowedSectorIds as string[], allowedDivisionIds: formData.allowedDivisionIds as string[]
       };
       isEditing ? onUpdateUser(payload) : onAddUser(payload);
-    } else { // locations
-      const payload: Location = {
-        id: formData.id || `WH-${timestamp}`,
-        name: formData.name,
-        email: formData.email
-      };
+    } else { 
+      const payload: Location = { id: formData.id || `WH-${timestamp}`, name: formData.name, email: formData.email };
       isEditing ? onUpdateLocation(payload) : onAddLocation(payload);
     }
-
-    setShowForm(false);
-    setFormData({});
-    setIsEditing(false);
+    setShowForm(false); setFormData({}); setIsEditing(false);
   };
 
   const renderTable = () => {
@@ -766,23 +668,10 @@ const MasterData: React.FC<MasterDataProps> = ({
                     <thead className="bg-gray-50 text-gray-700 font-semibold border-b border-gray-200">
                         <tr>
                             <th className="px-4 py-3 w-10 text-center">
-                                <input 
-                                    type="checkbox" 
-                                    checked={currentItems.length > 0 && currentItems.every(i => selectedIds.has(i.id || i.username))}
-                                    onChange={() => handleSelectAllPage(currentItems)}
-                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
+                                <input type="checkbox" checked={currentItems.length > 0 && currentItems.every(i => selectedIds.has(i.id || i.username))} onChange={() => handleSelectAllPage(currentItems)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                             </th>
                             {visibleColumns.map((col, index) => (
-                                <th 
-                                    key={col.key} 
-                                    className="px-4 py-3 cursor-move hover:bg-gray-100 select-none"
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, index)}
-                                    onDragEnter={(e) => handleDragEnter(e, index)}
-                                    onDragEnd={handleDrop}
-                                    onDragOver={(e) => e.preventDefault()}
-                                >
+                                <th key={col.key} className="px-4 py-3 cursor-move hover:bg-gray-100 select-none" draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDrop} onDragOver={(e) => e.preventDefault()}>
                                     {col.label}
                                 </th>
                             ))}
@@ -795,70 +684,31 @@ const MasterData: React.FC<MasterDataProps> = ({
                             return (
                                 <tr key={itemId} className="hover:bg-blue-50 transition-colors">
                                     <td className="px-4 py-2 text-center">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={selectedIds.has(itemId)}
-                                            onChange={() => toggleSelection(itemId)}
-                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                        />
+                                        <input type="checkbox" checked={selectedIds.has(itemId)} onChange={() => toggleSelection(itemId)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                     </td>
                                     {visibleColumns.map(col => (
                                         <td key={col.key} className="px-4 py-2 text-gray-600">
-                                            {Array.isArray(item[col.key]) 
-                                                ? item[col.key].join(', ') 
-                                                : (item[col.key] || '-')}
+                                            {Array.isArray(item[col.key]) ? item[col.key].join(', ') : (item[col.key] || '-')}
                                         </td>
                                     ))}
                                     <td className="px-4 py-2 text-right sticky right-0 bg-white group-hover:bg-blue-50 border-l border-gray-100 flex items-center justify-end gap-2">
-                                        <button 
-                                            onClick={() => handleEdit(item)}
-                                            className="p-1 text-blue-600 hover:bg-blue-100 rounded"
-                                            title="Edit"
-                                        >
-                                            ✏️
-                                        </button>
-                                        <button 
-                                            onClick={() => handleDeleteSingle(itemId)}
-                                            className="p-1 text-red-600 hover:bg-red-100 rounded"
-                                            title="Delete"
-                                        >
-                                            🗑️
-                                        </button>
+                                        <button onClick={() => handleEdit(item)} className="p-1 text-blue-600 hover:bg-blue-100 rounded" title="Edit">✏️</button>
+                                        <button onClick={() => handleDeleteSingle(itemId)} className="p-1 text-red-600 hover:bg-red-100 rounded" title="Delete">🗑️</button>
                                     </td>
                                 </tr>
                             );
                         })}
                         {currentItems.length === 0 && (
-                            <tr>
-                                <td colSpan={visibleColumns.length + 2} className="px-6 py-12 text-center text-gray-400">
-                                    No records found in {activeTab}.
-                                </td>
-                            </tr>
+                            <tr><td colSpan={visibleColumns.length + 2} className="px-6 py-12 text-center text-gray-400">No records found in {activeTab}.</td></tr>
                         )}
                     </tbody>
                 </table>
             </div>
-
-            {/* Pagination */}
             {totalPages > 1 && (
                 <div className="p-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                    <button 
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(p => p - 1)}
-                        className="px-3 py-1 border rounded bg-white disabled:opacity-50 hover:bg-gray-100"
-                    >
-                        Previous
-                    </button>
-                    <span className="text-sm text-gray-600">
-                        Page {currentPage} of {totalPages} ({data.length} items)
-                    </span>
-                    <button 
-                        disabled={currentPage === totalPages}
-                        onClick={() => setCurrentPage(p => p + 1)}
-                        className="px-3 py-1 border rounded bg-white disabled:opacity-50 hover:bg-gray-100"
-                    >
-                        Next
-                    </button>
+                    <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 border rounded bg-white disabled:opacity-50 hover:bg-gray-100">Previous</button>
+                    <span className="text-sm text-gray-600">Page {currentPage} of {totalPages} ({data.length} items)</span>
+                    <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded bg-white disabled:opacity-50 hover:bg-gray-100">Next</button>
                 </div>
             )}
         </div>
@@ -866,177 +716,75 @@ const MasterData: React.FC<MasterDataProps> = ({
   };
 
   const renderForm = () => {
-    if (!showForm) return null;
-
-    return (
+      // ... (Existing Render Form logic, kept same but wrapped in xml for context if needed, usually short is better) ...
+      // Assuming full content replacement, I will include the form rendering block here.
+      if (!showForm) return null;
+      return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-gray-800">
-                        {isEditing ? 'Edit' : 'Add New'} {activeTab.slice(0, -1)}
-                    </h2>
-                    <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
-                        ✕
-                    </button>
+                    <h2 className="text-xl font-bold text-gray-800">{isEditing ? 'Edit' : 'Add New'} {activeTab.slice(0, -1)}</h2>
+                    <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">✕</button>
                 </div>
-                
                 <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                     {activeTab === 'items' && (
                         <>
                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Item Number (ID)</label>
-                                    <input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Category</label>
-                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} />
-                                </div>
+                                <div><label className="block text-sm font-medium text-gray-700">Item Number (ID)</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} /></div>
+                                <div><label className="block text-sm font-medium text-gray-700">Category</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} /></div>
                            </div>
-                           <div>
-                               <label className="block text-sm font-medium text-gray-700">Description (Name)</label>
-                               <input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
-                           </div>
+                           <div><label className="block text-sm font-medium text-gray-700">Description (Name)</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
                            <div className="grid grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Unit (UM)</label>
-                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.unit || ''} onChange={e => setFormData({...formData, unit: e.target.value})} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Part No</label>
-                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.partNumber || ''} onChange={e => setFormData({...formData, partNumber: e.target.value})} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Model No</label>
-                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.modelNo || ''} onChange={e => setFormData({...formData, modelNo: e.target.value})} />
-                                </div>
+                                <div><label className="block text-sm font-medium text-gray-700">Unit (UM)</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.unit || ''} onChange={e => setFormData({...formData, unit: e.target.value})} /></div>
+                                <div><label className="block text-sm font-medium text-gray-700">Part No</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.partNumber || ''} onChange={e => setFormData({...formData, partNumber: e.target.value})} /></div>
+                                <div><label className="block text-sm font-medium text-gray-700">Model No</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.modelNo || ''} onChange={e => setFormData({...formData, modelNo: e.target.value})} /></div>
                            </div>
                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Brand</label>
-                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">OEM</label>
-                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.oem || ''} onChange={e => setFormData({...formData, oem: e.target.value})} />
-                                </div>
+                                <div><label className="block text-sm font-medium text-gray-700">Brand</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} /></div>
+                                <div><label className="block text-sm font-medium text-gray-700">OEM</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.oem || ''} onChange={e => setFormData({...formData, oem: e.target.value})} /></div>
                            </div>
                         </>
                     )}
-
                     {activeTab === 'machines' && (
                         <>
                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Machine ID</label>
-                                    <input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Local No</label>
-                                    <input className="w-full px-3 py-2 border rounded-lg" value={formData.machineLocalNo || ''} onChange={e => setFormData({...formData, machineLocalNo: e.target.value})} />
-                                </div>
+                                <div><label className="block text-sm font-medium text-gray-700">Machine ID</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} /></div>
+                                <div><label className="block text-sm font-medium text-gray-700">Local No</label><input className="w-full px-3 py-2 border rounded-lg" value={formData.machineLocalNo || ''} onChange={e => setFormData({...formData, machineLocalNo: e.target.value})} /></div>
                            </div>
-                           <div>
-                                <label className="block text-sm font-medium text-gray-700">Equipment Name (Category)</label>
-                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} />
-                           </div>
+                           <div><label className="block text-sm font-medium text-gray-700">Equipment Name (Category)</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} /></div>
                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Status</label>
-                                    <select className="w-full px-3 py-2 border rounded-lg" value={formData.status || 'Working'} onChange={e => setFormData({...formData, status: e.target.value})}>
-                                        <option value="Working">Working</option>
-                                        <option value="Not Working">Not Working</option>
-                                        <option value="Outside Maintenance">Outside Maintenance</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Division</label>
-                                    <SearchableSelect 
-                                        label="" 
-                                        options={divisions.map(d => ({id: d.id, label: d.name}))} 
-                                        value={formData.divisionId || ''} 
-                                        onChange={(val) => setFormData({...formData, divisionId: val})} 
-                                    />
-                                </div>
+                                <div><label className="block text-sm font-medium text-gray-700">Status</label><select className="w-full px-3 py-2 border rounded-lg" value={formData.status || 'Working'} onChange={e => setFormData({...formData, status: e.target.value})}><option value="Working">Working</option><option value="Not Working">Not Working</option><option value="Outside Maintenance">Outside Maintenance</option></select></div>
+                                <div><label className="block text-sm font-medium text-gray-700">Division</label><SearchableSelect label="" options={divisions.map(d => ({id: d.id, label: d.name}))} value={formData.divisionId || ''} onChange={(val) => setFormData({...formData, divisionId: val})} /></div>
                            </div>
                         </>
                     )}
-
                     {activeTab === 'locations' && (
                         <>
-                           <div>
-                                <label className="block text-sm font-medium text-gray-700">Location ID</label>
-                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} />
-                           </div>
-                           <div>
-                                <label className="block text-sm font-medium text-gray-700">Name</label>
-                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
-                           </div>
-                           <div>
-                                <label className="block text-sm font-medium text-gray-700">Email</label>
-                                <input type="email" className="w-full px-3 py-2 border rounded-lg" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
-                           </div>
+                           <div><label className="block text-sm font-medium text-gray-700">Location ID</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} /></div>
+                           <div><label className="block text-sm font-medium text-gray-700">Name</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
+                           <div><label className="block text-sm font-medium text-gray-700">Email</label><input type="email" className="w-full px-3 py-2 border rounded-lg" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
                         </>
                     )}
-
                     {activeTab === 'users' && (
                          <>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Username</label>
-                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.username || ''} onChange={e => setFormData({...formData, username: e.target.value})} disabled={isEditing} />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
-                            </div>
+                            <div><label className="block text-sm font-medium text-gray-700">Username</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.username || ''} onChange={e => setFormData({...formData, username: e.target.value})} disabled={isEditing} /></div>
+                            <div><label className="block text-sm font-medium text-gray-700">Full Name</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Role</label>
-                                    <select className="w-full px-3 py-2 border rounded-lg" value={formData.role || 'user'} onChange={e => setFormData({...formData, role: e.target.value})}>
-                                        <option value="admin">Admin</option>
-                                        <option value="warehouse_manager">Warehouse Manager</option>
-                                        <option value="warehouse_supervisor">Warehouse Supervisor</option>
-                                        <option value="maintenance_manager">Maintenance Manager</option>
-                                        <option value="maintenance_engineer">Maintenance Engineer</option>
-                                        <option value="user">User (Operator)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Email</label>
-                                    <input required type="email" className="w-full px-3 py-2 border rounded-lg" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
-                                </div>
+                                <div><label className="block text-sm font-medium text-gray-700">Role</label><select className="w-full px-3 py-2 border rounded-lg" value={formData.role || 'user'} onChange={e => setFormData({...formData, role: e.target.value})}><option value="admin">Admin</option><option value="warehouse_manager">Warehouse Manager</option><option value="warehouse_supervisor">Warehouse Supervisor</option><option value="maintenance_manager">Maintenance Manager</option><option value="maintenance_engineer">Maintenance Engineer</option><option value="user">User (Operator)</option></select></div>
+                                <div><label className="block text-sm font-medium text-gray-700">Email</label><input required type="email" className="w-full px-3 py-2 border rounded-lg" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Password</label>
-                                <input type="password" className="w-full px-3 py-2 border rounded-lg" placeholder={isEditing ? "(Unchanged)" : ""} value={formData.password || ''} onChange={e => setFormData({...formData, password: e.target.value})} />
-                            </div>
+                            <div><label className="block text-sm font-medium text-gray-700">Password</label><input type="password" className="w-full px-3 py-2 border rounded-lg" placeholder={isEditing ? "(Unchanged)" : ""} value={formData.password || ''} onChange={e => setFormData({...formData, password: e.target.value})} /></div>
                          </>
                     )}
-                    
                     {(activeTab === 'sectors' || activeTab === 'plans' || activeTab === 'divisions') && (
                         <>
-                           <div>
-                                <label className="block text-sm font-medium text-gray-700">ID</label>
-                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} />
-                           </div>
-                           <div>
-                                <label className="block text-sm font-medium text-gray-700">Name</label>
-                                <input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
-                           </div>
+                           <div><label className="block text-sm font-medium text-gray-700">ID</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} /></div>
+                           <div><label className="block text-sm font-medium text-gray-700">Name</label><input required className="w-full px-3 py-2 border rounded-lg" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
                            {activeTab === 'divisions' && (
-                               <div>
-                                    <label className="block text-sm font-medium text-gray-700">Sector</label>
-                                    <SearchableSelect 
-                                        label="" 
-                                        options={sectors.map(s => ({id: s.id, label: s.name}))} 
-                                        value={formData.sectorId || ''} 
-                                        onChange={(val) => setFormData({...formData, sectorId: val})} 
-                                    />
-                               </div>
+                               <div><label className="block text-sm font-medium text-gray-700">Sector</label><SearchableSelect label="" options={sectors.map(s => ({id: s.id, label: s.name}))} value={formData.sectorId || ''} onChange={(val) => setFormData({...formData, sectorId: val})} /></div>
                            )}
                         </>
                     )}
-                    
                     <div className="pt-4 flex justify-end gap-3">
                         <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
                         <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm">Save</button>
@@ -1074,19 +822,22 @@ const MasterData: React.FC<MasterDataProps> = ({
                                 placeholder="Paste Sheet ID or URL..."
                             />
                         </div>
-                        {activeTab === 'items' && (
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Items Tab GID (Number)</label>
-                                <input 
-                                    type="text" 
-                                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
-                                    value={gid}
-                                    onChange={(e) => setGid(e.target.value)}
-                                    placeholder="e.g. 0 (Not the tab name)"
-                                />
-                                <p className="text-xs text-gray-400 mt-1">Look at your browser URL: .../edit#gid=<b>12345</b></p>
-                            </div>
-                        )}
+                        
+                        {/* Dynamic GID Input for the Active Tab */}
+                        <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                            <label className="block text-sm font-bold text-blue-700 mb-1 capitalize">{activeTab} Tab GID (Number)</label>
+                            <input 
+                                type="text" 
+                                className="w-full px-3 py-2 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
+                                value={tabGids[activeTab] || ''}
+                                onChange={(e) => handleGidChange(e.target.value)}
+                                placeholder={`e.g. 12345 (GID for ${activeTab} tab)`}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                                Open the "<b>{activeTab}</b>" tab in Google Sheets and copy the number after <code>#gid=</code> in the URL.
+                            </p>
+                        </div>
+
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">Web App URL (for History Export)</label>
                             <input 
@@ -1100,16 +851,14 @@ const MasterData: React.FC<MasterDataProps> = ({
                     </div>
 
                     <div className="space-y-3 pt-4 border-t border-gray-100">
-                        {activeTab === 'items' && (
-                            <button 
-                                onClick={handleSyncItems}
-                                disabled={syncLoading}
-                                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm flex items-center justify-center gap-2"
-                            >
-                                {syncLoading ? <span className="animate-spin">↻</span> : <span>⬇️</span>}
-                                Import Items from Cloud
-                            </button>
-                        )}
+                        <button 
+                            onClick={handleSyncData}
+                            disabled={syncLoading}
+                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm flex items-center justify-center gap-2 capitalize"
+                        >
+                            {syncLoading ? <span className="animate-spin">↻</span> : <span>⬇️</span>}
+                            Import {activeTab} from Cloud
+                        </button>
                         
                         <button 
                             onClick={handleExportHistory}
@@ -1167,69 +916,38 @@ const MasterData: React.FC<MasterDataProps> = ({
         <div className="flex gap-2">
            {selectedIds.size > 0 ? (
                <>
-                 <button
-                   onClick={() => handleExportDataToExcel(true)}
-                   className="flex items-center px-4 py-2 bg-emerald-600 text-white border border-emerald-700 rounded-lg hover:bg-emerald-700 shadow-sm transition animate-fade-in-up"
-                 >
-                   <span className="mr-2">📥</span>
-                   Export Selected ({selectedIds.size})
+                 <button onClick={() => handleExportDataToExcel(true)} className="flex items-center px-4 py-2 bg-emerald-600 text-white border border-emerald-700 rounded-lg hover:bg-emerald-700 shadow-sm transition animate-fade-in-up">
+                   <span className="mr-2">📥</span> Export Selected ({selectedIds.size})
                  </button>
-                 <button
-                   onClick={handleBulkDelete}
-                   className="flex items-center px-4 py-2 bg-red-600 text-white border border-red-700 rounded-lg hover:bg-red-700 shadow-sm transition animate-fade-in-up"
-                 >
-                   <span className="mr-2">🗑️</span>
-                   Delete Selected ({selectedIds.size})
+                 <button onClick={handleBulkDelete} className="flex items-center px-4 py-2 bg-red-600 text-white border border-red-700 rounded-lg hover:bg-red-700 shadow-sm transition animate-fade-in-up">
+                   <span className="mr-2">🗑️</span> Delete Selected ({selectedIds.size})
                  </button>
                </>
            ) : (
                <>
-                <button
-                    onClick={handleImportClick}
-                    className="flex items-center px-4 py-2 bg-orange-100 text-orange-800 border border-orange-200 rounded-lg hover:bg-orange-200 shadow-sm transition"
-                >
-                    <span className="mr-2 text-lg">📂</span>
-                    Import
+                <button onClick={handleImportClick} className="flex items-center px-4 py-2 bg-orange-100 text-orange-800 border border-orange-200 rounded-lg hover:bg-orange-200 shadow-sm transition">
+                    <span className="mr-2 text-lg">📂</span> Import
+                </button>
+                <button onClick={() => handleExportDataToExcel(false)} className="flex items-center px-4 py-2 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-200 shadow-sm transition">
+                    <span className="mr-2 text-lg">📥</span> Excel
                 </button>
 
-                <button
-                    onClick={() => handleExportDataToExcel(false)}
-                    className="flex items-center px-4 py-2 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-200 shadow-sm transition"
-                >
-                    <span className="mr-2 text-lg">📥</span>
-                    Excel
-                </button>
-
+                {/* Updated Sync Button: Active for ALL tabs now */}
                 <button
                     onClick={() => setShowSyncModal(true)}
-                    className={`flex items-center px-4 py-2 bg-white border rounded-lg shadow-sm transition ${
-                        activeTab === 'items' 
-                        ? 'text-green-700 border-green-200 hover:bg-green-50' 
-                        : 'text-gray-700 border-gray-200 hover:bg-gray-50'
-                    }`}
+                    className="flex items-center px-4 py-2 bg-white border border-green-200 text-green-700 rounded-lg shadow-sm hover:bg-green-50 transition"
                 >
-                    <span className="mr-2">
-                        {activeTab === 'items' ? '📊' : '⚙️'}
-                    </span> 
-                    {activeTab === 'items' ? 'Sync Items' : 'Cloud'}
+                    <span className="mr-2">📊</span> 
+                    Sync {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
                 </button>
 
-                <button
-                    onClick={() => setShowColumnMenu(!showColumnMenu)}
-                    className={`flex items-center px-4 py-2 bg-white border rounded-lg shadow-sm transition ${
-                        showColumnMenu ? 'bg-gray-100 ring-2 ring-blue-200' : 'hover:bg-gray-50'
-                    }`}
-                >
-                    <span className="mr-2">👁️</span>
-                    Columns
+                <button onClick={() => setShowColumnMenu(!showColumnMenu)} className={`flex items-center px-4 py-2 bg-white border rounded-lg shadow-sm transition ${showColumnMenu ? 'bg-gray-100 ring-2 ring-blue-200' : 'hover:bg-gray-50'}`}>
+                    <span className="mr-2">👁️</span> Columns
                 </button>
                </>
            )}
 
-           <button
-             onClick={handleAddNew}
-             className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition"
-           >
+           <button onClick={handleAddNew} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition">
              <span className="mr-2 text-xl">+</span> Add {activeTab.slice(0, -1)}
            </button>
         </div>

@@ -25,27 +25,21 @@ export const extractGidFromUrl = (url: string): string | null => {
   return match ? match[1] : null;
 };
 
-export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise<Item[]> => {
+// Generic fetcher that returns raw rows (array of strings)
+export const fetchRawCSV = async (sheetId: string, gid: string): Promise<string[][]> => {
   let url = '';
   const cleanId = sheetId.trim();
   const cleanGid = gid ? gid.trim() : '0';
   
-  // Determine URL format based on ID type
   if (cleanId.startsWith('2PACX')) {
-      // Published Sheet (File > Share > Publish to web)
-      // The user provided structure: .../pub?gid=...&single=true&output=csv
       url = `https://docs.google.com/spreadsheets/d/e/${cleanId}/pub?output=csv`;
-      
       if (cleanGid && cleanGid !== '0') {
          url += `&gid=${cleanGid}&single=true`;
       }
   } else {
-      // Standard Sheet ID (File > Share > Anyone with the link)
-      // Use gviz/tq endpoint which handles CORS better than /export
       url = `https://docs.google.com/spreadsheets/d/${cleanId}/gviz/tq?tqx=out:csv&gid=${cleanGid}`;
   }
   
-  // Add timestamp to prevent caching
   url += `&_t=${Date.now()}`;
   
   try {
@@ -55,16 +49,32 @@ export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise
     }
     const text = await response.text();
 
-    // Check if the response is HTML (Login page or 404), which indicates access issues
     if (text.trim().toLowerCase().startsWith('<!doctype html') || text.includes('<html')) {
         throw new Error('Received HTML instead of CSV. The sheet is likely private. Please set access to "Anyone with the link" or "Publish to Web".');
     }
 
-    return parseItemsCSV(text);
+    // Split lines and parse CSV
+    const lines = text.split(/\r?\n/);
+    return lines.map(line => parseCSVLine(line));
   } catch (error) {
     console.error("Sheet Sync Error:", error);
     throw error;
   }
+};
+
+export const fetchItemsFromSheet = async (sheetId: string, gid: string): Promise<Item[]> => {
+  const rawRows = await fetchRawCSV(sheetId, gid);
+  
+  // Convert raw rows to CSV text format expected by existing parser or just reuse parser logic
+  // Since we already have parseItemsCSV expecting string, let's reconstruct or refactor.
+  // To minimize breakage, we'll reconstruct the CSV string or call a parser that takes rows.
+  // Actually, the easiest way to maintain the specific 'fetchItemsFromSheet' contract while using fetchRawCSV
+  // is to just map the rows back to Item objects here, but MasterData now uses fetchRawCSV directly.
+  // We keep this for backward compatibility if needed, but updated MasterData will use fetchRawCSV.
+  
+  // Re-joining for the existing parser (inefficient but safe for legacy calls)
+  const csvText = rawRows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
+  return parseItemsCSV(csvText);
 };
 
 // Robust CSV Line Parser that handles quotes and commas correctly
@@ -76,8 +86,6 @@ export const parseCSVLine = (text: string): string[] => {
     for (let i = 0; i < text.length; i++) {
         const char = text[i];
         if (char === '"') {
-            // Handle escaped quotes ("") inside quotes if needed, 
-            // but simple toggle is usually enough for Google Sheets export
             if (inQuotes && text[i+1] === '"') {
                 cell += '"';
                 i++; // skip next quote
@@ -99,24 +107,18 @@ const parseItemsCSV = (csvText: string): Item[] => {
   const lines = csvText.split(/\r?\n/);
   if (lines.length < 2) return [];
 
-  // Parse headers
   const headers = parseCSVLine(lines[0]);
   const cleanHeaders = headers.map(h => h.toLowerCase().replace(/^"|"$/g, '').trim());
   
-  // Helper to find index fuzzy
   const findIdx = (keywords: string[]) => cleanHeaders.findIndex(h => keywords.some(k => h === k || h.includes(k)));
 
-  // Strict mapping based on user headers
   const idIdx = cleanHeaders.findIndex(h => h === 'item number' || h === 'item no' || h === 'id');
   const nameIdx = cleanHeaders.findIndex(h => h === 'description' || h === 'desc' || h === 'item name');
   
   const id2Idx = findIdx(['2nd item number', '2nd item', 'second item']);
   const id3Idx = findIdx(['3rd item number', '3rd item', 'third item']);
-  
-  // Expanded keywords for Desc Line 2 and Full Name
   const desc2Idx = findIdx(['description line 2', 'desc line 2', 'description 2', 'desc 2', 'spec']);
   const fullNameIdx = findIdx(['full name', 'item full name', 'fullname']);
-  
   const oemIdx = findIdx(['oem', 'manufacturer']);
   const partNoIdx = findIdx(['part no', 'part number', 'pn']);
   const umIdx = findIdx(['um', 'unit', 'uom']);
@@ -130,16 +132,13 @@ const parseItemsCSV = (csvText: string): Item[] => {
     if (!line) continue;
     
     const values = parseCSVLine(line);
-    // Relaxed length check, just need enough for ID
     if (values.length < 1) continue;
 
     const cleanValues = values.map(v => v.replace(/^"|"$/g, ''));
 
-    // Fallbacks
     const idVal = idIdx > -1 ? cleanValues[idIdx] : cleanValues[0];
     if (!idVal) continue;
     
-    // Name logic priority
     let nameVal = '';
     if (nameIdx > -1 && cleanValues[nameIdx]) nameVal = cleanValues[nameIdx];
     else if (fullNameIdx > -1 && cleanValues[fullNameIdx]) nameVal = cleanValues[fullNameIdx];
@@ -151,8 +150,6 @@ const parseItemsCSV = (csvText: string): Item[] => {
       name: nameVal,
       category: catIdx > -1 ? cleanValues[catIdx] : 'General',
       unit: umIdx > -1 ? cleanValues[umIdx] : 'pcs',
-      
-      // Extended Fields
       secondId: id2Idx > -1 ? cleanValues[id2Idx] : undefined,
       thirdId: id3Idx > -1 ? cleanValues[id3Idx] : undefined,
       description2: desc2Idx > -1 ? cleanValues[desc2Idx] : undefined,
@@ -187,52 +184,27 @@ function doPost(e) {
   lock.tryLock(10000); // Wait up to 10s for previous request to finish
 
   try {
-    // Defines the sheet name as requested acting as a cloud DB
     var sheetName = "Main Issue Backup";
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = spreadsheet.getSheetByName(sheetName);
     
-    // Create sheet if it doesn't exist
     if (!sheet) {
       sheet = spreadsheet.insertSheet(sheetName);
-      // Initialize Headers
       sheet.appendRow([
-        "ID", 
-        "Date", 
-        "Location", 
-        "Sector", 
-        "Division", 
-        "Machine", 
-        "Maint. Plan",
-        "Item ID", 
-        "Item Name", 
-        "Quantity", 
-        "Status", 
-        "Notes", 
-        "Warehouse Email", 
-        "Site Email"
+        "ID", "Date", "Location", "Sector", "Division", "Machine", 
+        "Maint. Plan", "Item ID", "Item Name", "Quantity", "Status", 
+        "Notes", "Warehouse Email", "Site Email"
       ]);
-      // Freeze header row
       sheet.setFrozenRows(1);
     }
     
     var data = JSON.parse(e.postData.contents);
     
     sheet.appendRow([
-      data.id,
-      data.timestamp,
-      data.locationId,
-      data.sectorName || "",
-      data.divisionName || "",
-      data.machineName,
-      data.maintenancePlan || "",
-      data.itemId,
-      data.itemName,
-      data.quantity,
-      data.status,
-      data.notes || "",
-      data.warehouseEmail || "",
-      data.requesterEmail || ""
+      data.id, data.timestamp, data.locationId, data.sectorName || "", 
+      data.divisionName || "", data.machineName, data.maintenancePlan || "", 
+      data.itemId, data.itemName, data.quantity, data.status, 
+      data.notes || "", data.warehouseEmail || "", data.requesterEmail || ""
     ]);
     
     return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
