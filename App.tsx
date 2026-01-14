@@ -241,6 +241,7 @@ const App: React.FC = () => {
         case 'divisions': updateIdBasedState(setDivisions); break;
         case 'plans': updateIdBasedState(setPlans); break;
         case 'history': updateIdBasedState(setHistory); break; // Added History Import Support
+        case 'breakdowns': updateIdBasedState(setBreakdowns); break; // Added Breakdowns
         case 'users': 
             setUsersList(prev => {
                 const updateMap = new Map(updated.map((u: any) => [u.username, u]));
@@ -296,6 +297,7 @@ const App: React.FC = () => {
             onDeleteMachines={handleDeleteMachines}
             onAddBreakdown={handleAddBreakdown}
             onUpdateBreakdown={handleUpdateBreakdown}
+            onBulkImport={handleBulkImport}
           />
         );
       case 'issue-form':

@@ -1,8 +1,9 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Machine, BreakdownRecord, Location, Sector, Division } from '../types';
 import SearchableSelect from './SearchableSelect';
 import * as XLSX from 'xlsx';
+import { backupTabToSheet, DEFAULT_SCRIPT_URL } from '../services/googleSheetsService';
 
 interface AssetManagementProps {
   machines: Machine[];
@@ -15,13 +16,14 @@ interface AssetManagementProps {
   onDeleteMachines: (ids: string[]) => void;
   onAddBreakdown: (bd: BreakdownRecord) => void;
   onUpdateBreakdown: (bd: BreakdownRecord) => void;
+  onBulkImport: (tab: string, added: any[], updated: any[]) => void;
 }
 
 type TabType = 'assets' | 'breakdowns';
 
 const AssetManagement: React.FC<AssetManagementProps> = ({ 
   machines, locations, sectors, divisions, breakdowns,
-  onAddMachine, onUpdateMachine, onDeleteMachines, onAddBreakdown, onUpdateBreakdown 
+  onAddMachine, onUpdateMachine, onDeleteMachines, onAddBreakdown, onUpdateBreakdown, onBulkImport
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('assets');
   
@@ -38,9 +40,191 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   
   // --- COMMON ---
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // --- IMPORT/EXPORT/BACKUP STATE ---
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
+  const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
 
   // ---------------------------
-  // 1. ASSET LOGIC (Machines)
+  // 1. DATA MGMT LOGIC
+  // ---------------------------
+
+  const handleExport = () => {
+      let data: any[] = [];
+      let sheetName = "";
+      
+      if (activeTab === 'assets') {
+          data = machines;
+          sheetName = "Machines";
+      } else {
+          data = breakdowns;
+          sheetName = "Breakdowns";
+      }
+
+      if (data.length === 0) {
+          alert("No data to export.");
+          return;
+      }
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      XLSX.writeFile(wb, `WareFlow_${sheetName}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
+  const handleImportClick = () => {
+      fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          const data = e.target?.result;
+          try {
+              const workbook = XLSX.read(data, { type: 'array' });
+              const firstSheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[firstSheetName];
+              const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+              processImportData(jsonData);
+          } catch (error) {
+              console.error("Error parsing file:", error);
+              alert("Error parsing file. Please check format.");
+          }
+      };
+      reader.readAsArrayBuffer(file);
+      event.target.value = '';
+  };
+
+  const processImportData = (rows: any[][]) => {
+      if (!rows || rows.length < 2) return;
+
+      const headers = rows[0].map(h => String(h).trim().toLowerCase());
+      const dataRows = rows.slice(1);
+      
+      // Determine tab based on headers or active tab
+      // If we are in 'assets', we expect machine columns
+      // If 'breakdowns', breakdown columns
+      // For simplicity, we stick to activeTab
+      
+      let fieldMap: Record<string, string[]> = {};
+      
+      if (activeTab === 'assets') {
+          fieldMap = {
+              id: ['id', 'machine id', 'code'],
+              category: ['machine name', 'category', 'equipment name', 'name'],
+              brand: ['brand', 'make'],
+              modelNo: ['model no', 'model'],
+              chaseNo: ['chase no', 'serial no', 'chase'],
+              status: ['status'],
+              divisionId: ['division', 'division id']
+          };
+      } else {
+          fieldMap = {
+              id: ['id', 'ticket id'],
+              machineId: ['machine id', 'asset id'],
+              startTime: ['start time', 'date', 'start'],
+              endTime: ['end time', 'end'],
+              failureType: ['failure type', 'type'],
+              operatorName: ['operator', 'driver'],
+              status: ['status'],
+              locationId: ['location', 'location id'],
+              rootCause: ['root cause', 'cause'],
+              actionTaken: ['action taken', 'action']
+          };
+      }
+
+      const colIndexMap: Record<string, number> = {};
+      Object.keys(fieldMap).forEach(key => {
+          const possibleHeaders = fieldMap[key];
+          const idx = headers.findIndex(h => possibleHeaders.includes(h));
+          if (idx !== -1) colIndexMap[key] = idx;
+      });
+
+      if (colIndexMap['id'] === undefined && activeTab === 'assets') {
+          alert("Could not find 'ID' column in uploaded file.");
+          return;
+      }
+
+      const toAdd: any[] = [];
+      const toUpdate: any[] = [];
+      const currentData = activeTab === 'assets' ? machines : breakdowns;
+
+      dataRows.forEach(row => {
+          if (!row || row.length === 0) return;
+          
+          let payload: any = {};
+          Object.keys(colIndexMap).forEach(key => {
+              const val = row[colIndexMap[key]];
+              if (val !== undefined && val !== null) payload[key] = String(val).trim();
+          });
+
+          // Validation / Defaults
+          if (activeTab === 'assets') {
+              if (!payload.id) return;
+              if (!payload.status) payload.status = 'Working';
+          } else {
+              if (!payload.id) payload.id = `BD-${Date.now()}-${Math.random().toString(36).substr(2,5)}`;
+              if (!payload.status) payload.status = 'Open';
+              if (!payload.startTime) payload.startTime = new Date().toISOString();
+          }
+
+          // @ts-ignore
+          const exists = currentData.find(d => d.id === payload.id);
+          
+          if (exists) {
+              toUpdate.push({ ...exists, ...payload });
+          } else {
+              toAdd.push(payload);
+          }
+      });
+
+      onBulkImport(activeTab === 'assets' ? 'machines' : 'breakdowns', toAdd, toUpdate);
+      alert(`Import Successful!\nAdded: ${toAdd.length}\nUpdated: ${toUpdate.length}`);
+  };
+
+  const handleBackup = async () => {
+      if (!scriptUrl) {
+          alert("Please configure the Web App URL in Master Data settings first.");
+          return;
+      }
+      if (!confirm("Backup Machines and Breakdowns to Google Sheet? This will overwrite the specific tabs in your sheet.")) return;
+
+      setSyncLoading(true);
+      setSyncMsg("Backing up...");
+
+      try {
+          // Backup Machines
+          const machineHeaders = ["ID", "Name", "Brand", "Model", "Chase No", "Status", "Division"];
+          const machineRows = machines.map(m => [m.id, m.category, m.brand, m.modelNo, m.chaseNo, m.status, m.divisionId]);
+          await backupTabToSheet(scriptUrl, 'machines', [machineHeaders, ...machineRows]);
+          
+          // Backup Breakdowns
+          const bdHeaders = ["ID", "Machine ID", "Machine Name", "Location", "Start", "End", "Status", "Failure", "Operator", "Cause", "Action"];
+          const bdRows = breakdowns.map(b => [
+              b.id, b.machineId, b.machineName, b.locationId, 
+              b.startTime, b.endTime || '', b.status, b.failureType, b.operatorName,
+              b.rootCause || '', b.actionTaken || ''
+          ]);
+          await backupTabToSheet(scriptUrl, 'breakdowns', [bdHeaders, ...bdRows]);
+
+          setSyncMsg("✅ Backup Complete!");
+          setTimeout(() => setSyncMsg(""), 3000);
+      } catch (e) {
+          console.error(e);
+          setSyncMsg("❌ Backup Failed");
+          alert("Backup failed. Check console for details.");
+      } finally {
+          setSyncLoading(false);
+      }
+  };
+
+  // ---------------------------
+  // 2. ASSET LOGIC (Machines)
   // ---------------------------
   
   const handleAssetFormSubmit = (e: React.FormEvent) => {
@@ -81,7 +265,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   };
 
   // ---------------------------
-  // 2. BREAKDOWN LOGIC
+  // 3. BREAKDOWN LOGIC
   // ---------------------------
 
   const getMachineStatus = (machineId: string) => {
@@ -162,17 +346,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       setShowCloseForm(false);
   };
 
-  const exportBreakdowns = () => {
-      const ws = XLSX.utils.json_to_sheet(breakdowns.map(b => ({
-          ...b,
-          startTime: new Date(b.startTime).toLocaleString(),
-          endTime: b.endTime ? new Date(b.endTime).toLocaleString() : ''
-      })));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Breakdowns");
-      XLSX.writeFile(wb, "Breakdown_Report.xlsx");
-  };
-
   // --- RENDER HELPERS ---
 
   const filteredMachines = machines.filter(m => 
@@ -186,20 +359,13 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       b.id.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
-  // Filter machines for dropdown in Breakdown Form (Only show machines in selected location if possible, or all)
-  const availableMachines = useMemo(() => {
-      // Logic: User selects Location first? Or just selects machine?
-      // Requirement: "field for Location and asector and Brand and Model No"
-      // If user selects machine, we can auto-fill others.
-      // Let's allow selecting machine, then show details.
-      return machines;
-  }, [machines]);
-
   return (
     <div className="flex flex-col h-full space-y-4 animate-fade-in-up">
-      {/* Top Tabs */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex bg-gray-100 p-1 rounded-lg">
+      {/* Top Header & Controls */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+          
+          {/* Tabs */}
+          <div className="flex bg-gray-100 p-1 rounded-lg shrink-0">
                 <button 
                     onClick={() => setActiveTab('assets')}
                     className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'assets' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
@@ -214,17 +380,40 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                 </button>
           </div>
           
-          <div className="relative w-full md:w-64">
-                <input 
-                    type="text" 
-                    placeholder="Search..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
-                <span className="absolute left-3 top-2.5 text-gray-400">🔍</span>
+          {/* Global Actions Toolbar */}
+          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.csv" onChange={handleFileChange} />
+                
+                <button onClick={handleBackup} disabled={syncLoading} className="flex-1 xl:flex-none px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 border border-indigo-200 flex items-center justify-center gap-1 whitespace-nowrap">
+                     {syncLoading ? <span className="animate-spin">↻</span> : <span>☁️</span>} Backup All
+                </button>
+                <button onClick={handleExport} className="flex-1 xl:flex-none px-3 py-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1 whitespace-nowrap">
+                     <span>📊</span> Export
+                </button>
+                <button onClick={handleImportClick} className="flex-1 xl:flex-none px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 border border-orange-200 flex items-center justify-center gap-1 whitespace-nowrap">
+                     <span>📂</span> Import
+                </button>
+
+                <div className="relative flex-1 xl:w-64 min-w-[200px]">
+                    <input 
+                        type="text" 
+                        placeholder="Search..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                    />
+                    <span className="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
+                </div>
           </div>
       </div>
+      
+      {/* Sync Status Message */}
+      {syncMsg && (
+        <div className={`text-xs px-4 py-2 rounded-lg border flex items-center gap-2 ${syncMsg.includes('Failed') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+            <span className="text-lg">{syncMsg.includes('Failed') ? '⚠️' : 'ℹ️'}</span>
+            {syncMsg}
+        </div>
+      )}
 
       {/* CONTENT AREA */}
       <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
@@ -232,18 +421,18 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           {/* --- TAB 1: ASSETS --- */}
           {activeTab === 'assets' && (
               <>
-                <div className="p-4 border-b border-gray-100 flex justify-between bg-gray-50">
+                <div className="p-4 border-b border-gray-100 flex justify-between bg-gray-50 items-center">
                     <h3 className="font-bold text-gray-700">Machine List</h3>
                     <div className="flex gap-2">
-                        <button onClick={() => openAssetForm()} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-bold">+ New Asset</button>
                         {selectedAssetIds.size > 0 && (
-                            <button onClick={handleDeleteAssets} className="px-4 py-2 bg-red-100 text-red-600 rounded hover:bg-red-200 text-sm font-bold">Delete Selected</button>
+                            <button onClick={handleDeleteAssets} className="px-3 py-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 text-xs font-bold transition">Delete ({selectedAssetIds.size})</button>
                         )}
+                        <button onClick={() => openAssetForm()} className="px-4 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-bold transition shadow-sm">+ New Asset</button>
                     </div>
                 </div>
                 <div className="flex-1 overflow-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-gray-100 text-gray-700 sticky top-0">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-gray-100 text-gray-700 sticky top-0 border-b border-gray-200">
                             <tr>
                                 <th className="p-4 w-10"><input type="checkbox" /></th>
                                 <th className="p-4">ID</th>
@@ -295,20 +484,17 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           {/* --- TAB 2: BREAKDOWNS --- */}
           {activeTab === 'breakdowns' && (
               <>
-                <div className="p-4 border-b border-gray-100 flex justify-between bg-gray-50">
+                <div className="p-4 border-b border-gray-100 flex justify-between bg-gray-50 items-center">
                     <h3 className="font-bold text-gray-700">Breakdown History</h3>
                     <div className="flex gap-2">
-                        <button onClick={handleOpenBreakdownForm} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-bold flex items-center gap-2">
+                        <button onClick={handleOpenBreakdownForm} className="px-4 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-bold flex items-center gap-2 shadow-sm transition">
                             <span>⚠️</span> Report Breakdown
-                        </button>
-                        <button onClick={exportBreakdowns} className="px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 text-sm font-bold">
-                            Export Excel
                         </button>
                     </div>
                 </div>
                 <div className="flex-1 overflow-auto">
                     <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-100 text-gray-700 sticky top-0 z-10">
+                        <thead className="bg-gray-100 text-gray-700 sticky top-0 z-10 border-b border-gray-200">
                             <tr>
                                 <th className="p-4">Status</th>
                                 <th className="p-4">ID</th>
