@@ -11,52 +11,53 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+// Arabic Navigation Items matching the requested photo style
 const DEFAULT_NAV_ITEMS = [
     { 
       id: 'dashboard', 
-      label: 'Home Page', 
+      label: 'الصفحة الرئيسية', // Home Page
       icon: '🏠', 
       roles: ['admin', 'user', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer', 'warehouse_supervisor'] 
     },
     { 
       id: 'agri-work-order', 
-      label: 'Work Orders', 
+      label: 'اوامر الشغل', // Work Orders
       icon: '🚜', 
       roles: ['admin', 'warehouse_manager', 'maintenance_manager', 'user'] 
     },
     { 
       id: 'issue-form', 
-      label: 'Issue Requests', 
+      label: 'طلبات الصرف', // Issue Requests
       icon: '🛠️', 
       roles: ['admin', 'user', 'maintenance_manager', 'maintenance_engineer'] 
     },
     { 
       id: 'history', 
-      label: 'Inventory', 
+      label: 'جرد المعدات', // Equipment Inventory
       icon: '📋', 
       roles: ['admin', 'user', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer', 'warehouse_supervisor'] 
     },
     { 
       id: 'stock-approval', 
-      label: 'Approvals', 
+      label: 'مراجعة اوامر الشغل', // Review Work Orders (Approvals)
       icon: '✅', 
       roles: ['admin', 'warehouse_manager', 'warehouse_supervisor'] 
     },
     { 
-      id: 'master-data', 
-      label: 'Master Data', 
-      icon: '🗄️', 
-      roles: ['admin'] 
-    },
-    { 
       id: 'ai-assistant', 
-      label: 'AI Insights', 
+      label: 'متابعة الصيانة', // Maintenance Follow-up (AI)
       icon: '✨', 
       roles: ['admin', 'warehouse_manager', 'maintenance_manager'] 
     },
     { 
+      id: 'master-data', 
+      label: 'البيانات الأساسية', // Master Data
+      icon: '🗄️', 
+      roles: ['admin'] 
+    },
+    { 
       id: 'settings', 
-      label: 'Settings', 
+      label: 'الزيادات', // Increases/More (Settings)
       icon: '⚙️', 
       roles: ['admin', 'warehouse_manager', 'maintenance_manager', 'warehouse_supervisor', 'user'] 
     },
@@ -68,7 +69,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
           const savedOrder = localStorage.getItem('wf_sidebar_order');
           if (savedOrder) {
               const ids = JSON.parse(savedOrder) as string[];
-              // Reconstruct order based on saved IDs, appending new items at the end
               const ordered = [...DEFAULT_NAV_ITEMS].sort((a, b) => {
                   let indexA = ids.indexOf(a.id);
                   let indexB = ids.indexOf(b.id);
@@ -82,8 +82,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
       return DEFAULT_NAV_ITEMS;
   });
 
-  // Get Custom Logo from LocalStorage (set in Settings)
-  // Default to a known working clearbit url for 'daltexcorp.com' if not set
   const [logoUrl, setLogoUrl] = useState(() => {
       const custom = localStorage.getItem('wf_logo_url');
       return custom || "https://logo.clearbit.com/daltexcorp.com";
@@ -93,14 +91,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
   const dragOverItem = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Filter items based on user role
   const visibleNavItems = navItems.filter(item => 
     item.roles.includes(currentUser.role)
   );
 
   const handleNavClick = (viewId: string) => {
     setCurrentView(viewId);
-    onClose(); // Close sidebar on mobile selection
+    onClose(); 
   };
 
   const handleDragStart = (e: React.DragEvent<HTMLButtonElement>, position: number) => {
@@ -162,12 +159,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
 
       <aside className={`
         fixed md:static inset-y-0 left-0 z-30
-        w-72 bg-[#00695c] text-white min-h-screen flex flex-col shadow-2xl font-sans
+        w-72 bg-[#00695c] text-white min-h-screen flex flex-col shadow-2xl font-cairo
         transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        {/* Header Section matching screenshot */}
-        <div className="pt-8 pb-6 flex flex-col items-center text-center px-4 border-b-2 border-yellow-400/50">
+        {/* Header Section */}
+        <div className="pt-8 pb-6 flex flex-col items-center text-center px-4 border-b border-yellow-400/30">
              <div className="bg-white p-2 rounded-xl shadow-lg mb-4 w-28 h-28 flex items-center justify-center overflow-hidden">
                  <img 
                     src={logoUrl} 
@@ -176,18 +173,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
                     onError={(e) => {
                         const target = e.currentTarget;
                         target.onerror = null; 
-                        // Final Fallback: A nice generic icon if everything fails
                         target.src = "https://ui-avatars.com/api/?name=Daltex&background=0D8ABC&color=fff&size=128&font-size=0.4";
                     }}
                  />
              </div>
-             <h1 className="text-4xl font-serif font-bold text-[#FFD700] tracking-wide mb-1 drop-shadow-sm">DALTEX</h1>
-             <p className="text-[10px] text-white uppercase tracking-wider font-medium mb-1">Daltex For Agricultural Development</p>
-             <p className="text-sm font-bold text-[#FFD700] font-serif">Since 1964</p>
+             <h1 className="text-3xl font-bold text-[#FFD700] tracking-wide mb-1 drop-shadow-sm">DALTEX</h1>
         </div>
         
         {/* Navigation */}
-        <nav className="flex-1 w-full mt-4 overflow-y-auto px-4 space-y-2">
+        <nav className="flex-1 w-full mt-2 overflow-y-auto">
           {visibleNavItems.map((item, index) => {
             const isActive = currentView === item.id;
             return (
@@ -200,41 +194,43 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
                 onDragOver={handleDragOver}
                 onClick={() => handleNavClick(item.id)}
                 className={`
-                  w-full flex items-center justify-between px-4 py-3 
+                  w-full flex items-center justify-between px-6 py-4
                   border-b border-yellow-400/30 transition-all duration-200 group
                   ${isActive 
-                    ? 'bg-[#00C853] text-white shadow-lg font-bold transform scale-105 rounded border-none' 
-                    : 'text-white hover:bg-[#004d40] hover:pl-6 rounded hover:bg-opacity-50'}
+                    ? 'bg-[#00C853] text-white shadow-md font-bold' 
+                    : 'text-white hover:bg-[#004d40] hover:pr-8'}
                   ${isDragging ? 'cursor-grabbing' : 'cursor-grab active:cursor-grabbing'}
                 `}
               >
-                <div className="flex items-center gap-4">
-                    <span className="text-2xl drop-shadow-md">{item.icon}</span>
-                    <span className="text-lg tracking-wide">{item.label}</span>
+                {/* RTL Layout: Text on Right, Icon/Count on Left */}
+                <div className="flex flex-row-reverse items-center gap-4 w-full">
+                    <span className="text-xl w-8 text-center">{item.icon}</span>
+                    <span className="text-lg tracking-wide text-right flex-1">{item.label}</span>
+                    
+                    {/* Visual counts matching screenshot (Yellow Numbers) */}
+                    {item.id === 'agri-work-order' && <span className="text-[#FFD700] font-bold text-lg drop-shadow-sm">1274</span>}
+                    {item.id === 'issue-form' && <span className="text-[#FFD700] font-bold text-lg drop-shadow-sm">228</span>}
+                    {item.id === 'history' && <span className="text-[#FFD700] font-bold text-lg drop-shadow-sm">815</span>}
                 </div>
-                {/* Visual counts to match screenshot theme */}
-                {item.id === 'agri-work-order' && <span className="text-[#FFD700] font-bold text-sm drop-shadow-sm">1274</span>}
-                {item.id === 'issue-form' && <span className="text-[#FFD700] font-bold text-sm drop-shadow-sm">228</span>}
-                {item.id === 'history' && <span className="text-[#FFD700] font-bold text-sm drop-shadow-sm">815</span>}
               </button>
             );
           })}
         </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t-2 border-yellow-400/50 bg-[#004d40]/40">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shrink-0 border-2 border-[#FFD700] text-[#00695c] bg-white`}>
+        {/* Footer Account Section - Yellow Bar */}
+        <div className="p-4 bg-yellow-400 text-[#00695c]">
+          <div className="flex items-center space-x-3 mb-3 flex-row-reverse">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0 border-2 border-[#00695c] bg-white text-[#00695c]`}>
               {currentUser.username.substring(0,2).toUpperCase()}
             </div>
-            <div className="overflow-hidden">
-              <p className="text-sm font-bold text-white truncate">{currentUser.name}</p>
-              <p className="text-xs text-yellow-300 capitalize">{currentUser.role.replace('_', ' ')}</p>
+            <div className="overflow-hidden text-right pr-3">
+              <p className="text-base font-extrabold truncate">{currentUser.name}</p>
+              <p className="text-xs font-semibold capitalize">{currentUser.role.replace('_', ' ')}</p>
             </div>
           </div>
           <button 
               onClick={onLogout}
-              className="w-full py-2 border border-yellow-400/50 rounded-md text-xs text-yellow-100 hover:bg-yellow-400 hover:text-[#00695c] font-bold transition uppercase tracking-wider"
+              className="w-full py-2 border-2 border-[#00695c] rounded-md text-sm text-[#00695c] hover:bg-[#00695c] hover:text-white font-bold transition uppercase tracking-wider"
           >
               Sign Out
           </button>
