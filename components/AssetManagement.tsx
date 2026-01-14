@@ -1,9 +1,9 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Machine, BreakdownRecord, Location, Sector, Division } from '../types';
 import SearchableSelect from './SearchableSelect';
 import * as XLSX from 'xlsx';
-import { backupTabToSheet, DEFAULT_SCRIPT_URL } from '../services/googleSheetsService';
+import { backupTabToSheet, DEFAULT_SCRIPT_URL, extractSheetIdFromUrl, fetchRawCSV } from '../services/googleSheetsService';
 
 interface AssetManagementProps {
   machines: Machine[];
@@ -20,6 +20,9 @@ interface AssetManagementProps {
 }
 
 type TabType = 'assets' | 'breakdowns';
+
+// Default Link provided for Assets
+const DEFAULT_ASSET_SHEET_ID = '2PACX-1vQUT7WwHj0x4GrMEtlZ-X8L3GRCCPDMh4K2rOfbXD0GJ4Neu_aYl84xkGzMGzbStwIcVwSFWKOjxZHj';
 
 const AssetManagement: React.FC<AssetManagementProps> = ({ 
   machines, locations, sectors, divisions, breakdowns,
@@ -47,9 +50,71 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   const [syncMsg, setSyncMsg] = useState('');
   const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
 
+  // --- SYNC CONFIG STATE ---
+  const [syncConfig, setSyncConfig] = useState<Record<string, { sheetId: string; gid: string }>>(() => {
+    try {
+        const saved = localStorage.getItem('wf_sync_config_v2');
+        if (saved) return JSON.parse(saved);
+    } catch(e) { console.error(e); }
+    return {
+        machines: { sheetId: DEFAULT_ASSET_SHEET_ID, gid: '' },
+        breakdowns: { sheetId: '', gid: '' }
+    };
+  });
+
+  // Persist config changes
+  useEffect(() => { 
+      localStorage.setItem('wf_sync_config_v2', JSON.stringify(syncConfig)); 
+  }, [syncConfig]);
+
   // ---------------------------
   // 1. DATA MGMT LOGIC
   // ---------------------------
+
+  const handleSheetUrlPaste = (val: string) => {
+    const extractedId = extractSheetIdFromUrl(val);
+    // For 2PACX links, GID might be in URL but often it's just the published ID
+    // We treat the current active tab key as the target
+    const key = activeTab === 'assets' ? 'machines' : 'breakdowns';
+    
+    setSyncConfig(prev => ({
+        ...prev,
+        [key]: {
+            sheetId: extractedId,
+            gid: '' // GID is usually irrelevant for 2PACX CSV links unless specified in query, extracting it is complex for pubhtml
+        }
+    }));
+  };
+
+  const handleSyncData = async () => {
+      const key = activeTab === 'assets' ? 'machines' : 'breakdowns';
+      const config = syncConfig[key];
+
+      if (!config || !config.sheetId) {
+          setSyncMsg("Error: Please enter a Sheet ID or URL.");
+          return;
+      }
+
+      setSyncLoading(true);
+      setSyncMsg(`Fetching ${key} from Google Sheet...`);
+
+      try {
+          // fetchRawCSV handles the 2PACX logic internally
+          const rawRows = await fetchRawCSV(config.sheetId, config.gid);
+          if (rawRows && rawRows.length > 1) {
+              processImportData(rawRows);
+              setSyncMsg("✅ Sync Complete!");
+              setTimeout(() => setSyncMsg(""), 3000);
+          } else {
+              setSyncMsg("⚠️ No data found.");
+          }
+      } catch (e) {
+          console.error(e);
+          setSyncMsg("❌ Sync Failed: " + (e as Error).message);
+      } finally {
+          setSyncLoading(false);
+      }
+  };
 
   const handleExport = () => {
       let data: any[] = [];
@@ -103,23 +168,28 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   const processImportData = (rows: any[][]) => {
       if (!rows || rows.length < 2) return;
 
-      const headers = rows[0].map(h => String(h).trim().toLowerCase());
-      const dataRows = rows.slice(1);
-      
-      // Determine tab based on headers or active tab
-      // If we are in 'assets', we expect machine columns
-      // If 'breakdowns', breakdown columns
-      // For simplicity, we stick to activeTab
+      // Detect header row (look for "id" or "machine")
+      let headerRowIndex = 0;
+      for(let i=0; i<Math.min(rows.length, 5); i++) {
+          const rowStr = rows[i].join(' ').toLowerCase();
+          if (rowStr.includes('id') && (rowStr.includes('machine') || rowStr.includes('brand') || rowStr.includes('status'))) {
+              headerRowIndex = i;
+              break;
+          }
+      }
+
+      const headers = rows[headerRowIndex].map(h => String(h).trim().toLowerCase());
+      const dataRows = rows.slice(headerRowIndex + 1);
       
       let fieldMap: Record<string, string[]> = {};
       
       if (activeTab === 'assets') {
           fieldMap = {
-              id: ['id', 'machine id', 'code'],
-              category: ['machine name', 'category', 'equipment name', 'name'],
+              id: ['id', 'machine id', 'code', 'asset id'],
+              category: ['machine name', 'category', 'equipment name', 'name', 'asset name', 'machine'],
               brand: ['brand', 'make'],
-              modelNo: ['model no', 'model'],
-              chaseNo: ['chase no', 'serial no', 'chase'],
+              modelNo: ['model no', 'model', 'machine model'],
+              chaseNo: ['chase no', 'serial no', 'chase', 'serial'],
               status: ['status'],
               divisionId: ['division', 'division id']
           };
@@ -127,6 +197,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           fieldMap = {
               id: ['id', 'ticket id'],
               machineId: ['machine id', 'asset id'],
+              machineName: ['machine name', 'machine'],
               startTime: ['start time', 'date', 'start'],
               endTime: ['end time', 'end'],
               failureType: ['failure type', 'type'],
@@ -141,13 +212,19 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       const colIndexMap: Record<string, number> = {};
       Object.keys(fieldMap).forEach(key => {
           const possibleHeaders = fieldMap[key];
-          const idx = headers.findIndex(h => possibleHeaders.includes(h));
+          const idx = headers.findIndex(h => possibleHeaders.some(ph => h === ph || h.includes(ph)));
           if (idx !== -1) colIndexMap[key] = idx;
       });
 
       if (colIndexMap['id'] === undefined && activeTab === 'assets') {
-          alert("Could not find 'ID' column in uploaded file.");
-          return;
+          // If no explicit ID column found for assets, we might generate one or fail
+          // Let's try to be lenient: if 'category' exists, we use it as ID? No, ID is critical.
+          // Fallback: Check column 0
+          if (headers[0]?.includes('id') || headers[0]?.includes('code')) colIndexMap['id'] = 0;
+          else {
+             alert("Could not find 'ID' column in uploaded data. Please ensure header has 'ID' or 'Machine ID'.");
+             return;
+          }
       }
 
       const toAdd: any[] = [];
@@ -167,10 +244,16 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           if (activeTab === 'assets') {
               if (!payload.id) return;
               if (!payload.status) payload.status = 'Working';
+              if (!payload.category) payload.category = `Machine ${payload.id}`;
           } else {
               if (!payload.id) payload.id = `BD-${Date.now()}-${Math.random().toString(36).substr(2,5)}`;
               if (!payload.status) payload.status = 'Open';
               if (!payload.startTime) payload.startTime = new Date().toISOString();
+              // Try to find machine name if only ID provided
+              if (payload.machineId && !payload.machineName) {
+                  const m = machines.find(mac => mac.id === payload.machineId);
+                  if (m) payload.machineName = m.category;
+              }
           }
 
           // @ts-ignore
@@ -184,7 +267,11 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       });
 
       onBulkImport(activeTab === 'assets' ? 'machines' : 'breakdowns', toAdd, toUpdate);
-      alert(`Import Successful!\nAdded: ${toAdd.length}\nUpdated: ${toUpdate.length}`);
+      
+      // Only show alert if it was a file import (fileInputRef has value), otherwise it's sync (silent success or syncMsg)
+      if (fileInputRef.current?.value) {
+          alert(`Import Successful!\nAdded: ${toAdd.length}\nUpdated: ${toUpdate.length}`);
+      }
   };
 
   const handleBackup = async () => {
@@ -384,8 +471,27 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
                 <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.csv" onChange={handleFileChange} />
                 
+                {/* Sync Controls */}
+                <div className="flex items-center gap-1 bg-blue-50 p-1 rounded-lg border border-blue-100">
+                    <input 
+                       type="text" 
+                       className="text-xs bg-white border border-blue-200 rounded px-2 py-1.5 focus:ring-2 focus:ring-blue-400 focus:outline-none w-32 xl:w-48 text-blue-800 placeholder-blue-300" 
+                       placeholder={`ID or URL for ${activeTab}...`}
+                       value={syncConfig[activeTab === 'assets' ? 'machines' : 'breakdowns']?.sheetId || ''}
+                       onChange={(e) => handleSheetUrlPaste(e.target.value)}
+                    />
+                    <button 
+                        onClick={handleSyncData} 
+                        disabled={syncLoading}
+                        className="px-2 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition shadow-sm disabled:opacity-50 text-xs font-bold"
+                        title="Fetch data from URL"
+                    >
+                       {syncLoading ? <span className="animate-spin">↻</span> : <span>⬇️</span>}
+                    </button>
+                </div>
+
                 <button onClick={handleBackup} disabled={syncLoading} className="flex-1 xl:flex-none px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 border border-indigo-200 flex items-center justify-center gap-1 whitespace-nowrap">
-                     {syncLoading ? <span className="animate-spin">↻</span> : <span>☁️</span>} Backup All
+                     <span>☁️</span> Backup
                 </button>
                 <button onClick={handleExport} className="flex-1 xl:flex-none px-3 py-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1 whitespace-nowrap">
                      <span>📊</span> Export
@@ -394,15 +500,15 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                      <span>📂</span> Import
                 </button>
 
-                <div className="relative flex-1 xl:w-64 min-w-[200px]">
+                <div className="relative flex-1 xl:w-48 min-w-[150px]">
                     <input 
                         type="text" 
                         placeholder="Search..." 
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                        className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
                     />
-                    <span className="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
+                    <span className="absolute left-2.5 top-2.5 text-gray-400 text-sm">🔍</span>
                 </div>
           </div>
       </div>
