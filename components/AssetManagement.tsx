@@ -286,6 +286,15 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           };
           if(isEditing) onUpdateBreakdown(finalRecord);
           else onAddBreakdown(finalRecord);
+
+          // Update Machine Status based on Breakdown
+          if (selectedMachine) {
+              if (finalRecord.status === 'Open') {
+                  onUpdateMachine({ ...selectedMachine, status: 'Not Working' });
+              } else if (finalRecord.status === 'Closed') {
+                  onUpdateMachine({ ...selectedMachine, status: 'Working' });
+              }
+          }
       }
       setShowForm(false);
   };
