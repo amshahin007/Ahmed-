@@ -14,31 +14,31 @@ interface SidebarProps {
 const DEFAULT_NAV_ITEMS = [
     { 
       id: 'dashboard', 
-      label: 'Dashboard', 
-      icon: '📊', 
+      label: 'Home Page', 
+      icon: '🏠', 
       roles: ['admin', 'user', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer', 'warehouse_supervisor'] 
     },
     { 
       id: 'agri-work-order', 
-      label: 'Agri Work Order', 
+      label: 'Work Orders', 
       icon: '🚜', 
       roles: ['admin', 'warehouse_manager', 'maintenance_manager', 'user'] 
     },
     { 
       id: 'issue-form', 
-      label: 'New Issue', 
-      icon: '📝', 
+      label: 'Issue Requests', 
+      icon: '🛠️', 
       roles: ['admin', 'user', 'maintenance_manager', 'maintenance_engineer'] 
     },
     { 
       id: 'history', 
-      label: 'History & Reports', 
+      label: 'Inventory', 
       icon: '📋', 
       roles: ['admin', 'user', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer', 'warehouse_supervisor'] 
     },
     { 
       id: 'stock-approval', 
-      label: 'Stock Approval', 
+      label: 'Approvals', 
       icon: '✅', 
       roles: ['admin', 'warehouse_manager', 'warehouse_supervisor'] 
     },
@@ -50,7 +50,7 @@ const DEFAULT_NAV_ITEMS = [
     },
     { 
       id: 'ai-assistant', 
-      label: 'AI Assistant', 
+      label: 'AI Insights', 
       icon: '✨', 
       roles: ['admin', 'warehouse_manager', 'maintenance_manager'] 
     },
@@ -99,11 +99,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
   const handleDragStart = (e: React.DragEvent<HTMLButtonElement>, position: number) => {
       dragItem.current = position;
       setIsDragging(true);
-      // Nice drag effect
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setDragImage(e.currentTarget, 20, 20);
-      
-      // Add visual class to dragged element
       setTimeout(() => {
           e.currentTarget.classList.add('opacity-50');
       }, 0);
@@ -123,7 +120,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
           return;
       }
 
-      // We are dragging within visibleNavItems, but we need to reorder the main navItems array
       const draggedObj = visibleNavItems[dragItem.current];
       const targetObj = visibleNavItems[dragOverItem.current];
 
@@ -133,7 +129,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
       const fromIndex = allItemsCopy.findIndex(i => i.id === draggedObj.id);
       const toIndex = allItemsCopy.findIndex(i => i.id === targetObj.id);
 
-      // Move item
       allItemsCopy.splice(fromIndex, 1);
       allItemsCopy.splice(toIndex, 0, draggedObj);
 
@@ -145,7 +140,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
   };
 
   const handleDragOver = (e: React.DragEvent) => {
-      e.preventDefault(); // Necessary for onDrop/onDragEnd to work
+      e.preventDefault(); 
   };
 
   return (
@@ -160,74 +155,77 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
 
       <aside className={`
         fixed md:static inset-y-0 left-0 z-30
-        w-64 bg-slate-900 text-white min-h-screen flex flex-col shadow-xl
+        w-72 bg-[#00695c] text-white min-h-screen flex flex-col shadow-2xl font-sans
         transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-          <div className="flex items-center gap-3 w-full">
-             <div className="bg-white p-1 rounded-lg shrink-0 w-10 h-10 flex items-center justify-center overflow-hidden">
+        {/* Header Section matching screenshot */}
+        <div className="pt-8 pb-6 flex flex-col items-center text-center px-4 border-b-2 border-yellow-400/50">
+             <div className="bg-white p-2 rounded shadow-lg mb-4 w-24 h-24 flex items-center justify-center">
                  <img 
-                    src="https://logo.clearbit.com/daltex.com" 
-                    alt="Daltex" 
+                    src="https://daltex.com/wp-content/uploads/2020/09/Daltex-Logo.png" 
+                    alt="Daltex Logo" 
                     className="w-full h-full object-contain"
                     onError={(e) => {
                         e.currentTarget.style.display = 'none';
+                        e.currentTarget.parentElement!.innerText = 'DALTEX';
                     }}
                  />
              </div>
-             <div className="min-w-0">
-               <h1 className="text-xl font-bold tracking-tight text-blue-400 truncate leading-tight">Daltex</h1>
-               <p className="text-[10px] text-slate-400 uppercase tracking-wider truncate">Maintenance Mgmt</p>
-             </div>
-          </div>
-          {/* Mobile Close Button */}
-          <button onClick={onClose} className="md:hidden text-slate-400 hover:text-white shrink-0 ml-2">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+             <h1 className="text-4xl font-serif font-bold text-[#FFD700] tracking-wide mb-1 drop-shadow-sm">DALTEX</h1>
+             <p className="text-[10px] text-white uppercase tracking-wider font-medium mb-1">Daltex For Agricultural Development</p>
+             <p className="text-sm font-bold text-[#FFD700] font-serif">Since 1964</p>
         </div>
         
-        <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto">
-          {visibleNavItems.map((item, index) => (
-            <button
-              key={item.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragEnter={(e) => handleDragEnter(e, index)}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOver}
-              onClick={() => handleNavClick(item.id)}
-              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 group relative
-                ${currentView === item.id
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'}
-                ${isDragging ? 'cursor-grabbing' : 'cursor-grab active:cursor-grabbing'}
-              `}
-            >
-              <div className="absolute left-1 opacity-0 group-hover:opacity-30 transition-opacity">
-                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm8-12a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>
-              </div>
-              <span className="text-xl pl-2">{item.icon}</span>
-              <span className="font-medium">{item.label}</span>
-            </button>
-          ))}
+        {/* Navigation */}
+        <nav className="flex-1 w-full mt-4 overflow-y-auto px-4 space-y-2">
+          {visibleNavItems.map((item, index) => {
+            const isActive = currentView === item.id;
+            return (
+              <button
+                key={item.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragEnter={(e) => handleDragEnter(e, index)}
+                onDragEnd={handleDragEnd}
+                onDragOver={handleDragOver}
+                onClick={() => handleNavClick(item.id)}
+                className={`
+                  w-full flex items-center justify-between px-4 py-3 
+                  border-b border-yellow-400/30 transition-all duration-200 group
+                  ${isActive 
+                    ? 'bg-[#00C853] text-white shadow-lg font-bold transform scale-105 rounded border-none' 
+                    : 'text-white hover:bg-[#004d40] hover:pl-6 rounded hover:bg-opacity-50'}
+                  ${isDragging ? 'cursor-grabbing' : 'cursor-grab active:cursor-grabbing'}
+                `}
+              >
+                <div className="flex items-center gap-4">
+                    <span className="text-2xl drop-shadow-md">{item.icon}</span>
+                    <span className="text-lg tracking-wide">{item.label}</span>
+                </div>
+                {/* Visual counts to match screenshot theme */}
+                {item.id === 'agri-work-order' && <span className="text-[#FFD700] font-bold text-sm drop-shadow-sm">1274</span>}
+                {item.id === 'issue-form' && <span className="text-[#FFD700] font-bold text-sm drop-shadow-sm">228</span>}
+                {item.id === 'history' && <span className="text-[#FFD700] font-bold text-sm drop-shadow-sm">815</span>}
+              </button>
+            );
+          })}
         </nav>
 
-        <div className="p-4 border-t border-slate-700">
+        {/* Footer */}
+        <div className="p-4 border-t-2 border-yellow-400/50 bg-[#004d40]/40">
           <div className="flex items-center space-x-3 mb-4">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${currentUser.role === 'admin' ? 'bg-purple-500' : 'bg-blue-500'}`}>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shrink-0 border-2 border-[#FFD700] text-[#00695c] bg-white`}>
               {currentUser.username.substring(0,2).toUpperCase()}
             </div>
             <div className="overflow-hidden">
-              <p className="text-sm font-medium truncate">{currentUser.name}</p>
-              <p className="text-xs text-slate-400 capitalize">{currentUser.role.replace('_', ' ')}</p>
+              <p className="text-sm font-bold text-white truncate">{currentUser.name}</p>
+              <p className="text-xs text-yellow-300 capitalize">{currentUser.role.replace('_', ' ')}</p>
             </div>
           </div>
           <button 
               onClick={onLogout}
-              className="w-full py-2 border border-slate-600 rounded-md text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition"
+              className="w-full py-2 border border-yellow-400/50 rounded-md text-xs text-yellow-100 hover:bg-yellow-400 hover:text-[#00695c] font-bold transition uppercase tracking-wider"
           >
               Sign Out
           </button>
