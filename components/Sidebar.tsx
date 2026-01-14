@@ -161,15 +161,16 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
       `}>
         {/* Header Section matching screenshot */}
         <div className="pt-8 pb-6 flex flex-col items-center text-center px-4 border-b-2 border-yellow-400/50">
-             <div className="bg-white p-2 rounded-xl shadow-lg mb-4 w-24 h-24 flex items-center justify-center overflow-hidden">
+             <div className="bg-white p-2 rounded-xl shadow-lg mb-4 w-28 h-28 flex items-center justify-center overflow-hidden">
                  <img 
                     src="https://logo.clearbit.com/daltex.com" 
                     alt="Daltex Logo" 
                     className="w-full h-full object-contain"
                     onError={(e) => {
                         const target = e.currentTarget;
-                        target.onerror = null;
-                        target.src = "https://cdn-icons-png.flaticon.com/512/1518/1518965.png";
+                        target.onerror = null; // Prevent infinite loop
+                        // Fallback to the direct image URL if Clearbit fails
+                        target.src = "https://daltex.com/wp-content/uploads/2020/09/Daltex-Logo.png";
                     }}
                  />
              </div>
