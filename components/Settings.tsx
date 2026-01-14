@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DEFAULT_SCRIPT_URL, locateRemoteData, APP_SCRIPT_TEMPLATE } from '../services/googleSheetsService';
 
 const Settings: React.FC = () => {
@@ -9,6 +9,8 @@ const Settings: React.FC = () => {
   const [statusMsg, setStatusMsg] = useState('');
   const [statusType, setStatusType] = useState<'neutral' | 'success' | 'error'>('neutral');
   const [copyFeedback, setCopyFeedback] = useState('');
+  
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Load existing URL or default
@@ -28,6 +30,8 @@ const Settings: React.FC = () => {
 
     // Save Logic
     localStorage.setItem('wf_script_url_v3', scriptUrl);
+    
+    // Logic for logo is handled by state updating directly, but we ensure it's saved here just in case
     if (logoUrl) {
         localStorage.setItem('wf_logo_url', logoUrl);
     } else {
@@ -37,11 +41,34 @@ const Settings: React.FC = () => {
     setStatusType('success');
     setStatusMsg('Settings Saved Successfully!');
     
-    // Force reload to apply logo changes globally if needed, or user can just navigate
+    // Force reload to apply logo changes globally
     setTimeout(() => {
         setStatusMsg('');
         window.location.reload(); 
     }, 1500);
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      // Limit size to ~500KB to prevent LocalStorage quota exceeded errors
+      if (file.size > 500 * 1024) {
+          alert("File is too large. Please upload an image smaller than 500KB.");
+          return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+          const base64String = reader.result as string;
+          setLogoUrl(base64String);
+      };
+      reader.readAsDataURL(file);
+  };
+
+  const handleResetLogo = () => {
+      setLogoUrl('');
+      if (logoInputRef.current) logoInputRef.current.value = '';
   };
 
   const validateUrl = (url: string) => {
@@ -114,20 +141,49 @@ const Settings: React.FC = () => {
             
             {/* Branding Section */}
             <div className="space-y-4 pb-6 border-b border-gray-100">
-                <h3 className="text-lg font-bold text-gray-800">Branding</h3>
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">
-                        Custom Logo URL
-                        <span className="ml-2 font-normal text-gray-500">(Optional)</span>
-                    </label>
-                    <input 
-                        type="text" 
-                        value={logoUrl}
-                        onChange={(e) => setLogoUrl(e.target.value)}
-                        placeholder="https://your-website.com/logo.png"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Paste a direct link to your logo image. Leave empty to use default.</p>
+                <h3 className="text-lg font-bold text-gray-800">Company Logo</h3>
+                <div className="flex flex-col md:flex-row gap-6 items-start">
+                    
+                    {/* Preview Area */}
+                    <div className="w-32 h-32 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden shrink-0 relative group">
+                        {logoUrl ? (
+                            <img src={logoUrl} alt="Logo Preview" className="w-full h-full object-contain p-2" />
+                        ) : (
+                            <span className="text-gray-400 text-xs text-center px-2">Default Logo</span>
+                        )}
+                    </div>
+
+                    {/* Controls */}
+                    <div className="flex-1 space-y-3">
+                        <label className="block text-sm font-bold text-gray-700">
+                            Upload New Logo
+                        </label>
+                        <input 
+                            ref={logoInputRef}
+                            type="file" 
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                            className="block w-full text-sm text-gray-500
+                                file:mr-4 file:py-2 file:px-4
+                                file:rounded-full file:border-0
+                                file:text-sm file:font-semibold
+                                file:bg-blue-50 file:text-blue-700
+                                hover:file:bg-blue-100
+                            "
+                        />
+                        <p className="text-xs text-gray-500">
+                            Supported formats: PNG, JPG, GIF. Max size: 500KB.
+                        </p>
+                        
+                        {logoUrl && (
+                            <button 
+                                onClick={handleResetLogo}
+                                className="text-sm text-red-600 hover:text-red-800 font-medium underline"
+                            >
+                                Remove Custom Logo (Reset to Default)
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
