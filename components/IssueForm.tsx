@@ -72,7 +72,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
   useEffect(() => {
     const item = items.find(i => i.id === currentItemId);
     if (item) {
-      setCurrentItemName(item.name);
+      // Prioritize Full Name from Master Data
+      setCurrentItemName(item.fullName || item.name);
     } else {
       setCurrentItemName('');
     }
@@ -519,7 +520,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
       if (i.partNumber) parts.push(`PN: ${i.partNumber}`);
       if (i.modelNo) parts.push(`Model: ${i.modelNo}`);
       if (i.oem) parts.push(`OEM: ${i.oem}`);
-      const sub = parts.length > 0 ? parts.join(' | ') : i.name;
+      
+      const displayName = i.fullName || i.name;
+      const sub = parts.length > 0 ? `${displayName} | ${parts.join(' | ')}` : displayName;
+      
       return { id: i.id, label: i.id, subLabel: sub };
   }), [items]);
   
@@ -527,7 +531,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
       const parts = [i.id];
       if (i.partNumber) parts.push(`PN: ${i.partNumber}`);
       if (i.modelNo) parts.push(`Model: ${i.modelNo}`);
-      return { id: i.id, label: i.name, subLabel: parts.join(' | ') };
+      return { id: i.id, label: i.fullName || i.name, subLabel: parts.join(' | ') };
   }), [items]);
 
   return (
