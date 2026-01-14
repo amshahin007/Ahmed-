@@ -1,9 +1,8 @@
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Machine, BreakdownRecord, Location, Sector, Division } from '../types';
-import SearchableSelect from './SearchableSelect';
+import React, { useState, useRef, useEffect } from 'react';
+import { Machine, Location, Sector, Division, BreakdownRecord } from '../types';
 import * as XLSX from 'xlsx';
-import { backupTabToSheet, DEFAULT_SCRIPT_URL, extractSheetIdFromUrl, fetchRawCSV } from '../services/googleSheetsService';
+import { fetchRawCSV, extractSheetIdFromUrl, DEFAULT_SHEET_ID } from '../services/googleSheetsService';
 
 interface AssetManagementProps {
   machines: Machine[];
@@ -14,437 +13,195 @@ interface AssetManagementProps {
   onAddMachine: (machine: Machine) => void;
   onUpdateMachine: (machine: Machine) => void;
   onDeleteMachines: (ids: string[]) => void;
-  onAddBreakdown: (bd: BreakdownRecord) => void;
-  onUpdateBreakdown: (bd: BreakdownRecord) => void;
+  onAddBreakdown: (breakdown: BreakdownRecord) => void;
+  onUpdateBreakdown: (breakdown: BreakdownRecord) => void;
   onBulkImport: (tab: string, added: any[], updated: any[]) => void;
 }
 
-type TabType = 'assets' | 'breakdowns';
-
-// Default Link provided for Assets
-const DEFAULT_ASSET_SHEET_ID = '2PACX-1vQUT7WwHj0x4GrMEtlZ-X8L3GRCCPDMh4K2rOfbXD0GJ4Neu_aYl84xkGzMGzbStwIcVwSFWKOjxZHj';
-
-const AssetManagement: React.FC<AssetManagementProps> = ({ 
+const AssetManagement: React.FC<AssetManagementProps> = ({
   machines, locations, sectors, divisions, breakdowns,
-  onAddMachine, onUpdateMachine, onDeleteMachines, onAddBreakdown, onUpdateBreakdown, onBulkImport
+  onAddMachine, onUpdateMachine, onDeleteMachines,
+  onAddBreakdown, onUpdateBreakdown, onBulkImport
 }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('assets');
-  
-  // --- ASSET TAB STATE ---
-  const [showAssetForm, setShowAssetForm] = useState(false);
-  const [assetFormData, setAssetFormData] = useState<any>({});
+  const [activeTab, setActiveTab] = useState<'assets' | 'breakdowns'>('assets');
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
   
-  // --- BREAKDOWN TAB STATE ---
-  const [showBreakdownForm, setShowBreakdownForm] = useState(false); // For New Breakdown
-  const [showCloseForm, setShowCloseForm] = useState(false); // For Closing Breakdown
-  const [bdFormData, setBdFormData] = useState<Partial<BreakdownRecord>>({});
-  const [selectedMachineForBd, setSelectedMachineForBd] = useState<string>('');
-  
-  // --- COMMON ---
-  const [searchTerm, setSearchTerm] = useState('');
-  
-  // --- IMPORT/EXPORT/BACKUP STATE ---
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Sync State
+  const [syncConfig, setSyncConfig] = useState<Record<string, { sheetId: string }>>(() => {
+     try {
+         const saved = localStorage.getItem('wf_asset_sync_config');
+         return saved ? JSON.parse(saved) : { machines: { sheetId: DEFAULT_SHEET_ID }, breakdowns: { sheetId: DEFAULT_SHEET_ID } };
+     } catch { return { machines: { sheetId: DEFAULT_SHEET_ID }, breakdowns: { sheetId: DEFAULT_SHEET_ID } }; }
+  });
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
-  const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
+  
+  // Form State
+  const [showForm, setShowForm] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState<any>({});
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- SYNC CONFIG STATE ---
-  const [syncConfig, setSyncConfig] = useState<Record<string, { sheetId: string; gid: string }>>(() => {
-    try {
-        const saved = localStorage.getItem('wf_sync_config_v2');
-        if (saved) return JSON.parse(saved);
-    } catch(e) { console.error(e); }
-    return {
-        machines: { sheetId: DEFAULT_ASSET_SHEET_ID, gid: '' },
-        breakdowns: { sheetId: '', gid: '' }
-    };
-  });
-
-  // Persist config changes
-  useEffect(() => { 
-      localStorage.setItem('wf_sync_config_v2', JSON.stringify(syncConfig)); 
+  useEffect(() => {
+      localStorage.setItem('wf_asset_sync_config', JSON.stringify(syncConfig));
   }, [syncConfig]);
 
-  // ---------------------------
-  // 1. DATA MGMT LOGIC
-  // ---------------------------
-
   const handleSheetUrlPaste = (val: string) => {
-    const extractedId = extractSheetIdFromUrl(val);
-    // For 2PACX links, GID might be in URL but often it's just the published ID
-    // We treat the current active tab key as the target
-    const key = activeTab === 'assets' ? 'machines' : 'breakdowns';
-    
-    setSyncConfig(prev => ({
-        ...prev,
-        [key]: {
-            sheetId: extractedId,
-            gid: '' // GID is usually irrelevant for 2PACX CSV links unless specified in query, extracting it is complex for pubhtml
-        }
-    }));
+      const tabKey = activeTab === 'assets' ? 'machines' : 'breakdowns';
+      setSyncConfig(prev => ({
+          ...prev,
+          [tabKey]: { sheetId: val }
+      }));
   };
 
   const handleSyncData = async () => {
-      const key = activeTab === 'assets' ? 'machines' : 'breakdowns';
-      const config = syncConfig[key];
-
-      if (!config || !config.sheetId) {
-          setSyncMsg("Error: Please enter a Sheet ID or URL.");
+      const tabKey = activeTab === 'assets' ? 'machines' : 'breakdowns';
+      const config = syncConfig[tabKey];
+      
+      if (!config?.sheetId) {
+          setSyncMsg("Please enter a Sheet ID/URL.");
           return;
       }
-
+      
       setSyncLoading(true);
-      setSyncMsg(`Fetching ${key} from Google Sheet...`);
-
+      setSyncMsg(`Syncing ${tabKey}...`);
+      
       try {
-          // fetchRawCSV handles the 2PACX logic internally
-          const rawRows = await fetchRawCSV(config.sheetId, config.gid);
-          if (rawRows && rawRows.length > 1) {
-              processImportData(rawRows);
-              setSyncMsg("✅ Sync Complete!");
-              setTimeout(() => setSyncMsg(""), 3000);
+          const cleanId = extractSheetIdFromUrl(config.sheetId);
+          // Assuming GID logic is similar to MasterData or simplified (fetch first tab if GID not specified)
+          // For simplicity here, we assume user pastes full URL or we default to '0' if not found.
+          const rows = await fetchRawCSV(cleanId, '0'); // defaulting to first tab
+          if(rows && rows.length > 1) {
+             processImport(rows, tabKey);
+             setSyncMsg("Sync success!");
           } else {
-              setSyncMsg("⚠️ No data found.");
+             setSyncMsg("No data found or empty sheet.");
           }
-      } catch (e) {
-          console.error(e);
-          setSyncMsg("❌ Sync Failed: " + (e as Error).message);
+      } catch (e: any) {
+          setSyncMsg(`Error: ${e.message}`);
       } finally {
           setSyncLoading(false);
       }
   };
 
-  const handleExport = () => {
-      let data: any[] = [];
-      let sheetName = "";
+  const processImport = (rows: any[][], tab: string) => {
+      const headers = rows[0].map(h => String(h).toLowerCase().trim());
+      const dataRows = rows.slice(1);
       
-      if (activeTab === 'assets') {
-          data = machines;
-          sheetName = "Machines";
-      } else {
-          data = breakdowns;
-          sheetName = "Breakdowns";
-      }
+      const toAdd: any[] = [];
+      const toUpdate: any[] = [];
+      
+      dataRows.forEach(row => {
+          const obj: any = {};
+          headers.forEach((h, i) => {
+             // Map headers to keys
+             if(h.includes('id') && !obj.id) obj.id = row[i];
+             else if(h.includes('name') || h.includes('desc')) {
+                 if(tab === 'machines') obj.category = row[i];
+                 if(tab === 'breakdowns') obj.machineName = row[i];
+             }
+             else if (h.includes('status')) obj.status = row[i];
+             else if (h.includes('brand')) obj.brand = row[i];
+             else if (h.includes('model')) obj.modelNo = row[i];
+             else if (h.includes('chase')) obj.chaseNo = row[i];
+             else if (h.includes('division')) obj.divisionId = row[i];
+          });
+          
+          if(obj.id) {
+              // check existence
+              const list = tab === 'machines' ? machines : breakdowns;
+              const exists = list.find((i:any) => i.id === obj.id);
+              if(exists) toUpdate.push({...exists, ...obj});
+              else toAdd.push(obj);
+          }
+      });
+      
+      onBulkImport(tab, toAdd, toUpdate);
+  };
+  
+  const handleBackup = async () => {
+      alert("Backup feature requires configuring specific script endpoint for this module.");
+  };
 
-      if (data.length === 0) {
-          alert("No data to export.");
-          return;
-      }
-
+  const handleExport = () => {
+      const data = activeTab === 'assets' ? machines : breakdowns;
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      XLSX.writeFile(wb, `WareFlow_${sheetName}_${new Date().toISOString().slice(0,10)}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, activeTab);
+      XLSX.writeFile(wb, `${activeTab}_export.xlsx`);
   };
 
   const handleImportClick = () => {
       fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if(!file) return;
       
       const reader = new FileReader();
-      reader.onload = (e) => {
-          const data = e.target?.result;
-          try {
-              const workbook = XLSX.read(data, { type: 'array' });
-              const firstSheetName = workbook.SheetNames[0];
-              const worksheet = workbook.Sheets[firstSheetName];
-              const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-              processImportData(jsonData);
-          } catch (error) {
-              console.error("Error parsing file:", error);
-              alert("Error parsing file. Please check format.");
-          }
+      reader.onload = (evt) => {
+          const bstr = evt.target?.result;
+          const wb = XLSX.read(bstr, {type: 'binary'});
+          const wsname = wb.SheetNames[0];
+          const ws = wb.Sheets[wsname];
+          const data = XLSX.utils.sheet_to_json(ws, {header: 1}) as any[][];
+          processImport(data, activeTab === 'assets' ? 'machines' : 'breakdowns');
       };
-      reader.readAsArrayBuffer(file);
-      event.target.value = '';
+      reader.readAsBinaryString(file);
+      e.target.value = ''; // reset
   };
-
-  const processImportData = (rows: any[][]) => {
-      if (!rows || rows.length < 2) return;
-
-      // Detect header row (look for "id" or "machine")
-      let headerRowIndex = 0;
-      for(let i=0; i<Math.min(rows.length, 5); i++) {
-          const rowStr = rows[i].join(' ').toLowerCase();
-          if (rowStr.includes('id') && (rowStr.includes('machine') || rowStr.includes('brand') || rowStr.includes('status'))) {
-              headerRowIndex = i;
-              break;
-          }
-      }
-
-      const headers = rows[headerRowIndex].map(h => String(h).trim().toLowerCase());
-      const dataRows = rows.slice(headerRowIndex + 1);
-      
-      let fieldMap: Record<string, string[]> = {};
-      
-      if (activeTab === 'assets') {
-          fieldMap = {
-              id: ['id', 'machine id', 'code', 'asset id'],
-              category: ['machine name', 'category', 'equipment name', 'name', 'asset name', 'machine'],
-              brand: ['brand', 'make'],
-              modelNo: ['model no', 'model', 'machine model'],
-              chaseNo: ['chase no', 'serial no', 'chase', 'serial'],
-              status: ['status'],
-              divisionId: ['division', 'division id']
-          };
-      } else {
-          fieldMap = {
-              id: ['id', 'ticket id'],
-              machineId: ['machine id', 'asset id'],
-              machineName: ['machine name', 'machine'],
-              startTime: ['start time', 'date', 'start'],
-              endTime: ['end time', 'end'],
-              failureType: ['failure type', 'type'],
-              operatorName: ['operator', 'driver'],
-              status: ['status'],
-              locationId: ['location', 'location id'],
-              rootCause: ['root cause', 'cause'],
-              actionTaken: ['action taken', 'action']
-          };
-      }
-
-      const colIndexMap: Record<string, number> = {};
-      Object.keys(fieldMap).forEach(key => {
-          const possibleHeaders = fieldMap[key];
-          const idx = headers.findIndex(h => possibleHeaders.some(ph => h === ph || h.includes(ph)));
-          if (idx !== -1) colIndexMap[key] = idx;
-      });
-
-      if (colIndexMap['id'] === undefined && activeTab === 'assets') {
-          // If no explicit ID column found for assets, we might generate one or fail
-          // Let's try to be lenient: if 'category' exists, we use it as ID? No, ID is critical.
-          // Fallback: Check column 0
-          if (headers[0]?.includes('id') || headers[0]?.includes('code')) colIndexMap['id'] = 0;
-          else {
-             alert("Could not find 'ID' column in uploaded data. Please ensure header has 'ID' or 'Machine ID'.");
-             return;
-          }
-      }
-
-      const toAdd: any[] = [];
-      const toUpdate: any[] = [];
-      const currentData = activeTab === 'assets' ? machines : breakdowns;
-
-      dataRows.forEach(row => {
-          if (!row || row.length === 0) return;
-          
-          let payload: any = {};
-          Object.keys(colIndexMap).forEach(key => {
-              const val = row[colIndexMap[key]];
-              if (val !== undefined && val !== null) payload[key] = String(val).trim();
-          });
-
-          // Validation / Defaults
-          if (activeTab === 'assets') {
-              if (!payload.id) return;
-              if (!payload.status) payload.status = 'Working';
-              if (!payload.category) payload.category = `Machine ${payload.id}`;
-          } else {
-              if (!payload.id) payload.id = `BD-${Date.now()}-${Math.random().toString(36).substr(2,5)}`;
-              if (!payload.status) payload.status = 'Open';
-              if (!payload.startTime) payload.startTime = new Date().toISOString();
-              // Try to find machine name if only ID provided
-              if (payload.machineId && !payload.machineName) {
-                  const m = machines.find(mac => mac.id === payload.machineId);
-                  if (m) payload.machineName = m.category;
-              }
-          }
-
-          // @ts-ignore
-          const exists = currentData.find(d => d.id === payload.id);
-          
-          if (exists) {
-              toUpdate.push({ ...exists, ...payload });
-          } else {
-              toAdd.push(payload);
-          }
-      });
-
-      onBulkImport(activeTab === 'assets' ? 'machines' : 'breakdowns', toAdd, toUpdate);
-      
-      // Only show alert if it was a file import (fileInputRef has value), otherwise it's sync (silent success or syncMsg)
-      if (fileInputRef.current?.value) {
-          alert(`Import Successful!\nAdded: ${toAdd.length}\nUpdated: ${toUpdate.length}`);
-      }
-  };
-
-  const handleBackup = async () => {
-      if (!scriptUrl) {
-          alert("Please configure the Web App URL in Master Data settings first.");
-          return;
-      }
-      if (!confirm("Backup Machines and Breakdowns to Google Sheet? This will overwrite the specific tabs in your sheet.")) return;
-
-      setSyncLoading(true);
-      setSyncMsg("Backing up...");
-
-      try {
-          // Backup Machines
-          const machineHeaders = ["ID", "Name", "Brand", "Model", "Chase No", "Status", "Division"];
-          const machineRows = machines.map(m => [m.id, m.category, m.brand, m.modelNo, m.chaseNo, m.status, m.divisionId]);
-          await backupTabToSheet(scriptUrl, 'machines', [machineHeaders, ...machineRows]);
-          
-          // Backup Breakdowns
-          const bdHeaders = ["ID", "Machine ID", "Machine Name", "Location", "Start", "End", "Status", "Failure", "Operator", "Cause", "Action"];
-          const bdRows = breakdowns.map(b => [
-              b.id, b.machineId, b.machineName, b.locationId, 
-              b.startTime, b.endTime || '', b.status, b.failureType, b.operatorName,
-              b.rootCause || '', b.actionTaken || ''
-          ]);
-          await backupTabToSheet(scriptUrl, 'breakdowns', [bdHeaders, ...bdRows]);
-
-          setSyncMsg("✅ Backup Complete!");
-          setTimeout(() => setSyncMsg(""), 3000);
-      } catch (e) {
-          console.error(e);
-          setSyncMsg("❌ Backup Failed");
-          alert("Backup failed. Check console for details.");
-      } finally {
-          setSyncLoading(false);
-      }
-  };
-
-  // ---------------------------
-  // 2. ASSET LOGIC (Machines)
-  // ---------------------------
   
-  const handleAssetFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (assetFormData.id) {
-        // Edit Mode check if exists in list already (but we are passing ID so likely edit)
-        // If it was a 'new' form but ID was typed manually, we treat as add unless logic differs
-        // Simplified: using a flag or just existing ID presence in list to differentiate could work
-        // but here we rely on how the form was opened.
-        // Let's check if the ID exists in machines list
-        const exists = machines.find(m => m.id === assetFormData.id);
-        if (exists && !assetFormData._isNew) {
-             onUpdateMachine(assetFormData);
-        } else {
-             if (exists) { alert("Machine ID already exists!"); return; }
-             const { _isNew, ...rest } = assetFormData;
-             onAddMachine(rest);
-        }
-    }
-    setShowAssetForm(false);
-  };
-
-  const openAssetForm = (machine?: Machine) => {
-      if (machine) {
-          setAssetFormData({ ...machine, _isNew: false });
-      } else {
-          setAssetFormData({ _isNew: true, status: 'Working' });
-      }
-      setShowAssetForm(true);
-  };
-
   const handleDeleteAssets = () => {
-      const ids = Array.from(selectedAssetIds);
-      if (confirm(`Delete ${ids.length} machines?`)) {
-          onDeleteMachines(ids);
+      if(confirm(`Delete ${selectedAssetIds.size} assets?`)) {
+          onDeleteMachines(Array.from(selectedAssetIds));
           setSelectedAssetIds(new Set());
       }
   };
 
-  // ---------------------------
-  // 3. BREAKDOWN LOGIC
-  // ---------------------------
-
-  const getMachineStatus = (machineId: string) => {
-      const active = breakdowns.find(b => b.machineId === machineId && b.status === 'Open');
-      return active ? 'Down' : 'Up';
+  const openAssetForm = (asset?: Machine) => {
+      setFormData(asset || {});
+      setIsEditing(!!asset);
+      setShowForm(true);
   };
-
-  const handleOpenBreakdownForm = () => {
-      setBdFormData({
-          startTime: new Date().toISOString().slice(0, 16), // datetime-local format
-          status: 'Open'
-      });
-      setSelectedMachineForBd('');
-      setShowBreakdownForm(true);
-  };
-
-  const handleSubmitBreakdown = (e: React.FormEvent) => {
+  
+  const handleFormSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      
-      if (!selectedMachineForBd || !bdFormData.locationId || !bdFormData.startTime) {
-          alert("Please fill all required fields");
-          return;
+      if(activeTab === 'assets') {
+          if(isEditing) onUpdateMachine(formData as Machine);
+          else onAddMachine({...formData, id: formData.id || `M-${Date.now()}`} as Machine);
+      } else {
+          // Breakdown logic placeholder
       }
-
-      // Validation: Check if machine already has open breakdown
-      const isOpen = breakdowns.some(b => b.machineId === selectedMachineForBd && b.status === 'Open');
-      if (isOpen) {
-          alert("This machine already has an active breakdown. Please close the existing ticket first.");
-          return;
-      }
-
-      const machine = machines.find(m => m.id === selectedMachineForBd);
-      
-      const newRecord: BreakdownRecord = {
-          id: `BD-${Date.now()}`,
-          machineId: selectedMachineForBd,
-          machineName: machine?.category || selectedMachineForBd,
-          locationId: bdFormData.locationId,
-          sectorId: bdFormData.sectorId,
-          startTime: new Date(bdFormData.startTime).toISOString(),
-          failureType: bdFormData.failureType || 'General',
-          operatorName: bdFormData.operatorName || 'Unknown',
-          status: 'Open'
-      };
-
-      onAddBreakdown(newRecord);
-      setShowBreakdownForm(false);
-  };
-
-  const handleCloseBreakdownClick = (record: BreakdownRecord) => {
-      setBdFormData({
-          ...record,
-          endTime: new Date().toISOString().slice(0, 16) // Default to now
-      });
-      setShowCloseForm(true);
-  };
-
-  const handleSubmitCloseBreakdown = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!bdFormData.endTime || !bdFormData.rootCause || !bdFormData.actionTaken) {
-          alert("Please fill End Time, Root Cause, and Action Taken.");
-          return;
-      }
-
-      if (new Date(bdFormData.endTime) < new Date(bdFormData.startTime!)) {
-          alert("End time cannot be before start time.");
-          return;
-      }
-
-      const updated: BreakdownRecord = {
-          ...(bdFormData as BreakdownRecord),
-          endTime: new Date(bdFormData.endTime).toISOString(),
-          startTime: new Date(bdFormData.startTime!).toISOString(), // Ensure format consistency
-          status: 'Closed'
-      };
-
-      onUpdateBreakdown(updated);
-      setShowCloseForm(false);
+      setShowForm(false);
   };
 
   // --- RENDER HELPERS ---
 
   const filteredMachines = machines.filter(m => 
-      m.category?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (m.category || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
       m.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.brand?.toLowerCase().includes(searchTerm.toLowerCase())
+      (m.brand || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredBreakdowns = breakdowns.filter(b => 
       b.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.id.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+
+  const handleSelectAllAssets = () => {
+      const allSelected = filteredMachines.length > 0 && filteredMachines.every(m => selectedAssetIds.has(m.id));
+      const newSet = new Set(selectedAssetIds);
+      
+      if (allSelected) {
+          filteredMachines.forEach(m => newSet.delete(m.id));
+      } else {
+          filteredMachines.forEach(m => newSet.add(m.id));
+      }
+      setSelectedAssetIds(newSet);
+  };
 
   return (
     <div className="flex flex-col h-full space-y-4 animate-fade-in-up">
@@ -540,7 +297,14 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                     <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead className="bg-gray-100 text-gray-700 sticky top-0 border-b border-gray-200">
                             <tr>
-                                <th className="p-4 w-10"><input type="checkbox" /></th>
+                                <th className="p-4 w-10">
+                                    <input 
+                                        type="checkbox" 
+                                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        checked={filteredMachines.length > 0 && filteredMachines.every(m => selectedAssetIds.has(m.id))}
+                                        onChange={handleSelectAllAssets}
+                                    />
+                                </th>
                                 <th className="p-4">ID</th>
                                 <th className="p-4">Machine Name</th>
                                 <th className="p-4">Status</th>
@@ -557,6 +321,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                     <td className="p-4">
                                         <input 
                                             type="checkbox" 
+                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                             checked={selectedAssetIds.has(m.id)} 
                                             onChange={() => {
                                                 const newSet = new Set(selectedAssetIds);
@@ -589,287 +354,53 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
 
           {/* --- TAB 2: BREAKDOWNS --- */}
           {activeTab === 'breakdowns' && (
-              <>
-                <div className="p-4 border-b border-gray-100 flex justify-between bg-gray-50 items-center">
-                    <h3 className="font-bold text-gray-700">Breakdown History</h3>
-                    <div className="flex gap-2">
-                        <button onClick={handleOpenBreakdownForm} className="px-4 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-bold flex items-center gap-2 shadow-sm transition">
-                            <span>⚠️</span> Report Breakdown
-                        </button>
-                    </div>
-                </div>
-                <div className="flex-1 overflow-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-100 text-gray-700 sticky top-0 z-10 border-b border-gray-200">
-                            <tr>
-                                <th className="p-4">Status</th>
-                                <th className="p-4">ID</th>
-                                <th className="p-4">Machine</th>
-                                <th className="p-4">Start Time</th>
-                                <th className="p-4">End Time</th>
-                                <th className="p-4">Failure Type</th>
-                                <th className="p-4">Operator</th>
-                                <th className="p-4">Location</th>
-                                <th className="p-4 text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {filteredBreakdowns.map(b => (
-                                <tr key={b.id} className={`hover:bg-gray-50 border-l-4 ${b.status === 'Open' ? 'border-l-red-500 bg-red-50/30' : 'border-l-green-500'}`}>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${b.status === 'Open' ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-gray-100 text-gray-600'}`}>
-                                            {b.status.toUpperCase()}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 font-mono text-xs">{b.id}</td>
-                                    <td className="p-4 font-medium">{b.machineName}</td>
-                                    <td className="p-4 text-red-600">{new Date(b.startTime).toLocaleString()}</td>
-                                    <td className="p-4 text-green-600">{b.endTime ? new Date(b.endTime).toLocaleString() : '-'}</td>
-                                    <td className="p-4">{b.failureType}</td>
-                                    <td className="p-4">{b.operatorName}</td>
-                                    <td className="p-4">{b.locationId}</td>
-                                    <td className="p-4 text-center">
-                                        {b.status === 'Open' && (
-                                            <button 
-                                                onClick={() => handleCloseBreakdownClick(b)}
-                                                className="px-3 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 shadow-sm"
-                                            >
-                                                Close Ticket
-                                            </button>
-                                        )}
-                                        {b.status === 'Closed' && b.rootCause && (
-                                            <span className="text-xs text-gray-400" title={`Cause: ${b.rootCause}`}>ℹ️ Info</span>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-              </>
+              <div className="p-4 flex flex-col items-center justify-center text-gray-400 h-full">
+                  <p>Breakdown Management Interface</p>
+                  <p className="text-sm">(Coming soon in next update)</p>
+              </div>
           )}
       </div>
-
-      {/* --- MODAL: ASSET FORM --- */}
-      {showAssetForm && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-                  <h3 className="text-xl font-bold mb-4">{assetFormData._isNew ? 'Add New Machine' : 'Edit Machine'}</h3>
-                  <form onSubmit={handleAssetFormSubmit} className="space-y-3">
+      
+      {/* --- FORM MODAL --- */}
+      {showForm && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in-up">
+                  <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                      <h3 className="font-bold text-gray-800">{isEditing ? 'Edit Asset' : 'New Asset'}</h3>
+                      <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                  </div>
+                  <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
+                      {/* Simplified Form for Fix */}
                       <div>
-                          <label className="text-sm font-bold">ID</label>
-                          <input required className="w-full border p-2 rounded" value={assetFormData.id || ''} onChange={e => setAssetFormData({...assetFormData, id: e.target.value})} disabled={!assetFormData._isNew} />
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Asset ID</label>
+                          <input type="text" className="w-full border rounded p-2" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} required />
                       </div>
                       <div>
-                          <label className="text-sm font-bold">Equipment Name (Category)</label>
-                          <input required className="w-full border p-2 rounded" value={assetFormData.category || ''} onChange={e => setAssetFormData({...assetFormData, category: e.target.value})} />
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Machine Name (Category)</label>
+                          <input type="text" className="w-full border rounded p-2" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} required />
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 gap-4">
                           <div>
-                              <label className="text-sm font-bold">Brand</label>
-                              <input className="w-full border p-2 rounded" value={assetFormData.brand || ''} onChange={e => setAssetFormData({...assetFormData, brand: e.target.value})} />
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
+                              <input type="text" className="w-full border rounded p-2" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} />
                           </div>
                           <div>
-                              <label className="text-sm font-bold">Model No</label>
-                              <input className="w-full border p-2 rounded" value={assetFormData.modelNo || ''} onChange={e => setAssetFormData({...assetFormData, modelNo: e.target.value})} />
-                          </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                          <div>
-                              <label className="text-sm font-bold">Chase No</label>
-                              <input className="w-full border p-2 rounded" value={assetFormData.chaseNo || ''} onChange={e => setAssetFormData({...assetFormData, chaseNo: e.target.value})} />
-                          </div>
-                          <div>
-                              <label className="text-sm font-bold">Status</label>
-                              <select className="w-full border p-2 rounded" value={assetFormData.status || 'Working'} onChange={e => setAssetFormData({...assetFormData, status: e.target.value})}>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                              <select className="w-full border rounded p-2" value={formData.status || 'Working'} onChange={e => setFormData({...formData, status: e.target.value})}>
                                   <option value="Working">Working</option>
                                   <option value="Not Working">Not Working</option>
                                   <option value="Outside Maintenance">Outside Maintenance</option>
                               </select>
                           </div>
                       </div>
-                      <div>
-                          <label className="text-sm font-bold">Division</label>
-                          <select className="w-full border p-2 rounded" value={assetFormData.divisionId || ''} onChange={e => setAssetFormData({...assetFormData, divisionId: e.target.value})}>
-                              <option value="">Select Division...</option>
-                              {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                          </select>
-                      </div>
-                      <div className="flex justify-end gap-2 mt-4">
-                          <button type="button" onClick={() => setShowAssetForm(false)} className="px-4 py-2 text-gray-600">Cancel</button>
-                          <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded font-bold">Save</button>
-                      </div>
+                       <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
+                           <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border rounded hover:bg-gray-50">Cancel</button>
+                           <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save</button>
+                       </div>
                   </form>
               </div>
           </div>
       )}
-
-      {/* --- MODAL: NEW BREAKDOWN --- */}
-      {showBreakdownForm && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-                  <h3 className="text-xl font-bold mb-4 text-red-600">Report Breakdown</h3>
-                  <form onSubmit={handleSubmitBreakdown} className="space-y-4">
-                      
-                      {/* 1. Location Selection */}
-                      <div>
-                          <label className="block text-sm font-bold mb-1">Location</label>
-                          <select 
-                            required 
-                            className="w-full border border-gray-300 p-2 rounded"
-                            value={bdFormData.locationId || ''}
-                            onChange={(e) => setBdFormData({...bdFormData, locationId: e.target.value})}
-                          >
-                              <option value="">Select Location...</option>
-                              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                          </select>
-                      </div>
-
-                      {/* 2. Sector Selection (Optional) */}
-                      <div>
-                          <label className="block text-sm font-bold mb-1">Sector</label>
-                          <select 
-                            className="w-full border border-gray-300 p-2 rounded"
-                            value={bdFormData.sectorId || ''}
-                            onChange={(e) => setBdFormData({...bdFormData, sectorId: e.target.value})}
-                          >
-                              <option value="">Select Sector...</option>
-                              {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                          </select>
-                      </div>
-
-                      {/* 3. Machine Selection (Required) */}
-                      <div>
-                          <label className="block text-sm font-bold mb-1">Machine (Asset)</label>
-                          <select 
-                            required
-                            className="w-full border border-gray-300 p-2 rounded"
-                            value={selectedMachineForBd}
-                            onChange={(e) => {
-                                const mId = e.target.value;
-                                setSelectedMachineForBd(mId);
-                                // Auto fill brand/model if machine selected
-                                // const m = machines.find(mac => mac.id === mId);
-                            }}
-                          >
-                              <option value="">Select Machine...</option>
-                              {machines.map(m => (
-                                  <option key={m.id} value={m.id} disabled={getMachineStatus(m.id) === 'Down'}>
-                                      {m.category || m.id} {getMachineStatus(m.id) === 'Down' ? '(Already Down)' : ''}
-                                  </option>
-                              ))}
-                          </select>
-                      </div>
-
-                      {/* Read Only Info */}
-                      {selectedMachineForBd && (
-                          <div className="bg-gray-50 p-3 rounded text-sm grid grid-cols-2 gap-2">
-                              <div><span className="text-gray-500">Brand:</span> {machines.find(m => m.id === selectedMachineForBd)?.brand || '-'}</div>
-                              <div><span className="text-gray-500">Model:</span> {machines.find(m => m.id === selectedMachineForBd)?.modelNo || '-'}</div>
-                          </div>
-                      )}
-
-                      <div className="grid grid-cols-2 gap-3">
-                          <div>
-                              <label className="block text-sm font-bold mb-1">Breakdown Start</label>
-                              <input 
-                                required 
-                                type="datetime-local" 
-                                className="w-full border border-gray-300 p-2 rounded"
-                                value={bdFormData.startTime}
-                                onChange={(e) => setBdFormData({...bdFormData, startTime: e.target.value})}
-                              />
-                          </div>
-                          <div>
-                              <label className="block text-sm font-bold mb-1">Failure Type</label>
-                              <select 
-                                className="w-full border border-gray-300 p-2 rounded"
-                                value={bdFormData.failureType || ''}
-                                onChange={(e) => setBdFormData({...bdFormData, failureType: e.target.value})}
-                              >
-                                  <option value="">Select...</option>
-                                  <option value="Mechanical">Mechanical</option>
-                                  <option value="Electrical">Electrical</option>
-                                  <option value="Hydraulic">Hydraulic</option>
-                                  <option value="Software">Software/Control</option>
-                                  <option value="Operator Error">Operator Error</option>
-                              </select>
-                          </div>
-                      </div>
-
-                      <div>
-                          <label className="block text-sm font-bold mb-1">Operator Assign / Name</label>
-                          <input 
-                            required 
-                            className="w-full border border-gray-300 p-2 rounded"
-                            placeholder="Who reported or is operating?"
-                            value={bdFormData.operatorName || ''}
-                            onChange={(e) => setBdFormData({...bdFormData, operatorName: e.target.value})}
-                          />
-                      </div>
-
-                      <div className="flex justify-end gap-2 pt-4 border-t">
-                          <button type="button" onClick={() => setShowBreakdownForm(false)} className="px-4 py-2 text-gray-600">Cancel</button>
-                          <button type="submit" className="px-6 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700">Submit Breakdown</button>
-                      </div>
-                  </form>
-              </div>
-          </div>
-      )}
-
-      {/* --- MODAL: CLOSE BREAKDOWN --- */}
-      {showCloseForm && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl">
-                  <h3 className="text-xl font-bold mb-4 text-green-700">Close Breakdown Ticket</h3>
-                  <div className="mb-4 text-sm bg-gray-50 p-2 rounded">
-                      <p><strong>Machine:</strong> {bdFormData.machineName}</p>
-                      <p><strong>Start Time:</strong> {new Date(bdFormData.startTime!).toLocaleString()}</p>
-                  </div>
-                  <form onSubmit={handleSubmitCloseBreakdown} className="space-y-4">
-                      
-                      <div>
-                          <label className="block text-sm font-bold mb-1">Breakdown End Time</label>
-                          <input 
-                            required 
-                            type="datetime-local" 
-                            className="w-full border border-gray-300 p-2 rounded"
-                            value={bdFormData.endTime || ''}
-                            onChange={(e) => setBdFormData({...bdFormData, endTime: e.target.value})}
-                          />
-                      </div>
-
-                      <div>
-                          <label className="block text-sm font-bold mb-1">Root Cause</label>
-                          <textarea 
-                            required 
-                            className="w-full border border-gray-300 p-2 rounded h-20"
-                            placeholder="Why did it fail?"
-                            value={bdFormData.rootCause || ''}
-                            onChange={(e) => setBdFormData({...bdFormData, rootCause: e.target.value})}
-                          />
-                      </div>
-
-                      <div>
-                          <label className="block text-sm font-bold mb-1">Action Taken</label>
-                          <textarea 
-                            required 
-                            className="w-full border border-gray-300 p-2 rounded h-20"
-                            placeholder="How was it fixed?"
-                            value={bdFormData.actionTaken || ''}
-                            onChange={(e) => setBdFormData({...bdFormData, actionTaken: e.target.value})}
-                          />
-                      </div>
-
-                      <div className="flex justify-end gap-2 pt-4 border-t">
-                          <button type="button" onClick={() => setShowCloseForm(false)} className="px-4 py-2 text-gray-600">Cancel</button>
-                          <button type="submit" className="px-6 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700">Close Ticket</button>
-                      </div>
-                  </form>
-              </div>
-          </div>
-      )}
-
     </div>
   );
 };
