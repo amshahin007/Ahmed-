@@ -174,7 +174,16 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
 
   const openBreakdownForm = (bd?: BreakdownRecord) => {
       if (bd) {
-          setFormData({ ...bd });
+          // Calculate initial duration if start and end exist
+          let durationStr = '';
+          if (bd.startTime && bd.endTime) {
+              const start = new Date(bd.startTime).getTime();
+              const end = new Date(bd.endTime).getTime();
+              if (end > start) {
+                  durationStr = ((end - start) / (1000 * 60 * 60)).toFixed(2);
+              }
+          }
+          setFormData({ ...bd, duration: durationStr });
           setIsEditing(true);
       } else {
           setFormData({
@@ -185,11 +194,67 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
               operatorName: '',
               machineId: '',
               machineName: '',
-              locationId: filterLocationId || '' // Pre-fill with filter location if selected
+              locationId: filterLocationId || '',
+              duration: ''
           });
           setIsEditing(false);
       }
       setShowForm(true);
+  };
+
+  // --- TIME & DURATION LOGIC ---
+  const handleStartTimeChange = (val: string) => {
+      const updates: any = { startTime: val };
+      // If End time exists, update Duration
+      if (formData.endTime) {
+          const start = new Date(val).getTime();
+          const end = new Date(formData.endTime).getTime();
+          if (!isNaN(start) && !isNaN(end) && end > start) {
+              updates.duration = ((end - start) / (1000 * 60 * 60)).toFixed(2);
+          } else {
+              updates.duration = '';
+          }
+      } else if (formData.duration) {
+          // If Duration exists but End Time is empty (or invalid), recalc End Time? 
+          // Usually easier to clear duration if start changes drastically, but let's try to preserve duration
+          const start = new Date(val).getTime();
+          const dur = parseFloat(formData.duration);
+          if (!isNaN(start) && !isNaN(dur) && dur > 0) {
+              const newEnd = new Date(start + (dur * 60 * 60 * 1000));
+              updates.endTime = new Date(newEnd.getTime() - (newEnd.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+          }
+      }
+      setFormData({ ...formData, ...updates });
+  };
+
+  const handleEndTimeChange = (val: string) => {
+      const updates: any = { endTime: val };
+      if (formData.startTime) {
+          const start = new Date(formData.startTime).getTime();
+          const end = new Date(val).getTime();
+          if (!isNaN(start) && !isNaN(end)) {
+              if (end > start) {
+                  updates.duration = ((end - start) / (1000 * 60 * 60)).toFixed(2);
+              } else {
+                  updates.duration = ''; // Reset if end is before start
+              }
+          }
+      }
+      setFormData({ ...formData, ...updates });
+  };
+
+  const handleDurationChange = (val: string) => {
+      const updates: any = { duration: val };
+      const hours = parseFloat(val);
+      
+      if (formData.startTime && !isNaN(hours) && hours > 0) {
+          const start = new Date(formData.startTime).getTime();
+          const endMs = start + (hours * 60 * 60 * 1000);
+          const endDate = new Date(endMs);
+          // Adjust for local input format
+          updates.endTime = new Date(endDate.getTime() - (endDate.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+      }
+      setFormData({ ...formData, ...updates });
   };
   
   const handleFormSubmit = (e: React.FormEvent) => {
@@ -210,8 +275,11 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           }
 
           const selectedMachine = machines.find(m => m.id === formData.machineId);
+          // Clean up form data (remove UI-only duration if needed, or keep it)
+          const { duration, ...cleanData } = formData;
+          
           const finalRecord: BreakdownRecord = {
-             ...formData,
+             ...cleanData,
              machineName: selectedMachine?.category || formData.machineName || 'Unknown',
              locationId: formData.locationId || selectedMachine?.locationId || 'Unknown',
              sectorId: selectedMachine?.sectorId || formData.sectorId || '',
@@ -657,14 +725,14 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
 
                              {/* ROW 2: TIMING & STATUS */}
                              <div className="bg-white p-3 rounded border border-gray-200 shadow-sm">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                                     <div>
                                         <label className="block text-xs font-bold text-gray-600 mb-1">وقت البداية / Start Time</label>
                                         <input 
                                             type="datetime-local" 
                                             className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 px-2 text-sm"
                                             value={formData.startTime ? formData.startTime.slice(0, 16) : ''} 
-                                            onChange={e => setFormData({...formData, startTime: e.target.value})} 
+                                            onChange={e => handleStartTimeChange(e.target.value)} 
                                             required 
                                         />
                                     </div>
@@ -674,7 +742,18 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                             type="datetime-local" 
                                             className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 px-2 text-sm"
                                             value={formData.endTime ? formData.endTime.slice(0, 16) : ''} 
-                                            onChange={e => setFormData({...formData, endTime: e.target.value})} 
+                                            onChange={e => handleEndTimeChange(e.target.value)} 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">مدة (ساعة) / Duration</label>
+                                        <input 
+                                            type="number"
+                                            step="0.1" 
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 px-2 text-sm bg-yellow-50"
+                                            value={formData.duration || ''} 
+                                            onChange={e => handleDurationChange(e.target.value)} 
+                                            placeholder="Hrs..." 
                                         />
                                     </div>
                                     <div>
