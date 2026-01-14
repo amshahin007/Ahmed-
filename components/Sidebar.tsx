@@ -165,9 +165,16 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-blue-400">WareFlow</h1>
-            <p className="text-xs text-slate-400 mt-1">Inventory Management</p>
+          <div className="flex items-center gap-3">
+             <img 
+                src="https://daltex.com/wp-content/uploads/2020/09/Daltex-Logo.png" 
+                alt="Daltex" 
+                className="w-10 h-10 object-contain bg-white rounded p-1"
+             />
+             <div>
+               <h1 className="text-xl font-bold tracking-tight text-blue-400">Daltex</h1>
+               <p className="text-[10px] text-slate-400 uppercase tracking-wider">Maintenance Mgmt</p>
+             </div>
           </div>
           {/* Mobile Close Button */}
           <button onClick={onClose} className="md:hidden text-slate-400 hover:text-white">

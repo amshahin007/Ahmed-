@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { User } from '../types';
 
@@ -27,9 +28,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-        <div className="bg-slate-900 p-8 text-center">
-            <h1 className="text-3xl font-bold text-blue-400 mb-2">WareFlow</h1>
-            <p className="text-slate-400 text-sm">Inventory Management System</p>
+        <div className="bg-slate-900 p-8 text-center flex flex-col items-center">
+            <div className="w-24 h-24 bg-white rounded-xl flex items-center justify-center mb-4 p-2">
+                <img 
+                    src="https://daltex.com/wp-content/uploads/2020/09/Daltex-Logo.png" 
+                    alt="Daltex Logo" 
+                    className="w-full h-full object-contain"
+                />
+            </div>
+            <h1 className="text-2xl font-bold text-blue-400 mb-1">Daltex Maintenance</h1>
+            <p className="text-slate-400 text-sm tracking-widest uppercase">Management System</p>
         </div>
         
         <div className="p-8">
