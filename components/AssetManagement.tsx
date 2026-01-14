@@ -28,6 +28,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
   const [filterLocationId, setFilterLocationId] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'All' | 'Open' | 'Closed'>('All');
   
   // Sync State
   const [syncConfig, setSyncConfig] = useState<Record<string, { sheetId: string }>>(() => {
@@ -223,7 +224,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   const filteredBreakdowns = breakdowns.filter(b => 
       (b.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.id.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (!filterLocationId || b.locationId === filterLocationId)
+      (!filterLocationId || b.locationId === filterLocationId) &&
+      (filterStatus === 'All' || b.status === filterStatus)
   ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
   // BREAKDOWN FORM LOGIC
@@ -435,6 +437,15 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                         >
                             <option value="">All Locations</option>
                             {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        </select>
+                        <select 
+                            value={filterStatus} 
+                            onChange={(e) => setFilterStatus(e.target.value as any)}
+                            className="px-3 py-1.5 border border-gray-300 rounded text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-32"
+                        >
+                            <option value="All">All Status</option>
+                            <option value="Open">Open</option>
+                            <option value="Closed">Closed</option>
                         </select>
                         <button onClick={() => openBreakdownForm()} className="px-4 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-bold transition shadow-sm whitespace-nowrap">+ New Breakdown</button>
                    </div>
