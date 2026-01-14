@@ -72,6 +72,25 @@ export interface IssueRecord {
   requesterEmail?: string;
 }
 
+export interface BreakdownRecord {
+  id: string;
+  machineId: string;
+  machineName: string;
+  locationId: string; // Required for filtering/context
+  sectorId?: string;
+  
+  startTime: string; // ISO String
+  endTime?: string; // ISO String (nullable if open)
+  
+  failureType: string; // e.g., Mechanical, Electrical
+  operatorName: string;
+  
+  rootCause?: string;
+  actionTaken?: string;
+  
+  status: 'Open' | 'Closed';
+}
+
 // NEW: Agri Work Order Record
 export interface AgriOrderRecord {
   id: string;

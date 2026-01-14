@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
@@ -42,7 +41,7 @@ interface MasterDataProps {
   onBulkImport: (tab: string, added: any[], updated: any[]) => void;
 }
 
-type TabType = 'items' | 'machines' | 'locations' | 'sectors' | 'divisions' | 'users' | 'plans' | 'history';
+type TabType = 'items' | 'locations' | 'sectors' | 'divisions' | 'users' | 'plans' | 'history';
 
 const ITEMS_PER_PAGE = 80;
 
@@ -61,18 +60,6 @@ const COLUMNS_CONFIG: Record<Exclude<TabType, 'history'>, { key: string, label: 
     { key: 'oem', label: 'OEM' },
     { key: 'partNumber', label: 'Part No' },
     { key: 'unit', label: 'UM' }
-  ],
-  machines: [
-    { key: 'id', label: 'ID' },
-    { key: 'machineLocalNo', label: 'Machine Local No' },
-    { key: 'status', label: 'Status' }, 
-    { key: 'chaseNo', label: 'Chase No' }, 
-    { key: 'modelNo', label: 'Model No (طراز)' },
-    { key: 'category', label: 'إسم المعدة' },
-    { key: 'mainGroup', label: 'Main Group' },
-    { key: 'subGroup', label: 'Sub Group' },
-    { key: 'brand', label: 'Brand / Manufacturer' },
-    { key: 'divisionId', label: 'Division' }
   ],
   locations: [
     { key: 'id', label: 'ID' },
@@ -315,7 +302,7 @@ const MasterData: React.FC<MasterDataProps> = ({
       // Get data and columns based on tab
       switch(tabName) {
           case 'items': data = items; columns = COLUMNS_CONFIG['items']; break;
-          case 'machines': data = machines; columns = COLUMNS_CONFIG['machines']; break;
+          // Machines removed from here as they are in Asset Management
           case 'locations': data = locations; columns = COLUMNS_CONFIG['locations']; break;
           case 'sectors': data = sectors; columns = COLUMNS_CONFIG['sectors']; break;
           case 'divisions': data = divisions; columns = COLUMNS_CONFIG['divisions']; break;
@@ -347,7 +334,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     setSyncLoading(true);
     setSyncMsg("Starting Full Backup...");
     
-    const tabsToBackup = ['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users'];
+    const tabsToBackup = ['items', 'locations', 'sectors', 'divisions', 'plans', 'users'];
     let successCount = 0;
     let errors: string[] = [];
 
@@ -410,7 +397,6 @@ const MasterData: React.FC<MasterDataProps> = ({
   const handleDeleteImplementation = (ids: string[]) => {
       switch (activeTab) {
         case 'items': onDeleteItems(ids); break;
-        case 'machines': onDeleteMachines(ids); break;
         case 'locations': onDeleteLocations(ids); break;
         case 'sectors': onDeleteSectors(ids); break;
         case 'divisions': onDeleteDivisions(ids); break;
@@ -542,7 +528,6 @@ const MasterData: React.FC<MasterDataProps> = ({
     
     switch (activeTab) {
       case 'items': data = items; break;
-      case 'machines': data = machines; break;
       case 'locations': data = locations; break;
       case 'sectors': data = sectors; break;
       case 'divisions': data = divisions; break;
@@ -564,13 +549,6 @@ const MasterData: React.FC<MasterDataProps> = ({
         rows = data.map((i: Item) => [
             i.id, i.name, i.category, i.unit, 
             i.thirdId, i.description2, i.fullName, i.brand, i.oem, i.partNumber, i.modelNo, i.stockQuantity
-        ]);
-        break;
-      case 'machines':
-        headers = ['ID', 'Machine Local No', 'Status', 'Chase No', 'Model No', 'Main Group', 'Sub Group', 'إسم المعدة', 'Brand', 'Division ID'];
-        rows = data.map((m: Machine) => [
-            m.id, m.machineLocalNo || '', m.status, m.chaseNo, m.modelNo,
-            m.mainGroup, m.subGroup, m.category, m.brand, m.divisionId
         ]);
         break;
       case 'locations':
@@ -683,19 +661,6 @@ const MasterData: React.FC<MasterDataProps> = ({
             partNumber: ['part no', 'part number', 'pn', 'part num'],
             modelNo: ['model no', 'model', 'model number', 'طراز'],
             stockQuantity: ['stock', 'qty', 'stock qty', 'quantity', 'balance']
-        };
-    } else if (targetTab === 'machines') {
-        fieldMap = {
-            id: ['id', 'machine id', 'code'],
-            machineLocalNo: ['local no', 'local number', 'local id', 'machine local no', 'asset no'],
-            status: ['status', 'state', 'condition', 'name', 'machine name'], 
-            chaseNo: ['chase no', 'chase number', 'model', 'model name'], 
-            modelNo: ['model no', 'model number', 'طراز', 'type'],
-            mainGroup: ['main group', 'group'],
-            subGroup: ['sub group', 'subgroup'],
-            category: ['category', 'إسم المعدة', 'equipment name'],
-            brand: ['brand', 'manufacturer'],
-            divisionId: ['division id', 'division', 'line']
         };
     } else if (targetTab === 'locations') {
         fieldMap = {
@@ -874,7 +839,6 @@ const MasterData: React.FC<MasterDataProps> = ({
     if (isEditing) {
         switch(activeTab) {
             case 'items': onUpdateItem(payload); break;
-            case 'machines': onUpdateMachine(payload); break;
             case 'locations': onUpdateLocation(payload); break;
             case 'sectors': onUpdateSector(payload); break;
             case 'divisions': onUpdateDivision(payload); break;
@@ -884,7 +848,6 @@ const MasterData: React.FC<MasterDataProps> = ({
     } else {
         switch(activeTab) {
             case 'items': onAddItem(payload); break;
-            case 'machines': onAddMachine(payload); break;
             case 'locations': onAddLocation(payload); break;
             case 'sectors': onAddSector(payload); break;
             case 'divisions': onAddDivision(payload); break;
@@ -961,11 +924,9 @@ const MasterData: React.FC<MasterDataProps> = ({
   };
 
   const renderTable = () => {
-    // Only render standard master data tables. History is handled by HistoryTable.tsx
     let data: any[] = [];
     switch (activeTab) {
       case 'items': data = items; break;
-      case 'machines': data = machines; break;
       case 'locations': data = locations; break;
       case 'sectors': data = sectors; break;
       case 'divisions': data = divisions; break;
@@ -1039,7 +1000,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             
             {/* Tabs */}
             <div className="flex overflow-x-auto w-full lg:w-auto pb-2 lg:pb-0 gap-2 scrollbar-hide">
-                {(['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users'] as const).map(tab => (
+                {(['items', 'locations', 'sectors', 'divisions', 'plans', 'users'] as const).map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}

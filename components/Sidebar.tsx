@@ -19,6 +19,12 @@ const DEFAULT_NAV_ITEMS = [
       roles: ['admin', 'user', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer', 'warehouse_supervisor'] 
     },
     { 
+      id: 'asset-management', 
+      label: 'Asset Management', 
+      icon: '🏗️', 
+      roles: ['admin', 'maintenance_manager', 'maintenance_engineer'] 
+    },
+    { 
       id: 'agri-work-order', 
       label: 'Work Orders', 
       icon: '🚜', 

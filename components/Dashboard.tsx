@@ -15,6 +15,13 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 // Navigation configuration matching Sidebar roles
 const QUICK_NAV_ITEMS = [
     { 
+      id: 'asset-management', 
+      label: 'Asset Management', 
+      icon: '🏗️', 
+      color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100',
+      roles: ['admin', 'maintenance_manager', 'maintenance_engineer'] 
+    },
+    { 
       id: 'agri-work-order', 
       label: 'Work Orders', 
       icon: '🚜', 

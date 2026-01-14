@@ -10,6 +10,7 @@ import StockApproval from './components/StockApproval';
 import AiAssistant from './components/AiAssistant';
 import Settings from './components/Settings';
 import AgriWorkOrder from './components/AgriWorkOrder';
+import AssetManagement from './components/AssetManagement'; // Imported Asset Management
 import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import * as storageService from './services/storageService';
@@ -21,9 +22,10 @@ import {
   SECTORS as INIT_SECTORS,
   DIVISIONS as INIT_DIVISIONS,
   USERS as INIT_USERS,
-  MAINTENANCE_PLANS as INIT_PLANS
+  MAINTENANCE_PLANS as INIT_PLANS,
+  INITIAL_BREAKDOWNS // Imported initial breakdowns
 } from './constants';
-import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan, AgriOrderRecord } from './types';
+import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan, AgriOrderRecord, BreakdownRecord } from './types';
 
 // Helper to load small configs from LocalStorage safely (kept for non-data prefs)
 const loadConfig = <T,>(key: string, fallback: T): T => {
@@ -39,7 +41,6 @@ const App: React.FC = () => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   // --- Auth State ---
-  // User session is small, keep in localStorage for simplicity or move to DB. Keeping in LS for now to avoid async login flicker.
   const [user, setUser] = useState<User | null>(() => loadConfig('wf_user', null));
 
   // --- View State ---
@@ -55,8 +56,8 @@ const App: React.FC = () => {
   const [divisions, setDivisions] = useState<Division[]>(INIT_DIVISIONS);
   const [plans, setPlans] = useState<MaintenancePlan[]>(INIT_PLANS);
   const [usersList, setUsersList] = useState<User[]>(INIT_USERS);
-  // NEW: Agri Orders State
   const [agriOrders, setAgriOrders] = useState<AgriOrderRecord[]>([]);
+  const [breakdowns, setBreakdowns] = useState<BreakdownRecord[]>(INITIAL_BREAKDOWNS); // Breakdown State
 
   // --- Load Data from IndexedDB on Mount ---
   useEffect(() => {
@@ -64,7 +65,7 @@ const App: React.FC = () => {
       try {
         const [
           loadedHistory, loadedItems, loadedMachines, loadedLocations, 
-          loadedSectors, loadedDivisions, loadedPlans, loadedUsers, loadedAgri
+          loadedSectors, loadedDivisions, loadedPlans, loadedUsers, loadedAgri, loadedBreakdowns
         ] = await Promise.all([
           storageService.getItem<IssueRecord[]>('wf_history'),
           storageService.getItem<Item[]>('wf_items'),
@@ -75,6 +76,7 @@ const App: React.FC = () => {
           storageService.getItem<MaintenancePlan[]>('wf_plans'),
           storageService.getItem<User[]>('wf_users'),
           storageService.getItem<AgriOrderRecord[]>('wf_agri_orders'),
+          storageService.getItem<BreakdownRecord[]>('wf_breakdowns'),
         ]);
 
         if (loadedHistory) setHistory(loadedHistory);
@@ -82,7 +84,6 @@ const App: React.FC = () => {
         // Items Loading with Migration for Stock Quantity
         if (loadedItems) {
             const migratedItems = loadedItems.map(loadedItem => {
-                // If stockQuantity is missing (old data), try to grab from INIT or default to 0
                 if (loadedItem.stockQuantity === undefined) {
                     const initItem = INIT_ITEMS.find(i => i.id === loadedItem.id);
                     return { ...loadedItem, stockQuantity: initItem?.stockQuantity ?? 0 };
@@ -101,6 +102,7 @@ const App: React.FC = () => {
         if (loadedPlans) setPlans(loadedPlans);
         if (loadedUsers) setUsersList(loadedUsers);
         if (loadedAgri) setAgriOrders(loadedAgri);
+        if (loadedBreakdowns) setBreakdowns(loadedBreakdowns);
 
       } catch (err) {
         console.error("Failed to load data from database:", err);
@@ -112,7 +114,6 @@ const App: React.FC = () => {
   }, []);
 
   // --- Persistence Effects (Save on Change) ---
-  // Only save if data has been loaded to prevent overwriting DB with initial empty/default state
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_history', history); }, [history, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_items', items); }, [items, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_machines', machines); }, [machines, isDataLoaded]);
@@ -121,10 +122,9 @@ const App: React.FC = () => {
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_divisions', divisions); }, [divisions, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_plans', plans); }, [plans, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_users', usersList); }, [usersList, isDataLoaded]);
-  // NEW: Save Agri Orders
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_agri_orders', agriOrders); }, [agriOrders, isDataLoaded]);
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_breakdowns', breakdowns); }, [breakdowns, isDataLoaded]); // Breakdown Persist
   
-  // User persist to localStorage (Auth)
   useEffect(() => { localStorage.setItem('wf_user', JSON.stringify(user)); }, [user]);
 
 
@@ -145,22 +145,17 @@ const App: React.FC = () => {
   };
 
   const handleUpdateIssue = (updatedIssue: IssueRecord) => {
-    // Logic to decrease stock when an issue is approved
     const oldIssue = history.find(h => h.id === updatedIssue.id);
-    
     if (oldIssue && oldIssue.status !== 'Approved' && updatedIssue.status === 'Approved') {
-        // Find item and decrease stock
         setItems(prevItems => prevItems.map(item => {
             if (item.id === updatedIssue.itemId) {
                 const currentStock = item.stockQuantity || 0;
-                // Prevent negative stock for logical consistency, though system allows override
                 const newStock = Math.max(0, currentStock - updatedIssue.quantity);
                 return { ...item, stockQuantity: newStock };
             }
             return item;
         }));
     }
-
     setHistory(prev => prev.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue));
   };
 
@@ -177,6 +172,10 @@ const App: React.FC = () => {
   const handleAddAgriOrder = (order: AgriOrderRecord) => setAgriOrders(prev => [...prev, order]);
   const handleUpdateAgriOrder = (order: AgriOrderRecord) => setAgriOrders(prev => prev.map(o => o.id === order.id ? order : o));
   const handleDeleteAgriOrders = (ids: string[]) => setAgriOrders(prev => prev.filter(o => !ids.includes(o.id)));
+
+  // Breakdown Handlers
+  const handleAddBreakdown = (bd: BreakdownRecord) => setBreakdowns(prev => [bd, ...prev]);
+  const handleUpdateBreakdown = (bd: BreakdownRecord) => setBreakdowns(prev => prev.map(b => b.id === bd.id ? bd : b));
 
   const handleUpdateItem = (updatedItem: Item) => {
     setItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
@@ -282,6 +281,21 @@ const App: React.FC = () => {
             onDeleteOrders={handleDeleteAgriOrders}
             locations={locations}
             machines={machines}
+          />
+        );
+      case 'asset-management':
+        return (
+          <AssetManagement
+            machines={machines}
+            locations={locations}
+            sectors={sectors}
+            divisions={divisions}
+            breakdowns={breakdowns}
+            onAddMachine={handleAddMachine}
+            onUpdateMachine={handleUpdateMachine}
+            onDeleteMachines={handleDeleteMachines}
+            onAddBreakdown={handleAddBreakdown}
+            onUpdateBreakdown={handleUpdateBreakdown}
           />
         );
       case 'issue-form':

@@ -1,5 +1,5 @@
 
-import { Item, Machine, Location, IssueRecord, Sector, Division, User, MaintenancePlan } from './types';
+import { Item, Machine, Location, IssueRecord, Sector, Division, User, MaintenancePlan, BreakdownRecord } from './types';
 
 export const USERS: User[] = [
   { 
@@ -77,11 +77,11 @@ export const MAINTENANCE_PLANS: MaintenancePlan[] = [
 ];
 
 export const MACHINES: Machine[] = [
-  { id: 'M-101', category: 'Conveyor Belt Alpha', status: 'Working', chaseNo: 'CV-2000', divisionId: 'DIV-001' },
-  { id: 'M-102', category: 'Robotic Arm Bravo', status: 'Working', chaseNo: 'KUKA-KR6', divisionId: 'DIV-002' },
-  { id: 'M-103', category: 'Packaging Unit Charlie', status: 'Not Working', chaseNo: 'PAC-X1', divisionId: 'DIV-003' },
-  { id: 'M-104', category: 'CNC Lathe Delta', status: 'Outside Maintenance', chaseNo: 'Mazak-500', divisionId: 'DIV-001' },
-  { id: 'M-105', category: 'Hydraulic Press Echo', status: 'Working', chaseNo: 'HP-50T', divisionId: 'DIV-002' },
+  { id: 'M-101', category: 'Conveyor Belt Alpha', status: 'Working', chaseNo: 'CV-2000', divisionId: 'DIV-001', brand: 'Cat', modelNo: 'V100' },
+  { id: 'M-102', category: 'Robotic Arm Bravo', status: 'Working', chaseNo: 'KUKA-KR6', divisionId: 'DIV-002', brand: 'Kuka', modelNo: 'KR6' },
+  { id: 'M-103', category: 'Packaging Unit Charlie', status: 'Not Working', chaseNo: 'PAC-X1', divisionId: 'DIV-003', brand: 'PackMaster', modelNo: 'X1' },
+  { id: 'M-104', category: 'CNC Lathe Delta', status: 'Outside Maintenance', chaseNo: 'Mazak-500', divisionId: 'DIV-001', brand: 'Mazak', modelNo: '500' },
+  { id: 'M-105', category: 'Hydraulic Press Echo', status: 'Working', chaseNo: 'HP-50T', divisionId: 'DIV-002', brand: 'Hydra', modelNo: '50T' },
 ];
 
 export const ITEMS: Item[] = [
@@ -133,4 +133,30 @@ export const INITIAL_HISTORY: IssueRecord[] = [
     maintenancePlan: 'Sudden Breakdown (صيانة اعطال فجائية)',
     status: 'Pending'
   },
+];
+
+export const INITIAL_BREAKDOWNS: BreakdownRecord[] = [
+  {
+    id: 'BD-2024-001',
+    machineId: 'M-103',
+    machineName: 'Packaging Unit Charlie',
+    locationId: 'WH-002',
+    startTime: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), // 5 hours ago
+    failureType: 'Mechanical',
+    operatorName: 'Ahmed Ali',
+    status: 'Open'
+  },
+  {
+    id: 'BD-2024-000',
+    machineId: 'M-101',
+    machineName: 'Conveyor Belt Alpha',
+    locationId: 'WH-001',
+    startTime: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+    endTime: new Date(Date.now() - 1000 * 60 * 60 * 46).toISOString(),
+    failureType: 'Electrical',
+    operatorName: 'Sarah John',
+    rootCause: 'Fuse Blown',
+    actionTaken: 'Replaced Fuse',
+    status: 'Closed'
+  }
 ];
