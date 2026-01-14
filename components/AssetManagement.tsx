@@ -182,7 +182,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
               status: 'Open',
               failureType: 'Mechanical',
               operatorName: '',
-              machineId: ''
+              machineId: '',
+              locationId: ''
           });
           setIsEditing(false);
       }
@@ -200,7 +201,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           const finalRecord: BreakdownRecord = {
              ...formData,
              machineName: selectedMachine?.category || formData.machineName || 'Unknown',
-             locationId: selectedMachine?.locationId || formData.locationId || 'Unknown',
+             locationId: formData.locationId || selectedMachine?.locationId || 'Unknown',
              sectorId: selectedMachine?.sectorId || formData.sectorId || '',
           };
           if(isEditing) onUpdateBreakdown(finalRecord);
@@ -404,6 +405,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                <th className="p-4">ID</th>
                                <th className="p-4">Start Time</th>
                                <th className="p-4">End Time</th>
+                               <th className="p-4">Location</th>
                                <th className="p-4">Machine</th>
                                <th className="p-4">Type</th>
                                <th className="p-4">Operator</th>
@@ -419,6 +421,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                    <td className="p-4 font-mono">{b.id}</td>
                                    <td className="p-4">{new Date(b.startTime).toLocaleString()}</td>
                                    <td className="p-4 text-gray-500">{b.endTime ? new Date(b.endTime).toLocaleString() : '-'}</td>
+                                   <td className="p-4">{locations.find(l => l.id === b.locationId)?.name || b.locationId}</td>
                                    <td className="p-4 font-bold">{b.machineName}</td>
                                    <td className="p-4">{b.failureType}</td>
                                    <td className="p-4">{b.operatorName}</td>
@@ -435,7 +438,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                </tr>
                            ))}
                            {filteredBreakdowns.length === 0 && (
-                               <tr><td colSpan={10} className="p-8 text-center text-gray-400">No breakdowns found.</td></tr>
+                               <tr><td colSpan={11} className="p-8 text-center text-gray-400">No breakdowns found.</td></tr>
                            )}
                        </tbody>
                    </table>
@@ -521,7 +524,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                     value={formData.machineId || ''} 
                                     onChange={e => {
                                         const m = machines.find(mac => mac.id === e.target.value);
-                                        setFormData({...formData, machineId: e.target.value, machineName: m?.category || ''});
+                                        setFormData({
+                                            ...formData, 
+                                            machineId: e.target.value, 
+                                            machineName: m?.category || '',
+                                            locationId: m?.locationId || formData.locationId // Auto-fill location
+                                        });
                                     }} 
                                     required
                                 >
@@ -529,6 +537,14 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                     {machines.map(m => (
                                         <option key={m.id} value={m.id}>{m.category || m.id} ({m.locationId || 'No Loc'})</option>
                                     ))}
+                                </select>
+                             </div>
+
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                                <select className="w-full border rounded p-2" value={formData.locationId || ''} onChange={e => setFormData({...formData, locationId: e.target.value})}>
+                                    <option value="">Select Location...</option>
+                                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                                 </select>
                              </div>
                              
