@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Machine, Location, Sector, Division, BreakdownRecord } from '../types';
 import * as XLSX from 'xlsx';
 import { fetchRawCSV, extractSheetIdFromUrl, DEFAULT_SHEET_ID } from '../services/googleSheetsService';
+import SearchableSelect, { Option } from './SearchableSelect';
 
 interface AssetManagementProps {
   machines: Machine[];
@@ -233,6 +234,13 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   const formMachines = (!formData.locationId || ignoreLocationFilter)
       ? machines
       : machines.filter(m => m.locationId === formData.locationId);
+
+  // Prepare options for SearchableSelect
+  const machineOptions: Option[] = formMachines.map(m => ({
+      id: m.id,
+      label: m.category || m.id, // Primary display
+      subLabel: `ID: ${m.id} | ${m.brand || ''} ${m.modelNo || ''} (${m.locationId || 'No Loc'})` // Searchable metadata
+  }));
 
   const handleSelectAllAssets = () => {
       const allSelected = filteredMachines.length > 0 && filteredMachines.every(m => selectedAssetIds.has(m.id));
@@ -563,28 +571,27 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                         Show all machines
                                     </label>
                                 </div>
-                                <select 
-                                    className="w-full border rounded p-2" 
-                                    value={formData.machineId || ''} 
-                                    onChange={e => {
-                                        const m = machines.find(mac => mac.id === e.target.value);
-                                        setFormData({
-                                            ...formData, 
-                                            machineId: e.target.value, 
-                                            machineName: m?.category || '',
-                                            locationId: (m?.locationId && !ignoreLocationFilter) ? m.locationId : formData.locationId // Keep selected location if ignoring filter, otherwise sync
-                                        });
-                                    }} 
-                                    required
+                                <SearchableSelect 
+                                    label=""
+                                    placeholder={formData.locationId && !ignoreLocationFilter ? 'Type name or ID to filter...' : 'Search all machines...'}
+                                    options={machineOptions}
+                                    value={formData.machineId || ''}
+                                    onChange={(val) => {
+                                        const m = machines.find(mac => mac.id === val);
+                                        if (m) {
+                                            setFormData({
+                                                ...formData, 
+                                                machineId: val, 
+                                                machineName: m.category || '',
+                                                locationId: (m.locationId && !ignoreLocationFilter) ? m.locationId : formData.locationId
+                                            });
+                                        } else {
+                                             setFormData({ ...formData, machineId: val });
+                                        }
+                                    }}
                                     disabled={!formData.locationId && formMachines.length === machines.length && !ignoreLocationFilter}
-                                >
-                                    <option value="">
-                                        {formData.locationId && !ignoreLocationFilter ? '-- Choose Machine in Location --' : '-- Choose Machine --'}
-                                    </option>
-                                    {formMachines.map(m => (
-                                        <option key={m.id} value={m.id}>{m.category || m.id} ({m.locationId || 'No Loc'})</option>
-                                    ))}
-                                </select>
+                                    required
+                                />
                                 {formData.locationId && formMachines.length === 0 && !ignoreLocationFilter && (
                                     <p className="text-xs text-red-500 mt-1">
                                         No machines found in this location. 
