@@ -42,6 +42,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   const [showForm, setShowForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({});
+  const [ignoreLocationFilter, setIgnoreLocationFilter] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -173,6 +174,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   };
 
   const openBreakdownForm = (bd?: BreakdownRecord) => {
+      setIgnoreLocationFilter(false);
       if (bd) {
           setFormData({ ...bd });
           setIsEditing(true);
@@ -227,9 +229,10 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
   // Filter machines in form based on selected location in form
-  const formMachines = formData.locationId 
-      ? machines.filter(m => m.locationId === formData.locationId)
-      : machines;
+  // If "Ignore Location Filter" is checked OR locationId is empty, show all.
+  const formMachines = (!formData.locationId || ignoreLocationFilter)
+      ? machines
+      : machines.filter(m => m.locationId === formData.locationId);
 
   const handleSelectAllAssets = () => {
       const allSelected = filteredMachines.length > 0 && filteredMachines.every(m => selectedAssetIds.has(m.id));
@@ -548,7 +551,18 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                              </div>
 
                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Select Machine</label>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-sm font-medium text-gray-700">Select Machine</label>
+                                    <label className="flex items-center text-xs text-blue-600 cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            className="mr-1 rounded text-blue-600"
+                                            checked={ignoreLocationFilter}
+                                            onChange={(e) => setIgnoreLocationFilter(e.target.checked)}
+                                        />
+                                        Show all machines
+                                    </label>
+                                </div>
                                 <select 
                                     className="w-full border rounded p-2" 
                                     value={formData.machineId || ''} 
@@ -558,19 +572,24 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                             ...formData, 
                                             machineId: e.target.value, 
                                             machineName: m?.category || '',
-                                            locationId: m?.locationId || formData.locationId // Auto-fill location
+                                            locationId: (m?.locationId && !ignoreLocationFilter) ? m.locationId : formData.locationId // Keep selected location if ignoring filter, otherwise sync
                                         });
                                     }} 
                                     required
-                                    disabled={!formData.locationId && formMachines.length === machines.length}
+                                    disabled={!formData.locationId && formMachines.length === machines.length && !ignoreLocationFilter}
                                 >
-                                    <option value="">{formData.locationId ? '-- Choose Machine in Location --' : '-- Choose Machine --'}</option>
+                                    <option value="">
+                                        {formData.locationId && !ignoreLocationFilter ? '-- Choose Machine in Location --' : '-- Choose Machine --'}
+                                    </option>
                                     {formMachines.map(m => (
                                         <option key={m.id} value={m.id}>{m.category || m.id} ({m.locationId || 'No Loc'})</option>
                                     ))}
                                 </select>
-                                {formData.locationId && formMachines.length === 0 && (
-                                    <p className="text-xs text-red-500 mt-1">No machines found in this location.</p>
+                                {formData.locationId && formMachines.length === 0 && !ignoreLocationFilter && (
+                                    <p className="text-xs text-red-500 mt-1">
+                                        No machines found in this location. 
+                                        <button type="button" onClick={() => setIgnoreLocationFilter(true)} className="ml-1 underline font-bold">Show All</button>
+                                    </p>
                                 )}
                              </div>
                              
