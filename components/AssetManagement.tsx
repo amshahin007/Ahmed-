@@ -199,6 +199,16 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           else onAddMachine({...formData, id: formData.id || `M-${Date.now()}`} as Machine);
       } else {
           // Breakdown Logic
+          // Validate Time
+          if (formData.startTime && formData.endTime) {
+              const start = new Date(formData.startTime);
+              const end = new Date(formData.endTime);
+              if (end < start) {
+                  alert("⚠️ Error: End Time cannot be earlier than Start Time.");
+                  return;
+              }
+          }
+
           const selectedMachine = machines.find(m => m.id === formData.machineId);
           const finalRecord: BreakdownRecord = {
              ...formData,
