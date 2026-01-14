@@ -107,6 +107,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
              else if (h.includes('model')) obj.modelNo = row[i];
              else if (h.includes('chase')) obj.chaseNo = row[i];
              else if (h.includes('division')) obj.divisionId = row[i];
+             else if (h.includes('sector')) obj.sectorId = row[i];
+             else if (h.includes('location')) obj.locationId = row[i];
           });
           
           if(obj.id) {
@@ -311,7 +313,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                 <th className="p-4">Brand</th>
                                 <th className="p-4">Model No</th>
                                 <th className="p-4">Chase No</th>
-                                <th className="p-4">Division</th>
+                                <th className="p-4">Location</th>
+                                <th className="p-4">Sector</th>
                                 <th className="p-4 text-right">Action</th>
                             </tr>
                         </thead>
@@ -340,7 +343,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                     <td className="p-4">{m.brand}</td>
                                     <td className="p-4">{m.modelNo}</td>
                                     <td className="p-4">{m.chaseNo}</td>
-                                    <td className="p-4">{m.divisionId}</td>
+                                    <td className="p-4">{m.locationId}</td>
+                                    <td className="p-4">{m.sectorId}</td>
                                     <td className="p-4 text-right">
                                         <button onClick={() => openAssetForm(m)} className="text-blue-600 hover:underline">Edit</button>
                                     </td>
@@ -390,6 +394,22 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                   <option value="Working">Working</option>
                                   <option value="Not Working">Not Working</option>
                                   <option value="Outside Maintenance">Outside Maintenance</option>
+                              </select>
+                          </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                              <select className="w-full border rounded p-2" value={formData.locationId || ''} onChange={e => setFormData({...formData, locationId: e.target.value})}>
+                                  <option value="">Select Location...</option>
+                                  {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Sector</label>
+                              <select className="w-full border rounded p-2" value={formData.sectorId || ''} onChange={e => setFormData({...formData, sectorId: e.target.value})}>
+                                  <option value="">Select Sector...</option>
+                                  {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                               </select>
                           </div>
                       </div>

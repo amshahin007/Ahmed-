@@ -35,6 +35,8 @@ export interface Machine {
   chaseNo: string;       // Renamed from model (Chase No)
   modelNo?: string;    // "Model No (طراز المعده)"
   divisionId?: string; 
+  locationId?: string; // NEW
+  sectorId?: string;   // NEW
   
   // New Classification Fields
   mainGroup?: string;
