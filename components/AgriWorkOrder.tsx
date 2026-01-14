@@ -251,7 +251,7 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({
   const rowStyle = "flex items-center gap-2 mb-2";
 
   return (
-    <div className="p-4 bg-gray-100 min-h-screen font-sans" dir="rtl">
+    <div className="p-4 bg-gray-100 min-h-screen font-sans">
         
         {/* TAB NAVIGATION */}
         <div className="flex gap-2 mb-6 border-b border-gray-300 pb-2">
@@ -271,7 +271,7 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({
 
         {/* AGRI TAB CONTENT */}
         {activeTab === 'agri' && (
-            <div className="animate-fade-in-up">
+            <div className="animate-fade-in-up" dir="rtl">
                 <div className="flex flex-col lg:flex-row gap-6 items-start">
                    <div className="w-full lg:w-48 flex flex-col gap-3 pt-6 lg:pt-8">
                        <div className="flex items-center gap-1">
@@ -488,7 +488,7 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({
 
         {/* IRRIGATION TAB CONTENT */}
         {activeTab === 'irrigation' && (
-            <div className="animate-fade-in-up">
+            <div className="animate-fade-in-up" dir="rtl">
                 <div className="bg-gray-50 p-6 rounded border border-gray-300 relative mt-4">
                     <span className="absolute -top-3 left-3 bg-gray-100 px-2 text-sm font-bold text-gray-700 border border-gray-300 rounded">Run Times Log</span>
                     
