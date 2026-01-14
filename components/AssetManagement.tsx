@@ -170,6 +170,24 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       setIsEditing(!!asset);
       setShowForm(true);
   };
+
+  const openBreakdownForm = (bd?: BreakdownRecord) => {
+      if (bd) {
+          setFormData({ ...bd });
+          setIsEditing(true);
+      } else {
+          setFormData({
+              id: `BD-${Date.now()}`,
+              startTime: new Date().toISOString().slice(0, 16),
+              status: 'Open',
+              failureType: 'Mechanical',
+              operatorName: '',
+              machineId: ''
+          });
+          setIsEditing(false);
+      }
+      setShowForm(true);
+  };
   
   const handleFormSubmit = (e: React.FormEvent) => {
       e.preventDefault();
@@ -177,7 +195,16 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           if(isEditing) onUpdateMachine(formData as Machine);
           else onAddMachine({...formData, id: formData.id || `M-${Date.now()}`} as Machine);
       } else {
-          // Breakdown logic placeholder
+          // Breakdown Logic
+          const selectedMachine = machines.find(m => m.id === formData.machineId);
+          const finalRecord: BreakdownRecord = {
+             ...formData,
+             machineName: selectedMachine?.category || formData.machineName || 'Unknown',
+             locationId: selectedMachine?.locationId || formData.locationId || 'Unknown',
+             sectorId: selectedMachine?.sectorId || formData.sectorId || '',
+          };
+          if(isEditing) onUpdateBreakdown(finalRecord);
+          else onAddBreakdown(finalRecord);
       }
       setShowForm(false);
   };
@@ -365,10 +392,49 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
 
           {/* --- TAB 2: BREAKDOWNS --- */}
           {activeTab === 'breakdowns' && (
-              <div className="p-4 flex flex-col items-center justify-center text-gray-400 h-full">
-                  <p>Breakdown Management Interface</p>
-                  <p className="text-sm">(Coming soon in next update)</p>
-              </div>
+               <>
+               <div className="p-4 border-b border-gray-100 flex justify-between bg-gray-50 items-center">
+                   <h3 className="font-bold text-gray-700">Breakdown List</h3>
+                   <button onClick={() => openBreakdownForm()} className="px-4 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-bold transition shadow-sm">+ New Breakdown</button>
+               </div>
+               <div className="flex-1 overflow-auto">
+                   <table className="w-full text-left text-sm whitespace-nowrap">
+                       <thead className="bg-gray-100 text-gray-700 sticky top-0 border-b border-gray-200">
+                           <tr>
+                               <th className="p-4">ID</th>
+                               <th className="p-4">Start Time</th>
+                               <th className="p-4">Machine</th>
+                               <th className="p-4">Type</th>
+                               <th className="p-4">Operator</th>
+                               <th className="p-4">Status</th>
+                               <th className="p-4 text-right">Action</th>
+                           </tr>
+                       </thead>
+                       <tbody className="divide-y divide-gray-100">
+                           {filteredBreakdowns.map(b => (
+                               <tr key={b.id} className="hover:bg-red-50">
+                                   <td className="p-4 font-mono">{b.id}</td>
+                                   <td className="p-4">{new Date(b.startTime).toLocaleString()}</td>
+                                   <td className="p-4 font-bold">{b.machineName}</td>
+                                   <td className="p-4">{b.failureType}</td>
+                                   <td className="p-4">{b.operatorName}</td>
+                                   <td className="p-4">
+                                       <span className={`px-2 py-1 rounded-full text-xs ${b.status === 'Open' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
+                                           {b.status}
+                                       </span>
+                                   </td>
+                                   <td className="p-4 text-right">
+                                       <button onClick={() => openBreakdownForm(b)} className="text-blue-600 hover:underline">Edit</button>
+                                   </td>
+                               </tr>
+                           ))}
+                           {filteredBreakdowns.length === 0 && (
+                               <tr><td colSpan={7} className="p-8 text-center text-gray-400">No breakdowns found.</td></tr>
+                           )}
+                       </tbody>
+                   </table>
+               </div>
+             </>
           )}
       </div>
       
@@ -377,65 +443,139 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in-up">
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                      <h3 className="font-bold text-gray-800">{isEditing ? 'Edit Asset' : 'New Asset'}</h3>
+                      <h3 className="font-bold text-gray-800">
+                          {activeTab === 'assets' ? (isEditing ? 'Edit Asset' : 'New Asset') : (isEditing ? 'Edit Breakdown' : 'New Breakdown')}
+                      </h3>
                       <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">✕</button>
                   </div>
                   <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
-                      {/* Simplified Form for Fix */}
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Asset ID</label>
-                          <input type="text" className="w-full border rounded p-2" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} required />
-                      </div>
-                      <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Machine Name (Category)</label>
-                          <input type="text" className="w-full border rounded p-2" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} required />
-                      </div>
                       
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Main Group</label>
-                              <input type="text" className="w-full border rounded p-2" value={formData.mainGroup || ''} onChange={e => setFormData({...formData, mainGroup: e.target.value})} placeholder="e.g. Production" />
-                          </div>
-                          <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Sub Group</label>
-                              <input type="text" className="w-full border rounded p-2" value={formData.subGroup || ''} onChange={e => setFormData({...formData, subGroup: e.target.value})} placeholder="e.g. Line 1" />
-                          </div>
-                      </div>
+                      {activeTab === 'assets' ? (
+                          <>
+                            {/* ASSET FIELDS */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Asset ID</label>
+                                <input type="text" className="w-full border rounded p-2" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Machine Name (Category)</label>
+                                <input type="text" className="w-full border rounded p-2" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} required />
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Main Group</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.mainGroup || ''} onChange={e => setFormData({...formData, mainGroup: e.target.value})} placeholder="e.g. Production" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Sub Group</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.subGroup || ''} onChange={e => setFormData({...formData, subGroup: e.target.value})} placeholder="e.g. Line 1" />
+                                </div>
+                            </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
-                              <input type="text" className="w-full border rounded p-2" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} />
-                          </div>
-                          <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                              <select className="w-full border rounded p-2" value={formData.status || 'Working'} onChange={e => setFormData({...formData, status: e.target.value})}>
-                                  <option value="Working">Working</option>
-                                  <option value="Not Working">Not Working</option>
-                                  <option value="Outside Maintenance">Outside Maintenance</option>
-                              </select>
-                          </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                              <select className="w-full border rounded p-2" value={formData.locationId || ''} onChange={e => setFormData({...formData, locationId: e.target.value})}>
-                                  <option value="">Select Location...</option>
-                                  {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                              </select>
-                          </div>
-                          <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Sector</label>
-                              <select className="w-full border rounded p-2" value={formData.sectorId || ''} onChange={e => setFormData({...formData, sectorId: e.target.value})}>
-                                  <option value="">Select Sector...</option>
-                                  {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                              </select>
-                          </div>
-                      </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                    <select className="w-full border rounded p-2" value={formData.status || 'Working'} onChange={e => setFormData({...formData, status: e.target.value})}>
+                                        <option value="Working">Working</option>
+                                        <option value="Not Working">Not Working</option>
+                                        <option value="Outside Maintenance">Outside Maintenance</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                                    <select className="w-full border rounded p-2" value={formData.locationId || ''} onChange={e => setFormData({...formData, locationId: e.target.value})}>
+                                        <option value="">Select Location...</option>
+                                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Sector</label>
+                                    <select className="w-full border rounded p-2" value={formData.sectorId || ''} onChange={e => setFormData({...formData, sectorId: e.target.value})}>
+                                        <option value="">Select Sector...</option>
+                                        {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                          </>
+                      ) : (
+                          <>
+                             {/* BREAKDOWN FIELDS */}
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Select Machine</label>
+                                <select 
+                                    className="w-full border rounded p-2" 
+                                    value={formData.machineId || ''} 
+                                    onChange={e => {
+                                        const m = machines.find(mac => mac.id === e.target.value);
+                                        setFormData({...formData, machineId: e.target.value, machineName: m?.category || ''});
+                                    }} 
+                                    required
+                                >
+                                    <option value="">-- Choose Machine --</option>
+                                    {machines.map(m => (
+                                        <option key={m.id} value={m.id}>{m.category || m.id} ({m.locationId || 'No Loc'})</option>
+                                    ))}
+                                </select>
+                             </div>
+                             
+                             <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                                    <input 
+                                        type="datetime-local" 
+                                        className="w-full border rounded p-2" 
+                                        value={formData.startTime ? formData.startTime.slice(0, 16) : ''} 
+                                        onChange={e => setFormData({...formData, startTime: e.target.value})} 
+                                        required 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Failure Type</label>
+                                    <input type="text" list="failureTypes" className="w-full border rounded p-2" value={formData.failureType || ''} onChange={e => setFormData({...formData, failureType: e.target.value})} placeholder="e.g. Mechanical" required />
+                                    <datalist id="failureTypes">
+                                        <option value="Mechanical" />
+                                        <option value="Electrical" />
+                                        <option value="Software" />
+                                        <option value="Hydraulic" />
+                                        <option value="Operator Error" />
+                                    </datalist>
+                                </div>
+                             </div>
+
+                             <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Operator Name</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.operatorName || ''} onChange={e => setFormData({...formData, operatorName: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                    <select className="w-full border rounded p-2" value={formData.status || 'Open'} onChange={e => setFormData({...formData, status: e.target.value})}>
+                                        <option value="Open">Open (Active)</option>
+                                        <option value="Closed">Closed (Resolved)</option>
+                                    </select>
+                                </div>
+                             </div>
+
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-700 mb-1">Root Cause / Notes</label>
+                                 <textarea className="w-full border rounded p-2" rows={2} value={formData.rootCause || ''} onChange={e => setFormData({...formData, rootCause: e.target.value})} placeholder="Optional details..." />
+                             </div>
+                          </>
+                      )}
+
                        <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
                            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border rounded hover:bg-gray-50">Cancel</button>
-                           <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save</button>
+                           <button type="submit" className={`px-4 py-2 text-white rounded shadow-sm ${activeTab === 'assets' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}>
+                               {activeTab === 'assets' ? 'Save Asset' : 'Save Breakdown'}
+                           </button>
                        </div>
                   </form>
               </div>
