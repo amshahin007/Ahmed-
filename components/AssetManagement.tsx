@@ -229,8 +229,14 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   // BREAKDOWN FORM LOGIC
   
   // 1. Get machines strictly in the selected location
+  // Update: Check both ID and Name to handle potential import inconsistencies
+  const selectedLocation = locations.find(l => l.id === formData.locationId);
+  
   const machinesInLocation = formData.locationId 
-      ? machines.filter(m => m.locationId === formData.locationId) 
+      ? machines.filter(m => 
+          m.locationId === formData.locationId || 
+          (selectedLocation && m.locationId === selectedLocation.name)
+        ) 
       : [];
 
   // 2. Get unique machine names (categories) in that location
