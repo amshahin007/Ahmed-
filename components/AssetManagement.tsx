@@ -26,6 +26,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   const [activeTab, setActiveTab] = useState<'assets' | 'breakdowns'>('assets');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [filterLocationId, setFilterLocationId] = useState('');
   
   // Sync State
   const [syncConfig, setSyncConfig] = useState<Record<string, { sheetId: string }>>(() => {
@@ -183,7 +184,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
               failureType: 'Mechanical',
               operatorName: '',
               machineId: '',
-              locationId: ''
+              locationId: filterLocationId || '' // Pre-fill with filter location if selected
           });
           setIsEditing(false);
       }
@@ -220,9 +221,15 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   );
 
   const filteredBreakdowns = breakdowns.filter(b => 
-      b.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.id.toLowerCase().includes(searchTerm.toLowerCase())
+      (b.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.id.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (!filterLocationId || b.locationId === filterLocationId)
   ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+
+  // Filter machines in form based on selected location in form
+  const formMachines = formData.locationId 
+      ? machines.filter(m => m.locationId === formData.locationId)
+      : machines;
 
   const handleSelectAllAssets = () => {
       const allSelected = filteredMachines.length > 0 && filteredMachines.every(m => selectedAssetIds.has(m.id));
@@ -394,9 +401,20 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           {/* --- TAB 2: BREAKDOWNS --- */}
           {activeTab === 'breakdowns' && (
                <>
-               <div className="p-4 border-b border-gray-100 flex justify-between bg-gray-50 items-center">
+               <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between bg-gray-50 items-start sm:items-center gap-4">
                    <h3 className="font-bold text-gray-700">Breakdown List</h3>
-                   <button onClick={() => openBreakdownForm()} className="px-4 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-bold transition shadow-sm">+ New Breakdown</button>
+                   
+                   <div className="flex gap-2 w-full sm:w-auto">
+                        <select 
+                            value={filterLocationId} 
+                            onChange={(e) => setFilterLocationId(e.target.value)}
+                            className="px-3 py-1.5 border border-gray-300 rounded text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-48"
+                        >
+                            <option value="">All Locations</option>
+                            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        </select>
+                        <button onClick={() => openBreakdownForm()} className="px-4 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-bold transition shadow-sm whitespace-nowrap">+ New Breakdown</button>
+                   </div>
                </div>
                <div className="flex-1 overflow-auto">
                    <table className="w-full text-left text-sm whitespace-nowrap">
@@ -518,6 +536,18 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                           <>
                              {/* BREAKDOWN FIELDS */}
                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                                <select 
+                                    className="w-full border rounded p-2" 
+                                    value={formData.locationId || ''} 
+                                    onChange={e => setFormData({...formData, locationId: e.target.value, machineId: ''})}
+                                >
+                                    <option value="">Select Location...</option>
+                                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                </select>
+                             </div>
+
+                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Select Machine</label>
                                 <select 
                                     className="w-full border rounded p-2" 
@@ -532,20 +562,16 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                         });
                                     }} 
                                     required
+                                    disabled={!formData.locationId && formMachines.length === machines.length}
                                 >
-                                    <option value="">-- Choose Machine --</option>
-                                    {machines.map(m => (
+                                    <option value="">{formData.locationId ? '-- Choose Machine in Location --' : '-- Choose Machine --'}</option>
+                                    {formMachines.map(m => (
                                         <option key={m.id} value={m.id}>{m.category || m.id} ({m.locationId || 'No Loc'})</option>
                                     ))}
                                 </select>
-                             </div>
-
-                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                                <select className="w-full border rounded p-2" value={formData.locationId || ''} onChange={e => setFormData({...formData, locationId: e.target.value})}>
-                                    <option value="">Select Location...</option>
-                                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                                </select>
+                                {formData.locationId && formMachines.length === 0 && (
+                                    <p className="text-xs text-red-500 mt-1">No machines found in this location.</p>
+                                )}
                              </div>
                              
                              <div className="grid grid-cols-2 gap-4">
