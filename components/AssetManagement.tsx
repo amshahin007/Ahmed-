@@ -304,19 +304,22 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
 
   // --- RENDER HELPERS ---
 
+  // Determine the location name if a location ID is selected for filtering
+  const selectedFilterLocation = locations.find(l => l.id === filterLocationId);
+
   const filteredMachines = machines.filter(m => 
       ((m.category || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
       m.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (m.brand || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (m.mainGroup || '').toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (!filterLocationId || m.locationId === filterLocationId) &&
+      (!filterLocationId || m.locationId === filterLocationId || (selectedFilterLocation && m.locationId === selectedFilterLocation.name)) &&
       (assetFilterStatus === 'All' || m.status === assetFilterStatus)
   );
 
   const filteredBreakdowns = breakdowns.filter(b => 
       (b.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.id.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (!filterLocationId || b.locationId === filterLocationId) &&
+      (!filterLocationId || b.locationId === filterLocationId || (selectedFilterLocation && b.locationId === selectedFilterLocation.name)) &&
       (filterStatus === 'All' || b.status === filterStatus)
   ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
