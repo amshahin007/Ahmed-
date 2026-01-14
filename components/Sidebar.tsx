@@ -82,6 +82,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
       return DEFAULT_NAV_ITEMS;
   });
 
+  // Get Custom Logo from LocalStorage (set in Settings)
+  // Default to a known working clearbit url for 'daltexcorp.com' if not set
+  const [logoUrl, setLogoUrl] = useState(() => {
+      const custom = localStorage.getItem('wf_logo_url');
+      return custom || "https://logo.clearbit.com/daltexcorp.com";
+  });
+
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -163,14 +170,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
         <div className="pt-8 pb-6 flex flex-col items-center text-center px-4 border-b-2 border-yellow-400/50">
              <div className="bg-white p-2 rounded-xl shadow-lg mb-4 w-28 h-28 flex items-center justify-center overflow-hidden">
                  <img 
-                    src="https://logo.clearbit.com/daltex.com" 
+                    src={logoUrl} 
                     alt="Daltex Logo" 
                     className="w-full h-full object-contain"
                     onError={(e) => {
                         const target = e.currentTarget;
-                        target.onerror = null; // Prevent infinite loop
-                        // Fallback to the direct image URL if Clearbit fails
-                        target.src = "https://daltex.com/wp-content/uploads/2020/09/Daltex-Logo.png";
+                        target.onerror = null; 
+                        // Final Fallback: A nice generic icon if everything fails
+                        target.src = "https://ui-avatars.com/api/?name=Daltex&background=0D8ABC&color=fff&size=128&font-size=0.4";
                     }}
                  />
              </div>

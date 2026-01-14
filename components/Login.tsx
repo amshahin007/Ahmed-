@@ -12,6 +12,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
+  // Get Custom Logo from LocalStorage (set in Settings)
+  const logoUrl = localStorage.getItem('wf_logo_url') || "https://logo.clearbit.com/daltexcorp.com";
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -34,13 +37,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
             <div className="w-32 h-32 flex items-center justify-center mb-4 relative">
                 <div className="absolute inset-0 bg-blue-50 rounded-full opacity-50 blur-xl"></div>
                 <img 
-                    src="https://logo.clearbit.com/daltex.com" 
+                    src={logoUrl} 
                     alt="Daltex Logo" 
                     className="w-full h-full object-contain relative z-10 drop-shadow-sm"
                     onError={(e) => {
-                        // Fallback if image fails
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.parentElement!.innerHTML = '<span class="text-4xl">🏢</span>';
+                        const target = e.currentTarget;
+                        target.onerror = null;
+                        target.src = "https://ui-avatars.com/api/?name=Daltex&background=0D8ABC&color=fff&size=128&font-size=0.4";
                     }}
                 />
             </div>

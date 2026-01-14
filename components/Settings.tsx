@@ -4,6 +4,7 @@ import { DEFAULT_SCRIPT_URL, locateRemoteData, APP_SCRIPT_TEMPLATE } from '../se
 
 const Settings: React.FC = () => {
   const [scriptUrl, setScriptUrl] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [statusType, setStatusType] = useState<'neutral' | 'success' | 'error'>('neutral');
@@ -11,17 +12,36 @@ const Settings: React.FC = () => {
 
   useEffect(() => {
     // Load existing URL or default
-    const stored = localStorage.getItem('wf_script_url_v3');
-    setScriptUrl(stored || DEFAULT_SCRIPT_URL);
+    const storedScript = localStorage.getItem('wf_script_url_v3');
+    const storedLogo = localStorage.getItem('wf_logo_url');
+    setScriptUrl(storedScript || DEFAULT_SCRIPT_URL);
+    setLogoUrl(storedLogo || '');
   }, []);
 
   const handleSave = () => {
-    if (validateUrl(scriptUrl)) {
-        localStorage.setItem('wf_script_url_v3', scriptUrl);
-        setStatusType('success');
-        setStatusMsg('URL Saved successfully!');
-        setTimeout(() => setStatusMsg(''), 3000);
+    // Basic validation
+    if (!scriptUrl) {
+         setStatusType('error');
+         setStatusMsg('Please enter a Web App URL.');
+         return;
     }
+
+    // Save Logic
+    localStorage.setItem('wf_script_url_v3', scriptUrl);
+    if (logoUrl) {
+        localStorage.setItem('wf_logo_url', logoUrl);
+    } else {
+        localStorage.removeItem('wf_logo_url');
+    }
+
+    setStatusType('success');
+    setStatusMsg('Settings Saved Successfully!');
+    
+    // Force reload to apply logo changes globally if needed, or user can just navigate
+    setTimeout(() => {
+        setStatusMsg('');
+        window.location.reload(); 
+    }, 1500);
   };
 
   const validateUrl = (url: string) => {
@@ -86,53 +106,83 @@ const Settings: React.FC = () => {
             </div>
             <div>
                 <h2 className="text-2xl font-bold text-gray-800">System Configuration</h2>
-                <p className="text-gray-500 text-sm">Manage cloud connections and application settings.</p>
+                <p className="text-gray-500 text-sm">Manage cloud connections and application branding.</p>
             </div>
         </div>
 
         <div className="space-y-6">
-            {/* API URL Section */}
-            <div className="space-y-4">
-                <label className="block text-sm font-bold text-gray-700">
-                    Google Apps Script Web App URL
-                    <span className="ml-2 font-normal text-gray-500">(Required for Drive Backup & Sheets Sync)</span>
-                </label>
-                
-                <div className="flex gap-2">
+            
+            {/* Branding Section */}
+            <div className="space-y-4 pb-6 border-b border-gray-100">
+                <h3 className="text-lg font-bold text-gray-800">Branding</h3>
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">
+                        Custom Logo URL
+                        <span className="ml-2 font-normal text-gray-500">(Optional)</span>
+                    </label>
                     <input 
                         type="text" 
-                        value={scriptUrl}
-                        onChange={(e) => setScriptUrl(e.target.value)}
-                        placeholder="https://script.google.com/macros/s/.../exec"
-                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                        value={logoUrl}
+                        onChange={(e) => setLogoUrl(e.target.value)}
+                        placeholder="https://your-website.com/logo.png"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                     />
-                    <button 
-                        onClick={handleSave}
-                        className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition"
-                    >
-                        Save
-                    </button>
+                    <p className="text-xs text-gray-500 mt-1">Paste a direct link to your logo image. Leave empty to use default.</p>
+                </div>
+            </div>
+
+            {/* API URL Section */}
+            <div className="space-y-4">
+                <h3 className="text-lg font-bold text-gray-800">Cloud Connection</h3>
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">
+                        Google Apps Script Web App URL
+                        <span className="ml-2 font-normal text-gray-500">(Required for Drive Backup & Sheets Sync)</span>
+                    </label>
+                    
+                    <div className="flex flex-col gap-2">
+                        <input 
+                            type="text" 
+                            value={scriptUrl}
+                            onChange={(e) => setScriptUrl(e.target.value)}
+                            placeholder="https://script.google.com/macros/s/.../exec"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                        />
+                    </div>
                 </div>
 
                 <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">
                     <div className="text-sm text-gray-600 flex-1 mr-4">
                         <p>Status: <span className={`font-bold ${statusType === 'success' ? 'text-green-600' : statusType === 'error' ? 'text-red-600' : 'text-gray-800'}`}>
-                            {statusMsg || 'Ready'}
+                            {statusMsg || 'Ready to Save'}
                         </span></p>
                         {statusMsg.includes('Connection Blocked') && (
                             <p className="text-xs text-red-500 mt-1">
                                 💡 Fix: Go to Script &gt; Deploy &gt; Manage Deployments &gt; Edit &gt; Set <strong>Who has access</strong> to <strong>Anyone</strong>.
                             </p>
                         )}
+                        {statusMsg.includes('Saved Successfully') && (
+                            <p className="text-xs text-green-600 mt-1">
+                                Application will reload shortly to apply changes...
+                            </p>
+                        )}
                     </div>
-                    <button 
-                        onClick={handleTestConnection}
-                        disabled={loading}
-                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm font-medium flex items-center gap-2 whitespace-nowrap"
-                    >
-                        {loading ? <span className="animate-spin">↻</span> : <span>🔍</span>}
-                        Test Connection
-                    </button>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={handleTestConnection}
+                            disabled={loading}
+                            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm font-medium flex items-center gap-2 whitespace-nowrap"
+                        >
+                            {loading ? <span className="animate-spin">↻</span> : <span>🔍</span>}
+                            Test
+                        </button>
+                        <button 
+                            onClick={handleSave}
+                            className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-sm"
+                        >
+                            Save Settings
+                        </button>
+                    </div>
                 </div>
             </div>
 
