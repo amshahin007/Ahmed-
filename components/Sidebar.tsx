@@ -21,6 +21,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
       roles: ['admin', 'user', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer', 'warehouse_supervisor'] 
     },
     { 
+      id: 'agri-work-order', 
+      label: 'Agri Work Order', 
+      icon: '🚜', 
+      roles: ['admin', 'warehouse_manager', 'maintenance_manager', 'user'] 
+    },
+    { 
       id: 'issue-form', 
       label: 'New Issue', 
       icon: '📝', 

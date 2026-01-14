@@ -71,6 +71,34 @@ export interface IssueRecord {
   requesterEmail?: string;
 }
 
+// NEW: Agri Work Order Record
+export interface AgriOrderRecord {
+  id: string;
+  date: string;
+  branch: string; // الفرع / Location
+  tractor: string; // موديل الجرار
+  machineLocalNo: string; // محلي رقم
+  attached: string; // المعدة الملحقة
+  attachedLocalNo: string; // محلي رقم (attached)
+  department: string; // الادارة
+  pivot: string; // رقم البيفوت
+  driver: string; // اسم السائق
+  
+  startCounter: number;
+  endCounter: number;
+  rowNumber: string;
+  
+  unitType: string; // يومية / فدان (Unit)
+  achievement: number; // الانجاز
+  actualOrReturn: number; // الاعادة او الفعلي
+  calculated: number; // الانجاز الحسابي
+  timeSpent: number; // الزمن / ساعة
+  
+  notes: string;
+  sector?: string; // قطاع (Data Out)
+  services?: string; // الخدمات (Data Out)
+}
+
 export interface DashboardMetrics {
   totalIssues: number;
   topItem: string;

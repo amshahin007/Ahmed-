@@ -9,6 +9,7 @@ import MasterData from './components/MasterData';
 import StockApproval from './components/StockApproval';
 import AiAssistant from './components/AiAssistant';
 import Settings from './components/Settings';
+import AgriWorkOrder from './components/AgriWorkOrder';
 import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import * as storageService from './services/storageService';
@@ -22,7 +23,7 @@ import {
   USERS as INIT_USERS,
   MAINTENANCE_PLANS as INIT_PLANS
 } from './constants';
-import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan } from './types';
+import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan, AgriOrderRecord } from './types';
 
 // Helper to load small configs from LocalStorage safely (kept for non-data prefs)
 const loadConfig = <T,>(key: string, fallback: T): T => {
@@ -54,6 +55,8 @@ const App: React.FC = () => {
   const [divisions, setDivisions] = useState<Division[]>(INIT_DIVISIONS);
   const [plans, setPlans] = useState<MaintenancePlan[]>(INIT_PLANS);
   const [usersList, setUsersList] = useState<User[]>(INIT_USERS);
+  // NEW: Agri Orders State
+  const [agriOrders, setAgriOrders] = useState<AgriOrderRecord[]>([]);
 
   // --- Load Data from IndexedDB on Mount ---
   useEffect(() => {
@@ -61,7 +64,7 @@ const App: React.FC = () => {
       try {
         const [
           loadedHistory, loadedItems, loadedMachines, loadedLocations, 
-          loadedSectors, loadedDivisions, loadedPlans, loadedUsers
+          loadedSectors, loadedDivisions, loadedPlans, loadedUsers, loadedAgri
         ] = await Promise.all([
           storageService.getItem<IssueRecord[]>('wf_history'),
           storageService.getItem<Item[]>('wf_items'),
@@ -71,6 +74,7 @@ const App: React.FC = () => {
           storageService.getItem<Division[]>('wf_divisions'),
           storageService.getItem<MaintenancePlan[]>('wf_plans'),
           storageService.getItem<User[]>('wf_users'),
+          storageService.getItem<AgriOrderRecord[]>('wf_agri_orders'),
         ]);
 
         if (loadedHistory) setHistory(loadedHistory);
@@ -81,6 +85,7 @@ const App: React.FC = () => {
         if (loadedDivisions) setDivisions(loadedDivisions);
         if (loadedPlans) setPlans(loadedPlans);
         if (loadedUsers) setUsersList(loadedUsers);
+        if (loadedAgri) setAgriOrders(loadedAgri);
 
       } catch (err) {
         console.error("Failed to load data from database:", err);
@@ -101,6 +106,8 @@ const App: React.FC = () => {
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_divisions', divisions); }, [divisions, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_plans', plans); }, [plans, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_users', usersList); }, [usersList, isDataLoaded]);
+  // NEW: Save Agri Orders
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_agri_orders', agriOrders); }, [agriOrders, isDataLoaded]);
   
   // User persist to localStorage (Auth)
   useEffect(() => { localStorage.setItem('wf_user', JSON.stringify(user)); }, [user]);
@@ -135,6 +142,11 @@ const App: React.FC = () => {
   const handleAddPlan = (plan: MaintenancePlan) => setPlans(prev => [...prev, plan]);
   const handleAddUser = (newUser: User) => setUsersList(prev => [...prev, newUser]);
   
+  // Agri Orders Handlers
+  const handleAddAgriOrder = (order: AgriOrderRecord) => setAgriOrders(prev => [...prev, order]);
+  const handleUpdateAgriOrder = (order: AgriOrderRecord) => setAgriOrders(prev => prev.map(o => o.id === order.id ? order : o));
+  const handleDeleteAgriOrders = (ids: string[]) => setAgriOrders(prev => prev.filter(o => !ids.includes(o.id)));
+
   const handleUpdateItem = (updatedItem: Item) => {
     setItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
   };
@@ -230,6 +242,17 @@ const App: React.FC = () => {
     switch (currentView) {
       case 'dashboard':
         return <Dashboard history={history} />;
+      case 'agri-work-order':
+        return (
+          <AgriWorkOrder 
+            orders={agriOrders}
+            onAddOrder={handleAddAgriOrder}
+            onUpdateOrder={handleUpdateAgriOrder}
+            onDeleteOrders={handleDeleteAgriOrders}
+            locations={locations}
+            machines={machines}
+          />
+        );
       case 'issue-form':
         return (
           <IssueForm 
