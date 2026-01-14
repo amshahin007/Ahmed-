@@ -121,6 +121,17 @@ export interface AgriOrderRecord {
   services?: string; // الخدمات (Data Out)
 }
 
+export interface IrrigationLogRecord {
+  id: string;
+  date: string;
+  locationName: string;
+  generatorModel: string;
+  engineStart: number;
+  engineEnd: number;
+  totalHours: number;
+  notes?: string;
+}
+
 export interface DashboardMetrics {
   totalIssues: number;
   topItem: string;

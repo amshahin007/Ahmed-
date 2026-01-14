@@ -25,7 +25,7 @@ import {
   MAINTENANCE_PLANS as INIT_PLANS,
   INITIAL_BREAKDOWNS // Imported initial breakdowns
 } from './constants';
-import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan, AgriOrderRecord, BreakdownRecord } from './types';
+import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan, AgriOrderRecord, BreakdownRecord, IrrigationLogRecord } from './types';
 
 // Helper to load small configs from LocalStorage safely (kept for non-data prefs)
 const loadConfig = <T,>(key: string, fallback: T): T => {
@@ -58,6 +58,7 @@ const App: React.FC = () => {
   const [usersList, setUsersList] = useState<User[]>(INIT_USERS);
   const [agriOrders, setAgriOrders] = useState<AgriOrderRecord[]>([]);
   const [breakdowns, setBreakdowns] = useState<BreakdownRecord[]>(INITIAL_BREAKDOWNS); // Breakdown State
+  const [irrigationLogs, setIrrigationLogs] = useState<IrrigationLogRecord[]>([]);
 
   // --- Load Data from IndexedDB on Mount ---
   useEffect(() => {
@@ -65,7 +66,7 @@ const App: React.FC = () => {
       try {
         const [
           loadedHistory, loadedItems, loadedMachines, loadedLocations, 
-          loadedSectors, loadedDivisions, loadedPlans, loadedUsers, loadedAgri, loadedBreakdowns
+          loadedSectors, loadedDivisions, loadedPlans, loadedUsers, loadedAgri, loadedBreakdowns, loadedIrrigation
         ] = await Promise.all([
           storageService.getItem<IssueRecord[]>('wf_history'),
           storageService.getItem<Item[]>('wf_items'),
@@ -77,6 +78,7 @@ const App: React.FC = () => {
           storageService.getItem<User[]>('wf_users'),
           storageService.getItem<AgriOrderRecord[]>('wf_agri_orders'),
           storageService.getItem<BreakdownRecord[]>('wf_breakdowns'),
+          storageService.getItem<IrrigationLogRecord[]>('wf_irrigation_logs'),
         ]);
 
         if (loadedHistory) setHistory(loadedHistory);
@@ -103,6 +105,7 @@ const App: React.FC = () => {
         if (loadedUsers) setUsersList(loadedUsers);
         if (loadedAgri) setAgriOrders(loadedAgri);
         if (loadedBreakdowns) setBreakdowns(loadedBreakdowns);
+        if (loadedIrrigation) setIrrigationLogs(loadedIrrigation);
 
       } catch (err) {
         console.error("Failed to load data from database:", err);
@@ -123,7 +126,8 @@ const App: React.FC = () => {
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_plans', plans); }, [plans, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_users', usersList); }, [usersList, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_agri_orders', agriOrders); }, [agriOrders, isDataLoaded]);
-  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_breakdowns', breakdowns); }, [breakdowns, isDataLoaded]); // Breakdown Persist
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_breakdowns', breakdowns); }, [breakdowns, isDataLoaded]); 
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_irrigation_logs', irrigationLogs); }, [irrigationLogs, isDataLoaded]);
   
   useEffect(() => { localStorage.setItem('wf_user', JSON.stringify(user)); }, [user]);
 
@@ -172,6 +176,12 @@ const App: React.FC = () => {
   const handleAddAgriOrder = (order: AgriOrderRecord) => setAgriOrders(prev => [...prev, order]);
   const handleUpdateAgriOrder = (order: AgriOrderRecord) => setAgriOrders(prev => prev.map(o => o.id === order.id ? order : o));
   const handleDeleteAgriOrders = (ids: string[]) => setAgriOrders(prev => prev.filter(o => !ids.includes(o.id)));
+
+  // Irrigation Logs Handlers
+  const handleAddIrrigationLog = (log: IrrigationLogRecord) => setIrrigationLogs(prev => [...prev, log]);
+  const handleUpdateIrrigationLog = (log: IrrigationLogRecord) => setIrrigationLogs(prev => prev.map(l => l.id === log.id ? log : l));
+  const handleDeleteIrrigationLogs = (ids: string[]) => setIrrigationLogs(prev => prev.filter(l => !ids.includes(l.id)));
+
 
   // Breakdown Handlers
   const handleAddBreakdown = (bd: BreakdownRecord) => setBreakdowns(prev => [bd, ...prev]);
@@ -280,6 +290,10 @@ const App: React.FC = () => {
             onAddOrder={handleAddAgriOrder}
             onUpdateOrder={handleUpdateAgriOrder}
             onDeleteOrders={handleDeleteAgriOrders}
+            irrigationLogs={irrigationLogs}
+            onAddIrrigationLog={handleAddIrrigationLog}
+            onUpdateIrrigationLog={handleUpdateIrrigationLog}
+            onDeleteIrrigationLogs={handleDeleteIrrigationLogs}
             locations={locations}
             machines={machines}
           />
