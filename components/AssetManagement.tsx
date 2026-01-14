@@ -491,26 +491,25 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       {/* --- FORM MODAL --- */}
       {showForm && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" dir={activeTab === 'breakdowns' ? 'rtl' : 'ltr'}>
-              <div className={`bg-white rounded-lg shadow-2xl w-full ${activeTab === 'breakdowns' ? 'max-w-4xl font-cairo' : 'max-w-lg'} overflow-hidden animate-fade-in-up flex flex-col max-h-[90vh]`}>
+              <div className={`bg-white rounded-lg shadow-2xl w-full ${activeTab === 'breakdowns' ? 'max-w-6xl font-cairo' : 'max-w-lg'} overflow-hidden animate-fade-in-up flex flex-col max-h-[95vh]`}>
                   
                   {/* Header */}
-                  <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10">
+                  <div className="px-5 py-3 border-b border-gray-200 flex justify-between items-center bg-gray-50 sticky top-0 z-10 shrink-0">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900">
-                            {activeTab === 'assets' ? (isEditing ? 'Edit Asset' : 'New Asset') : (isEditing ? 'تعديل عطل (Edit Breakdown)' : 'تسجيل عطل جديد (New Breakdown)')}
+                        <h3 className="text-lg font-bold text-gray-900">
+                            {activeTab === 'assets' ? (isEditing ? 'Edit Asset' : 'New Asset') : (isEditing ? 'تعديل عطل (Edit)' : 'تسجيل عطل جديد (New Log)')}
                         </h3>
-                        {activeTab === 'breakdowns' && <p className="text-sm text-gray-500 mt-1">يرجى ملء كافة التفاصيل الفنية بدقة</p>}
                       </div>
-                      <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-700 transition p-2 hover:bg-gray-100 rounded-full">
-                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-700 transition p-1.5 hover:bg-gray-200 rounded-full">
+                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                   </div>
 
-                  <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto bg-gray-50/50 p-6">
+                  <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto bg-gray-50/30 p-4">
                       
                       {activeTab === 'assets' ? (
                           <div className="space-y-4">
-                            {/* ASSET FIELDS (Keep original simple layout for Assets tab) */}
+                            {/* ASSET FIELDS (Original simple layout for Assets) */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Asset ID</label>
                                 <input type="text" className="w-full border rounded p-2" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} required />
@@ -564,17 +563,14 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                             </div>
                           </div>
                       ) : (
-                          <div className="space-y-8">
-                             {/* SECTION 1: IDENTIFICATION */}
-                             <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
-                                <h4 className="text-sm font-bold text-gray-900 mb-4 pb-2 border-b border-gray-100 flex items-center gap-2">
-                                    <span className="text-blue-600">📍</span> تحديد الأصل (Asset Identification)
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">الموقع / Location</label>
+                          <div className="space-y-3">
+                             {/* ROW 1: IDENTIFICATION & CONTEXT */}
+                             <div className="bg-white p-3 rounded border border-gray-200 shadow-sm">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                    <div className="md:col-span-1">
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">الموقع / Location</label>
                                         <select 
-                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm bg-white" 
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 text-sm px-2 bg-white" 
                                             value={formData.locationId || ''} 
                                             onChange={e => setFormData({
                                                 ...formData, 
@@ -583,14 +579,14 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                                 machineName: ''
                                             })}
                                         >
-                                            <option value="">-- اختر الموقع --</option>
+                                            <option value="">-- الموقع --</option>
                                             {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                                         </select>
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">اسم المعدة / Machine Name</label>
+                                    <div className="md:col-span-1">
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">اسم المعدة / Machine Name</label>
                                         <select 
-                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400" 
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 text-sm px-2 bg-white disabled:bg-gray-100 disabled:text-gray-400" 
                                             value={formData.machineName || ''} 
                                             onChange={e => setFormData({
                                                 ...formData, 
@@ -599,73 +595,76 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                             })}
                                             disabled={!formData.locationId}
                                         >
-                                            <option value="">{formData.locationId ? '-- تصفية حسب الاسم --' : 'اختر الموقع أولاً'}</option>
+                                            <option value="">{formData.locationId ? '-- الاسم --' : '-'}</option>
                                             {machineNamesInLocation.map(name => (
                                                 <option key={name} value={name}>{name}</option>
                                             ))}
                                         </select>
                                     </div>
-                                    <div>
-                                        {/* Wrapped SearchableSelect for consistent styling */}
-                                        <div className="relative">
-                                            <SearchableSelect 
-                                                label="كود الأصل / Asset ID"
-                                                placeholder={!formData.locationId ? '...' : 'بحث عن الكود...'}
-                                                options={machineAssetOptions}
-                                                value={formData.machineId || ''}
-                                                onChange={(val) => {
-                                                    const m = machines.find(mac => mac.id === val);
-                                                    setFormData({
-                                                        ...formData, 
-                                                        machineId: val, 
-                                                        machineName: m?.category || formData.machineName
-                                                    });
-                                                }}
-                                                disabled={!formData.locationId}
-                                                required
-                                            />
-                                        </div>
+                                    <div className="md:col-span-1">
+                                        <SearchableSelect 
+                                            label="كود الأصل / Asset ID"
+                                            placeholder={!formData.locationId ? '...' : 'Code...'}
+                                            options={machineAssetOptions}
+                                            value={formData.machineId || ''}
+                                            onChange={(val) => {
+                                                const m = machines.find(mac => mac.id === val);
+                                                setFormData({
+                                                    ...formData, 
+                                                    machineId: val, 
+                                                    machineName: m?.category || formData.machineName
+                                                });
+                                            }}
+                                            disabled={!formData.locationId}
+                                            required
+                                        />
                                         {formData.locationId && machinesForAssetDropdown.length === 0 && (
-                                            <p className="text-xs text-red-500 mt-1 font-bold">⚠️ لا توجد أصول بهذا الاسم في الموقع المحدد</p>
+                                            <p className="text-[10px] text-red-500 mt-0.5 font-bold leading-tight">⚠️ لا توجد أصول</p>
                                         )}
+                                    </div>
+                                    <div className="md:col-span-1">
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">اسم المشغل / Operator</label>
+                                        <input 
+                                            type="text" 
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 px-2 text-sm"
+                                            value={formData.operatorName || ''} 
+                                            onChange={e => setFormData({...formData, operatorName: e.target.value})} 
+                                        />
                                     </div>
                                 </div>
                              </div>
 
-                             {/* SECTION 2: TIMING & STATUS */}
-                             <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
-                                <h4 className="text-sm font-bold text-gray-900 mb-4 pb-2 border-b border-gray-100 flex items-center gap-2">
-                                    <span className="text-orange-600">⏱️</span> التوقيت والحالة (Timing & Status)
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                             {/* ROW 2: TIMING & STATUS */}
+                             <div className="bg-white p-3 rounded border border-gray-200 shadow-sm">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">وقت البداية / Start Time</label>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">وقت البداية / Start Time</label>
                                         <input 
                                             type="datetime-local" 
-                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm"
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 px-2 text-sm"
                                             value={formData.startTime ? formData.startTime.slice(0, 16) : ''} 
                                             onChange={e => setFormData({...formData, startTime: e.target.value})} 
                                             required 
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">وقت النهاية / End Time</label>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">وقت النهاية / End Time</label>
                                         <input 
                                             type="datetime-local" 
-                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm"
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 px-2 text-sm"
                                             value={formData.endTime ? formData.endTime.slice(0, 16) : ''} 
                                             onChange={e => setFormData({...formData, endTime: e.target.value})} 
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">نوع العطل / Failure Type</label>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">نوع العطل / Failure Type</label>
                                         <input 
                                             type="text" 
                                             list="failureTypes" 
-                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm"
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 px-2 text-sm"
                                             value={formData.failureType || ''} 
                                             onChange={e => setFormData({...formData, failureType: e.target.value})} 
-                                            placeholder="اختر أو اكتب..."
+                                            placeholder="Mechanical, etc..."
                                             required 
                                         />
                                         <datalist id="failureTypes">
@@ -677,9 +676,9 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                         </datalist>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">حالة العطل / Status</label>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">حالة العطل / Status</label>
                                         <select 
-                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm bg-white"
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 px-2 text-sm bg-white"
                                             value={formData.status || 'Open'} 
                                             onChange={e => setFormData({...formData, status: e.target.value})}
                                         >
@@ -690,42 +689,28 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                 </div>
                              </div>
 
-                             {/* SECTION 3: DETAILS */}
-                             <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
-                                <h4 className="text-sm font-bold text-gray-900 mb-4 pb-2 border-b border-gray-100 flex items-center gap-2">
-                                    <span className="text-gray-600">📝</span> التفاصيل الفنية (Details)
-                                </h4>
-                                <div className="space-y-6">
+                             {/* ROW 3: TECHNICAL DETAILS */}
+                             <div className="bg-white p-3 rounded border border-gray-200 shadow-sm">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">اسم المشغل / Operator Name</label>
-                                        <input 
-                                            type="text" 
-                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm"
-                                            value={formData.operatorName || ''} 
-                                            onChange={e => setFormData({...formData, operatorName: e.target.value})} 
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">السبب الجذري / Root Cause</label>
+                                        <textarea 
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm min-h-[60px]" 
+                                            rows={2} 
+                                            value={formData.rootCause || ''} 
+                                            onChange={e => setFormData({...formData, rootCause: e.target.value})} 
+                                            placeholder="..." 
                                         />
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-700 mb-1.5">السبب الجذري / Root Cause</label>
-                                            <textarea 
-                                                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3 text-gray-900 text-sm min-h-[80px]" 
-                                                rows={3} 
-                                                value={formData.rootCause || ''} 
-                                                onChange={e => setFormData({...formData, rootCause: e.target.value})} 
-                                                placeholder="وصف سبب العطل..." 
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-700 mb-1.5">الإجراء المتخذ / Action Taken</label>
-                                            <textarea 
-                                                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3 text-gray-900 text-sm min-h-[80px]" 
-                                                rows={3} 
-                                                value={formData.actionTaken || ''} 
-                                                onChange={e => setFormData({...formData, actionTaken: e.target.value})} 
-                                                placeholder="وصف الإصلاح..." 
-                                            />
-                                        </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">الإجراء المتخذ / Action Taken</label>
+                                        <textarea 
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-sm min-h-[60px]" 
+                                            rows={2} 
+                                            value={formData.actionTaken || ''} 
+                                            onChange={e => setFormData({...formData, actionTaken: e.target.value})} 
+                                            placeholder="..." 
+                                        />
                                     </div>
                                 </div>
                              </div>
@@ -733,12 +718,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                       )}
 
                        {/* FOOTER ACTIONS */}
-                       <div className="mt-8 pt-4 border-t border-gray-200 sticky bottom-0 bg-white flex items-center justify-between gap-4">
-                           <button type="button" onClick={() => setShowForm(false)} className="px-6 py-2.5 border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition shadow-sm w-32">
+                       <div className="mt-2 pt-3 border-t border-gray-200 sticky bottom-0 bg-white flex items-center justify-between gap-3 shrink-0">
+                           <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2 border border-gray-300 text-gray-700 font-bold text-sm rounded hover:bg-gray-50 transition w-28">
                                إلغاء
                            </button>
-                           <button type="submit" className={`px-8 py-2.5 text-white font-bold rounded-lg shadow-md transition transform active:scale-95 flex-1 md:flex-none md:w-48 ${activeTab === 'assets' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}>
-                               {activeTab === 'assets' ? 'Save Asset' : 'حفظ البيانات (Save)'}
+                           <button type="submit" className={`px-6 py-2 text-white font-bold text-sm rounded shadow-sm transition transform active:scale-95 flex-1 md:flex-none md:w-40 ${activeTab === 'assets' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}>
+                               {activeTab === 'assets' ? 'Save Asset' : 'حفظ (Save)'}
                            </button>
                        </div>
                   </form>
