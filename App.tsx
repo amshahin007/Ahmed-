@@ -241,7 +241,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard history={history} />;
+        return <Dashboard history={history} setCurrentView={setCurrentView} currentUser={user} />;
       case 'agri-work-order':
         return (
           <AgriWorkOrder 
@@ -267,7 +267,7 @@ const App: React.FC = () => {
           />
         );
       case 'stock-approval':
-        if (!['admin', 'warehouse_manager', 'warehouse_supervisor'].includes(user.role)) return <Dashboard history={history} />;
+        if (!['admin', 'warehouse_manager', 'warehouse_supervisor'].includes(user.role)) return <Dashboard history={history} setCurrentView={setCurrentView} currentUser={user} />;
         return (
           <StockApproval 
             history={history} 
@@ -278,7 +278,7 @@ const App: React.FC = () => {
       case 'history':
         return <HistoryTable history={history} locations={locations} />;
       case 'master-data':
-        if (user.role !== 'admin') return <Dashboard history={history} />;
+        if (user.role !== 'admin') return <Dashboard history={history} setCurrentView={setCurrentView} currentUser={user} />;
         return (
           <MasterData 
             history={history}
@@ -318,7 +318,7 @@ const App: React.FC = () => {
       case 'settings':
         return <Settings />;
       default:
-        return <Dashboard history={history} />;
+        return <Dashboard history={history} setCurrentView={setCurrentView} currentUser={user} />;
     }
   };
 
