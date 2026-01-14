@@ -403,9 +403,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                            <tr>
                                <th className="p-4">ID</th>
                                <th className="p-4">Start Time</th>
+                               <th className="p-4">End Time</th>
                                <th className="p-4">Machine</th>
                                <th className="p-4">Type</th>
                                <th className="p-4">Operator</th>
+                               <th className="p-4">Root Cause</th>
+                               <th className="p-4">Action Taken</th>
                                <th className="p-4">Status</th>
                                <th className="p-4 text-right">Action</th>
                            </tr>
@@ -415,9 +418,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                <tr key={b.id} className="hover:bg-red-50">
                                    <td className="p-4 font-mono">{b.id}</td>
                                    <td className="p-4">{new Date(b.startTime).toLocaleString()}</td>
+                                   <td className="p-4 text-gray-500">{b.endTime ? new Date(b.endTime).toLocaleString() : '-'}</td>
                                    <td className="p-4 font-bold">{b.machineName}</td>
                                    <td className="p-4">{b.failureType}</td>
                                    <td className="p-4">{b.operatorName}</td>
+                                   <td className="p-4 max-w-xs truncate" title={b.rootCause}>{b.rootCause || '-'}</td>
+                                   <td className="p-4 max-w-xs truncate" title={b.actionTaken}>{b.actionTaken || '-'}</td>
                                    <td className="p-4">
                                        <span className={`px-2 py-1 rounded-full text-xs ${b.status === 'Open' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
                                            {b.status}
@@ -429,7 +435,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                </tr>
                            ))}
                            {filteredBreakdowns.length === 0 && (
-                               <tr><td colSpan={7} className="p-8 text-center text-gray-400">No breakdowns found.</td></tr>
+                               <tr><td colSpan={10} className="p-8 text-center text-gray-400">No breakdowns found.</td></tr>
                            )}
                        </tbody>
                    </table>
@@ -538,6 +544,18 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                     />
                                 </div>
                                 <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                                    <input 
+                                        type="datetime-local" 
+                                        className="w-full border rounded p-2" 
+                                        value={formData.endTime ? formData.endTime.slice(0, 16) : ''} 
+                                        onChange={e => setFormData({...formData, endTime: e.target.value})} 
+                                    />
+                                </div>
+                             </div>
+
+                             <div className="grid grid-cols-2 gap-4">
+                                <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Failure Type</label>
                                     <input type="text" list="failureTypes" className="w-full border rounded p-2" value={formData.failureType || ''} onChange={e => setFormData({...formData, failureType: e.target.value})} placeholder="e.g. Mechanical" required />
                                     <datalist id="failureTypes">
@@ -547,13 +565,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                         <option value="Hydraulic" />
                                         <option value="Operator Error" />
                                     </datalist>
-                                </div>
-                             </div>
-
-                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Operator Name</label>
-                                    <input type="text" className="w-full border rounded p-2" value={formData.operatorName || ''} onChange={e => setFormData({...formData, operatorName: e.target.value})} />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
@@ -565,8 +576,18 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                              </div>
 
                              <div>
-                                 <label className="block text-sm font-medium text-gray-700 mb-1">Root Cause / Notes</label>
-                                 <textarea className="w-full border rounded p-2" rows={2} value={formData.rootCause || ''} onChange={e => setFormData({...formData, rootCause: e.target.value})} placeholder="Optional details..." />
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Operator Name</label>
+                                <input type="text" className="w-full border rounded p-2" value={formData.operatorName || ''} onChange={e => setFormData({...formData, operatorName: e.target.value})} />
+                             </div>
+
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-700 mb-1">Root Cause</label>
+                                 <textarea className="w-full border rounded p-2" rows={2} value={formData.rootCause || ''} onChange={e => setFormData({...formData, rootCause: e.target.value})} placeholder="Describe the cause..." />
+                             </div>
+                             
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-700 mb-1">Action Taken</label>
+                                 <textarea className="w-full border rounded p-2" rows={2} value={formData.actionTaken || ''} onChange={e => setFormData({...formData, actionTaken: e.target.value})} placeholder="Describe the fix..." />
                              </div>
                           </>
                       )}
