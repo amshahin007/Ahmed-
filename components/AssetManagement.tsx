@@ -109,6 +109,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
              else if (h.includes('division')) obj.divisionId = row[i];
              else if (h.includes('sector')) obj.sectorId = row[i];
              else if (h.includes('location')) obj.locationId = row[i];
+             else if ((h.includes('main') && h.includes('group'))) obj.mainGroup = row[i];
+             else if ((h.includes('sub') && h.includes('group'))) obj.subGroup = row[i];
           });
           
           if(obj.id) {
@@ -185,7 +187,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   const filteredMachines = machines.filter(m => 
       (m.category || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
       m.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (m.brand || '').toLowerCase().includes(searchTerm.toLowerCase())
+      (m.brand || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (m.mainGroup || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredBreakdowns = breakdowns.filter(b => 
@@ -309,6 +312,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                 </th>
                                 <th className="p-4">ID</th>
                                 <th className="p-4">Machine Name</th>
+                                <th className="p-4">Main Group</th>
+                                <th className="p-4">Sub Group</th>
                                 <th className="p-4">Status</th>
                                 <th className="p-4">Brand</th>
                                 <th className="p-4">Model No</th>
@@ -335,6 +340,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                     </td>
                                     <td className="p-4 font-mono">{m.id}</td>
                                     <td className="p-4 font-bold text-gray-800">{m.category}</td>
+                                    <td className="p-4 text-gray-600">{m.mainGroup || '-'}</td>
+                                    <td className="p-4 text-gray-600">{m.subGroup || '-'}</td>
                                     <td className="p-4">
                                         <span className={`px-2 py-1 rounded text-xs ${m.status === 'Working' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                             {m.status}
@@ -383,6 +390,18 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                           <label className="block text-sm font-medium text-gray-700 mb-1">Machine Name (Category)</label>
                           <input type="text" className="w-full border rounded p-2" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} required />
                       </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Main Group</label>
+                              <input type="text" className="w-full border rounded p-2" value={formData.mainGroup || ''} onChange={e => setFormData({...formData, mainGroup: e.target.value})} placeholder="e.g. Production" />
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Sub Group</label>
+                              <input type="text" className="w-full border rounded p-2" value={formData.subGroup || ''} onChange={e => setFormData({...formData, subGroup: e.target.value})} placeholder="e.g. Line 1" />
+                          </div>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-4">
                           <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
@@ -397,6 +416,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                               </select>
                           </div>
                       </div>
+                      
                       <div className="grid grid-cols-2 gap-4">
                           <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
