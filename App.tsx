@@ -78,7 +78,22 @@ const App: React.FC = () => {
         ]);
 
         if (loadedHistory) setHistory(loadedHistory);
-        if (loadedItems) setItems(loadedItems);
+        
+        // Items Loading with Migration for Stock Quantity
+        if (loadedItems) {
+            const migratedItems = loadedItems.map(loadedItem => {
+                // If stockQuantity is missing (old data), try to grab from INIT or default to 0
+                if (loadedItem.stockQuantity === undefined) {
+                    const initItem = INIT_ITEMS.find(i => i.id === loadedItem.id);
+                    return { ...loadedItem, stockQuantity: initItem?.stockQuantity ?? 0 };
+                }
+                return loadedItem;
+            });
+            setItems(migratedItems);
+        } else {
+            setItems(INIT_ITEMS);
+        }
+
         if (loadedMachines) setMachines(loadedMachines);
         if (loadedLocations) setLocations(loadedLocations);
         if (loadedSectors) setSectors(loadedSectors);
@@ -130,6 +145,22 @@ const App: React.FC = () => {
   };
 
   const handleUpdateIssue = (updatedIssue: IssueRecord) => {
+    // Logic to decrease stock when an issue is approved
+    const oldIssue = history.find(h => h.id === updatedIssue.id);
+    
+    if (oldIssue && oldIssue.status !== 'Approved' && updatedIssue.status === 'Approved') {
+        // Find item and decrease stock
+        setItems(prevItems => prevItems.map(item => {
+            if (item.id === updatedIssue.itemId) {
+                const currentStock = item.stockQuantity || 0;
+                // Prevent negative stock for logical consistency, though system allows override
+                const newStock = Math.max(0, currentStock - updatedIssue.quantity);
+                return { ...item, stockQuantity: newStock };
+            }
+            return item;
+        }));
+    }
+
     setHistory(prev => prev.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue));
   };
 

@@ -69,15 +69,16 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const qtyInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-lookup Item Name for current input (Maintains the string for Line Item creation)
+  const selectedItemObj = useMemo(() => items.find(i => i.id === currentItemId), [items, currentItemId]);
+  
   useEffect(() => {
-    const item = items.find(i => i.id === currentItemId);
-    if (item) {
+    if (selectedItemObj) {
       // Prioritize Full Name from Master Data
-      setCurrentItemName(item.fullName || item.name);
+      setCurrentItemName(selectedItemObj.fullName || selectedItemObj.name);
     } else {
       setCurrentItemName('');
     }
-  }, [currentItemId, items]);
+  }, [currentItemId, selectedItemObj]);
 
   // Reset downstream fields when upstream changes (Org Structure)
   useEffect(() => {
@@ -106,6 +107,13 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
   const handleAddLineItem = () => {
     if (!currentItemId || !currentQuantity || Number(currentQuantity) <= 0) return;
+
+    // Optional: Validation check against stock (User can force it, but visual cue helps)
+    if (selectedItemObj && (selectedItemObj.stockQuantity || 0) < Number(currentQuantity)) {
+        if (!confirm(`Warning: Requested Quantity (${currentQuantity}) exceeds Available Stock (${selectedItemObj.stockQuantity || 0}). Continue?`)) {
+            return;
+        }
+    }
 
     const newItem: LineItem = {
       itemId: currentItemId,
@@ -735,6 +743,17 @@ const IssueForm: React.FC<IssueFormProps> = ({
                     onChange={setCurrentItemId} 
                     placeholder="Search by name..." 
                  />
+                 
+                 {/* STOCK DISPLAY - NEW */}
+                 {selectedItemObj && (
+                    <div className="text-xs md:text-sm mt-1 bg-white inline-block px-3 py-1.5 rounded-lg border border-blue-200 shadow-sm">
+                        <span className="text-gray-500 font-medium">Available Stock: </span> 
+                        <span className={`font-bold text-lg ml-1 ${(selectedItemObj.stockQuantity || 0) <= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {selectedItemObj.stockQuantity !== undefined ? selectedItemObj.stockQuantity : 0} 
+                        </span>
+                        <span className="text-xs text-gray-400 ml-1">{selectedItemObj.unit}</span>
+                    </div>
+                 )}
                </div>
                <div className="w-full md:w-24">
                  <label className="block text-sm font-medium text-gray-700 mb-1">Qty</label>
@@ -766,6 +785,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                             <tr>
                                 <th className="px-4 py-2 whitespace-nowrap">Item Number</th>
                                 <th className="px-4 py-2 whitespace-nowrap">Item Name</th>
+                                <th className="px-4 py-2 text-center whitespace-nowrap">Stock</th>
                                 <th className="px-4 py-2 w-24 text-center whitespace-nowrap">Qty</th>
                                 <th className="px-4 py-2 w-24 text-center whitespace-nowrap">Action</th>
                             </tr>
@@ -775,6 +795,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
                                 <tr key={idx} className="hover:bg-gray-50">
                                     <td className="px-4 py-2 font-mono text-gray-600 font-bold whitespace-nowrap">{line.itemId}</td>
                                     <td className="px-4 py-2 whitespace-nowrap">{line.itemName}</td>
+                                    <td className="px-4 py-2 text-center whitespace-nowrap text-gray-500">
+                                        {items.find(i => i.id === line.itemId)?.stockQuantity || 0}
+                                    </td>
                                     <td className="px-4 py-2 text-center font-bold text-lg whitespace-nowrap">{line.quantity}</td>
                                     <td className="px-4 py-2 text-center whitespace-nowrap">
                                         <button type="button" onClick={() => handleRemoveLineItem(idx)} className="text-red-500 hover:text-red-700 font-medium">Remove</button>

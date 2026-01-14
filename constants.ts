@@ -85,14 +85,14 @@ export const MACHINES: Machine[] = [
 ];
 
 export const ITEMS: Item[] = [
-  { id: 'ITM-001', name: 'Ball Bearing 50mm', category: 'Spare Parts', unit: 'pcs' },
-  { id: 'ITM-002', name: 'Hydraulic Fluid 5L', category: 'Consumables', unit: 'can' },
-  { id: 'ITM-003', name: 'M10 Stainless Bolt', category: 'Fasteners', unit: 'box' },
-  { id: 'ITM-004', name: 'Rubber Seal Ring', category: 'Spare Parts', unit: 'pcs' },
-  { id: 'ITM-005', name: 'Safety Gloves (L)', category: 'PPE', unit: 'pair' },
-  { id: 'ITM-006', name: 'Circuit Board PCB-X', category: 'Electronics', unit: 'pcs' },
-  { id: 'ITM-007', name: 'Lubricant Spray', category: 'Consumables', unit: 'can' },
-  { id: 'ITM-008', name: 'V-Belt B45', category: 'Spare Parts', unit: 'pcs' },
+  { id: 'ITM-001', name: 'Ball Bearing 50mm', category: 'Spare Parts', unit: 'pcs', stockQuantity: 150 },
+  { id: 'ITM-002', name: 'Hydraulic Fluid 5L', category: 'Consumables', unit: 'can', stockQuantity: 45 },
+  { id: 'ITM-003', name: 'M10 Stainless Bolt', category: 'Fasteners', unit: 'box', stockQuantity: 500 },
+  { id: 'ITM-004', name: 'Rubber Seal Ring', category: 'Spare Parts', unit: 'pcs', stockQuantity: 200 },
+  { id: 'ITM-005', name: 'Safety Gloves (L)', category: 'PPE', unit: 'pair', stockQuantity: 100 },
+  { id: 'ITM-006', name: 'Circuit Board PCB-X', category: 'Electronics', unit: 'pcs', stockQuantity: 12 },
+  { id: 'ITM-007', name: 'Lubricant Spray', category: 'Consumables', unit: 'can', stockQuantity: 60 },
+  { id: 'ITM-008', name: 'V-Belt B45', category: 'Spare Parts', unit: 'pcs', stockQuantity: 30 },
 ];
 
 // Initial mock history

@@ -50,6 +50,7 @@ const ITEMS_PER_PAGE = 80;
 const COLUMNS_CONFIG: Record<Exclude<TabType, 'history'>, { key: string, label: string }[]> = {
   items: [
     { key: 'id', label: 'Item Number' },
+    { key: 'stockQuantity', label: 'Stock Qty' }, // New Stock Column
     { key: 'thirdId', label: '3rd Item No' },
     { key: 'name', label: 'Description' },
     { key: 'description2', label: 'Desc Line 2' },
@@ -559,10 +560,10 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     switch (activeTab) {
       case 'items':
-        headers = ['Item Number', 'Description', 'Category', 'Unit', '3rd Item No', 'Desc Line 2', 'Full Name', 'Brand', 'OEM', 'Part No', 'Model No'];
+        headers = ['Item Number', 'Description', 'Category', 'Unit', '3rd Item No', 'Desc Line 2', 'Full Name', 'Brand', 'OEM', 'Part No', 'Model No', 'Stock Qty'];
         rows = data.map((i: Item) => [
             i.id, i.name, i.category, i.unit, 
-            i.thirdId, i.description2, i.fullName, i.brand, i.oem, i.partNumber, i.modelNo
+            i.thirdId, i.description2, i.fullName, i.brand, i.oem, i.partNumber, i.modelNo, i.stockQuantity
         ]);
         break;
       case 'machines':
@@ -680,7 +681,8 @@ const MasterData: React.FC<MasterDataProps> = ({
             brand: ['brand', 'manufacturer', 'make'],
             oem: ['oem'],
             partNumber: ['part no', 'part number', 'pn', 'part num'],
-            modelNo: ['model no', 'model', 'model number', 'طراز']
+            modelNo: ['model no', 'model', 'model number', 'طراز'],
+            stockQuantity: ['stock', 'qty', 'stock qty', 'quantity', 'balance']
         };
     } else if (targetTab === 'machines') {
         fieldMap = {
@@ -773,6 +775,7 @@ const MasterData: React.FC<MasterDataProps> = ({
         if (targetTab === 'items') {
              if (!payload.category) payload.category = 'General';
              if (!payload.unit) payload.unit = 'pcs';
+             if (payload.stockQuantity) payload.stockQuantity = Number(payload.stockQuantity);
         } else if (targetTab === 'machines') {
              if (!payload.status) payload.status = 'Working';
              if (!payload.chaseNo) payload.chaseNo = 'Unknown';
@@ -864,6 +867,10 @@ const MasterData: React.FC<MasterDataProps> = ({
         });
     }
 
+    if (activeTab === 'items' && payload.stockQuantity) {
+        payload.stockQuantity = Number(payload.stockQuantity);
+    }
+
     if (isEditing) {
         switch(activeTab) {
             case 'items': onUpdateItem(payload); break;
@@ -916,7 +923,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                                 <div key={field.key} className={field.key === 'name' || field.key === 'fullName' ? "md:col-span-2 space-y-1" : "space-y-1"}>
                                     <label className="block text-sm font-medium text-gray-700">{field.label}</label>
                                     <input 
-                                        type="text" 
+                                        type={field.key === 'stockQuantity' ? 'number' : 'text'}
                                         value={displayVal}
                                         onChange={(e) => setFormData({...formData, [field.key]: e.target.value})}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
@@ -1025,232 +1032,98 @@ const MasterData: React.FC<MasterDataProps> = ({
     );
   };
 
-  const renderSyncModal = () => {
-    if (!showSyncModal) return null;
+  return (
+    <div className="flex flex-col h-full space-y-4 font-sans animate-fade-in-up">
+        {/* Header and Toolbar */}
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            
+            {/* Tabs */}
+            <div className="flex overflow-x-auto w-full lg:w-auto pb-2 lg:pb-0 gap-2 scrollbar-hide">
+                {(['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users'] as const).map(tab => (
+                    <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-all ${
+                            activeTab === tab 
+                            ? 'bg-blue-600 text-white shadow-md transform scale-105' 
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100'
+                        }`}
+                    >
+                        {tab === 'users' ? 'Users & Roles' : tab}
+                    </button>
+                ))}
+            </div>
 
-    const currentConfig = syncConfig[activeTab] || { sheetId: '', gid: '' };
-
-    return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
-                <div className="bg-gradient-to-r from-green-600 to-green-700 p-6 text-white">
-                    <h2 className="text-xl font-bold flex items-center">
-                        <span className="mr-2 text-2xl">☁️</span> Google Sheets Sync
-                    </h2>
-                    <p className="text-green-100 text-sm mt-1 opacity-90">
-                        Connect your spreadsheet for <b>{activeTab.toUpperCase()}</b> or restore full backup.
-                    </p>
-                </div>
-                
-                <div className="p-6 space-y-6">
-                    <div className="space-y-4">
-                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
-                            <p className="text-sm text-blue-800">
-                                💡 <b>Tip:</b> Paste the full Google Sheet URL below to automatically extract the ID and GID.
-                            </p>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Google Sheet ID / URL</label>
-                            <input 
-                                type="text" 
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
-                                value={currentConfig.sheetId}
-                                onChange={(e) => handleSheetUrlPaste(e.target.value)}
-                                placeholder="Paste Sheet ID or URL..."
-                            />
-                        </div>
-                        
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1 capitalize">{activeTab} Tab GID (Number)</label>
-                            <input 
-                                type="text" 
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
-                                value={currentConfig.gid}
-                                onChange={(e) => updateSyncConfig(activeTab, 'gid', e.target.value)}
-                                placeholder="e.g. 0 or 12345"
-                            />
-                        </div>
-
-                        {/* History GID Input separately if needed for full restore */}
-                        <div className="pt-2 border-t border-gray-100">
-                             <label className="block text-sm font-bold text-gray-700 mb-1 capitalize">History / Issue Log GID</label>
-                             <input 
-                                type="text" 
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
-                                value={syncConfig['history']?.gid || ''}
-                                onChange={(e) => updateSyncConfig('history', 'gid', e.target.value)}
-                                placeholder="GID for History tab (for full restore)"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Web App URL (for History Export & Uploads)</label>
-                            <input 
-                                type="text" 
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm font-mono"
-                                value={scriptUrl}
-                                onChange={(e) => setScriptUrl(e.target.value)}
-                                placeholder="https://script.google.com/macros/s/..."
-                            />
-                        </div>
-
-                        {/* Locate Data Button */}
-                        <div className="pt-2 border-t border-gray-100">
-                             <button
-                                onClick={handleLocateData}
-                                disabled={syncLoading || !scriptUrl}
-                                className="w-full py-2 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg text-sm font-bold hover:bg-yellow-100 transition flex items-center justify-center gap-2"
-                             >
-                                {syncLoading ? <span className="animate-spin">↻</span> : <span>🔍</span>}
-                                Test Connection & Locate Data
-                             </button>
-                             
-                             {remoteLinks && (
-                                 <div className="mt-2 text-xs text-center space-y-1 bg-yellow-50 p-2 rounded border border-yellow-100">
-                                     <p className="font-bold">Found your files:</p>
-                                     <a href={remoteLinks.folderUrl} target="_blank" rel="noopener noreferrer" className="block text-blue-600 underline">📂 Open "WareFlow Reports" Folder</a>
-                                     <a href={remoteLinks.sheetUrl} target="_blank" rel="noopener noreferrer" className="block text-green-600 underline">📊 Open "WareFlow Database" Sheet</a>
-                                 </div>
-                             )}
-                        </div>
-
-                        {/* New Master Data Backup Button */}
-                        <div className="pt-2 border-t border-gray-100">
-                             <button
-                                onClick={handleCloudBackup}
-                                disabled={syncLoading || !scriptUrl}
-                                className="w-full py-3 bg-red-600 text-white rounded-lg font-bold shadow-sm hover:bg-red-700 transition flex items-center justify-center gap-2"
-                             >
-                                {syncLoading ? <span className="animate-spin">↻</span> : <span>💾</span>}
-                                Backup All Master Data to Cloud (Overwrite)
-                             </button>
-                        </div>
-
-                        <div className="pt-2 border-t border-gray-100 grid grid-cols-2 gap-3">
-                             <button
-                                onClick={handleAutoConfigFromSheet}
-                                className="col-span-2 py-2 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-sm font-medium hover:bg-purple-100 transition flex items-center justify-center gap-2"
-                             >
-                                <span>⚡</span> Auto-Configure All Tabs (Master Config)
-                             </button>
-                             
-                             <button
-                                onClick={handleFullSync}
-                                className="col-span-2 py-3 bg-indigo-600 text-white rounded-lg font-bold shadow-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2"
-                             >
-                                {syncLoading ? <span className="animate-spin">↻</span> : <span>📥</span>}
-                                Fetch All Data (Full Backup Restore)
-                             </button>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3 pt-4 border-t border-gray-100">
-                        <button 
-                            onClick={() => handleSyncData(activeTab)}
-                            disabled={syncLoading}
-                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm flex items-center justify-center gap-2 capitalize"
-                        >
-                            {syncLoading ? <span className="animate-spin">↻</span> : <span>⬇️</span>}
-                            Import Only {activeTab}
-                        </button>
-                        
-                        <button 
-                            onClick={handleExportHistory}
-                            disabled={syncLoading || !scriptUrl}
-                            className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-lg font-bold shadow-sm flex items-center justify-center gap-2"
-                        >
-                            {syncLoading ? <span className="animate-spin">↻</span> : <span>⬆️</span>}
-                            Export History to Cloud
-                        </button>
-                    </div>
-
-                    {syncMsg && (
-                        <div className={`p-3 rounded-lg text-sm text-center ${syncMsg.includes('Error') || syncMsg.includes('Failed') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>
-                            {syncMsg}
-                        </div>
-                    )}
-
-                    <div className="flex justify-between items-center text-xs text-gray-400 pt-2">
-                        <button onClick={handleResetDefaults} className="hover:text-gray-600 underline">Restore Defaults</button>
-                        <button onClick={() => setShowSyncModal(false)} className="font-bold text-gray-600 hover:text-gray-900">Close</button>
-                    </div>
-                </div>
+            {/* Sync Controls */}
+            <div className="flex items-center gap-2 bg-blue-50 p-1.5 rounded-lg border border-blue-100 w-full lg:w-auto">
+                <input 
+                   type="text" 
+                   className="text-xs bg-white border border-blue-200 rounded px-2 py-1.5 focus:ring-2 focus:ring-blue-400 focus:outline-none w-full lg:w-48 text-blue-800 placeholder-blue-300" 
+                   placeholder="Paste Sheet URL / ID for this tab..." 
+                   value={syncConfig[activeTab]?.sheetId || ''}
+                   onChange={(e) => handleSheetUrlPaste(e.target.value)}
+                />
+                <button 
+                    onClick={() => handleSyncData()} 
+                    disabled={syncLoading}
+                    className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition shadow-sm disabled:opacity-50"
+                    title={`Sync ${activeTab} from Google Sheet`}
+                >
+                   {syncLoading ? <span className="animate-spin text-lg">↻</span> : <span>⬇️</span>}
+                </button>
+                <button 
+                    onClick={handleAutoConfigFromSheet}
+                    className="p-1.5 bg-white text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition"
+                    title="Auto-detect Config from Sheet (GID 0)"
+                >
+                    🪄
+                </button>
             </div>
         </div>
-    );
-  };
-
-  return (
-    <div className="space-y-6">
-      <input 
-        type="file" 
-        accept=".csv,.txt,.xlsx,.xls" 
-        ref={fileInputRef} 
-        onChange={handleFileChange} 
-        className="hidden" 
-      />
-
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-        <div className="flex flex-wrap gap-2 bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
-          {(['sectors', 'divisions', 'machines', 'items', 'plans', 'locations', 'users'] as const).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-md text-sm font-medium capitalize transition-all ${
-                activeTab === tab 
-                  ? 'bg-blue-100 text-blue-700 shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
         
-        <div className="flex gap-2">
-           {selectedIds.size > 0 ? (
-               <>
-                 <button onClick={() => handleExportDataToExcel(true)} className="flex items-center px-4 py-2 bg-emerald-600 text-white border border-emerald-700 rounded-lg hover:bg-emerald-700 shadow-sm transition animate-fade-in-up">
-                   <span className="mr-2">📥</span> Export Selected ({selectedIds.size})
+        {/* Actions Bar */}
+        <div className="flex flex-col md:flex-row justify-between items-center bg-white p-3 rounded-xl border border-gray-200 shadow-sm gap-3">
+             <div className="flex gap-2 items-center w-full md:w-auto">
+                 <button onClick={handleAddNew} className="flex-1 md:flex-none px-4 py-2 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 flex items-center justify-center gap-2 shadow-sm transition-transform active:scale-95">
+                     <span>+</span> Add New
                  </button>
-                 <button onClick={handleBulkDelete} className="flex items-center px-4 py-2 bg-red-600 text-white border border-red-700 rounded-lg hover:bg-red-700 shadow-sm transition animate-fade-in-up">
-                   <span className="mr-2">🗑️</span> Delete Selected ({selectedIds.size})
+                 {selectedIds.size > 0 && (
+                     <button onClick={handleBulkDelete} className="flex-1 md:flex-none px-4 py-2 bg-red-50 text-red-600 rounded-lg font-bold text-sm hover:bg-red-100 border border-red-100 flex items-center justify-center gap-2">
+                         <span>🗑️</span> Delete ({selectedIds.size})
+                     </button>
+                 )}
+             </div>
+
+             <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                 <button onClick={handleCloudBackup} disabled={syncLoading} className="whitespace-nowrap px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 border border-indigo-200 flex items-center gap-1">
+                     <span>☁️</span> Backup All
                  </button>
-               </>
-           ) : (
-               <>
-                <button onClick={handleImportClick} className="flex items-center px-4 py-2 bg-orange-100 text-orange-800 border border-orange-200 rounded-lg hover:bg-orange-200 shadow-sm transition">
-                    <span className="mr-2 text-lg">📂</span> Import
-                </button>
-                <button onClick={() => handleExportDataToExcel(false)} className="flex items-center px-4 py-2 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-200 shadow-sm transition">
-                    <span className="mr-2 text-lg">📥</span> Excel
-                </button>
-
-                {/* Updated Sync Button: Active for ALL tabs now */}
-                <button
-                    onClick={() => setShowSyncModal(true)}
-                    className="flex items-center px-4 py-2 bg-white border border-green-200 text-green-700 rounded-lg shadow-sm hover:bg-green-50 transition"
-                >
-                    <span className="mr-2">📊</span> 
-                    Sync {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-                </button>
-
-                <button onClick={() => setShowColumnMenu(!showColumnMenu)} className={`flex items-center px-4 py-2 bg-white border rounded-lg shadow-sm transition ${showColumnMenu ? 'bg-gray-100 ring-2 ring-blue-200' : 'hover:bg-gray-50'}`}>
-                    <span className="mr-2">👁️</span> Columns
-                </button>
-               </>
-           )}
-
-           <button onClick={handleAddNew} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm transition">
-             <span className="mr-2 text-xl">+</span> Add {activeTab.slice(0, -1)}
-           </button>
+                 <button onClick={() => handleExportDataToExcel(false)} className="whitespace-nowrap px-3 py-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 border border-green-200 flex items-center gap-1">
+                     <span>📊</span> Export
+                 </button>
+                 <button onClick={handleImportClick} className="whitespace-nowrap px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 border border-orange-200 flex items-center gap-1">
+                     <span>📂</span> Import
+                 </button>
+                 <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.csv" onChange={handleFileChange} />
+             </div>
         </div>
-      </div>
 
-      {renderTable()}
-      {renderForm()}
-      {renderSyncModal()}
+        {/* Sync Status / Messages */}
+        {syncMsg && (
+            <div className={`text-xs px-4 py-3 rounded-lg border flex items-center gap-2 animate-fade-in ${syncMsg.includes('Error') || syncMsg.includes('Failed') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                <span className="text-lg">{syncMsg.includes('Error') ? '⚠️' : 'ℹ️'}</span>
+                {syncMsg}
+            </div>
+        )}
+
+        {/* The Data Table */}
+        <div className="flex-1 overflow-hidden">
+            {renderTable()}
+        </div>
+
+        {/* Modals */}
+        {renderForm()}
+
     </div>
   );
 };
