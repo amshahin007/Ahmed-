@@ -11,53 +11,52 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-// Arabic Navigation Items matching the requested photo style
 const DEFAULT_NAV_ITEMS = [
     { 
       id: 'dashboard', 
-      label: 'الصفحة الرئيسية', // Home Page
+      label: 'Home Page', 
       icon: '🏠', 
       roles: ['admin', 'user', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer', 'warehouse_supervisor'] 
     },
     { 
       id: 'agri-work-order', 
-      label: 'اوامر الشغل', // Work Orders
+      label: 'Work Orders', 
       icon: '🚜', 
       roles: ['admin', 'warehouse_manager', 'maintenance_manager', 'user'] 
     },
     { 
       id: 'issue-form', 
-      label: 'طلبات الصرف', // Issue Requests
+      label: 'Issue Requests', 
       icon: '🛠️', 
       roles: ['admin', 'user', 'maintenance_manager', 'maintenance_engineer'] 
     },
     { 
       id: 'history', 
-      label: 'جرد المعدات', // Equipment Inventory
+      label: 'Inventory', 
       icon: '📋', 
       roles: ['admin', 'user', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer', 'warehouse_supervisor'] 
     },
     { 
       id: 'stock-approval', 
-      label: 'مراجعة اوامر الشغل', // Review Work Orders (Approvals)
+      label: 'Approvals', 
       icon: '✅', 
       roles: ['admin', 'warehouse_manager', 'warehouse_supervisor'] 
     },
     { 
       id: 'ai-assistant', 
-      label: 'متابعة الصيانة', // Maintenance Follow-up (AI)
+      label: 'Maintenance AI', 
       icon: '✨', 
       roles: ['admin', 'warehouse_manager', 'maintenance_manager'] 
     },
     { 
       id: 'master-data', 
-      label: 'البيانات الأساسية', // Master Data
+      label: 'Master Data', 
       icon: '🗄️', 
       roles: ['admin'] 
     },
     { 
       id: 'settings', 
-      label: 'الزيادات', // Increases/More (Settings)
+      label: 'Settings', 
       icon: '⚙️', 
       roles: ['admin', 'warehouse_manager', 'maintenance_manager', 'warehouse_supervisor', 'user'] 
     },
@@ -159,13 +158,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
 
       <aside className={`
         fixed md:static inset-y-0 left-0 z-30
-        w-72 bg-[#00695c] text-white min-h-screen flex flex-col shadow-2xl font-cairo
+        w-60 bg-[#00695c] text-white min-h-screen flex flex-col shadow-2xl font-cairo
         transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-      `}>
+      `}
+      style={{ fontFamily: '"Cairo", "Sakkal Majalla", sans-serif' }}
+      >
         {/* Header Section */}
-        <div className="pt-8 pb-6 flex flex-col items-center text-center px-4 border-b border-yellow-400/30">
-             <div className="bg-white p-2 rounded-xl shadow-lg mb-4 w-28 h-28 flex items-center justify-center overflow-hidden">
+        <div className="pt-6 pb-4 flex flex-col items-center text-center px-4 border-b border-yellow-400/30">
+             <div className="bg-white p-2 rounded-xl shadow-lg mb-3 w-20 h-20 flex items-center justify-center overflow-hidden">
                  <img 
                     src={logoUrl} 
                     alt="Daltex Logo" 
@@ -177,7 +178,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
                     }}
                  />
              </div>
-             <h1 className="text-3xl font-bold text-[#FFD700] tracking-wide mb-1 drop-shadow-sm">DALTEX</h1>
+             <h1 className="text-xl font-bold text-[#FFD700] tracking-wide mb-0 drop-shadow-sm uppercase">DALTEX</h1>
+             <p className="text-[10px] text-gray-200">Maintenance System</p>
         </div>
         
         {/* Navigation */}
@@ -194,23 +196,22 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
                 onDragOver={handleDragOver}
                 onClick={() => handleNavClick(item.id)}
                 className={`
-                  w-full flex items-center justify-between px-6 py-4
+                  w-full flex items-center justify-between px-4 py-3
                   border-b border-yellow-400/30 transition-all duration-200 group
                   ${isActive 
                     ? 'bg-[#00C853] text-white shadow-md font-bold' 
-                    : 'text-white hover:bg-[#004d40] hover:pr-8'}
+                    : 'text-white hover:bg-[#004d40] hover:pl-5'}
                   ${isDragging ? 'cursor-grabbing' : 'cursor-grab active:cursor-grabbing'}
                 `}
               >
-                {/* RTL Layout: Text on Right, Icon/Count on Left */}
-                <div className="flex flex-row-reverse items-center gap-4 w-full">
-                    <span className="text-xl w-8 text-center">{item.icon}</span>
-                    <span className="text-lg tracking-wide text-right flex-1">{item.label}</span>
+                <div className="flex items-center gap-3 w-full">
+                    <span className="text-lg w-6 text-center">{item.icon}</span>
+                    <span className="text-sm tracking-wide text-left flex-1 font-semibold">{item.label}</span>
                     
-                    {/* Visual counts matching screenshot (Yellow Numbers) */}
-                    {item.id === 'agri-work-order' && <span className="text-[#FFD700] font-bold text-lg drop-shadow-sm">1274</span>}
-                    {item.id === 'issue-form' && <span className="text-[#FFD700] font-bold text-lg drop-shadow-sm">228</span>}
-                    {item.id === 'history' && <span className="text-[#FFD700] font-bold text-lg drop-shadow-sm">815</span>}
+                    {/* Visual counts matching screenshot style */}
+                    {item.id === 'agri-work-order' && <span className="text-[#FFD700] font-bold text-sm drop-shadow-sm">1274</span>}
+                    {item.id === 'issue-form' && <span className="text-[#FFD700] font-bold text-sm drop-shadow-sm">228</span>}
+                    {item.id === 'history' && <span className="text-[#FFD700] font-bold text-sm drop-shadow-sm">815</span>}
                 </div>
               </button>
             );
@@ -218,19 +219,19 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
         </nav>
 
         {/* Footer Account Section - Yellow Bar */}
-        <div className="p-4 bg-yellow-400 text-[#00695c]">
-          <div className="flex items-center space-x-3 mb-3 flex-row-reverse">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl shrink-0 border-2 border-[#00695c] bg-white text-[#00695c]`}>
+        <div className="bg-[#FFD700] text-[#00695c] py-2 px-3">
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 border-2 border-[#00695c] bg-white text-[#00695c]`}>
               {currentUser.username.substring(0,2).toUpperCase()}
             </div>
-            <div className="overflow-hidden text-right pr-3">
-              <p className="text-base font-extrabold truncate">{currentUser.name}</p>
-              <p className="text-xs font-semibold capitalize">{currentUser.role.replace('_', ' ')}</p>
+            <div className="overflow-hidden">
+              <p className="text-sm font-bold truncate leading-tight">{currentUser.name}</p>
+              <p className="text-[10px] font-semibold capitalize leading-tight opacity-90">{currentUser.role.replace('_', ' ')}</p>
             </div>
           </div>
           <button 
               onClick={onLogout}
-              className="w-full py-2 border-2 border-[#00695c] rounded-md text-sm text-[#00695c] hover:bg-[#00695c] hover:text-white font-bold transition uppercase tracking-wider"
+              className="w-full py-1 border border-[#00695c] rounded text-xs text-[#00695c] hover:bg-[#00695c] hover:text-white font-bold transition uppercase tracking-wider"
           >
               Sign Out
           </button>
