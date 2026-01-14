@@ -17,17 +17,17 @@ interface SearchableSelectProps {
   disabled?: boolean;
   inputRef?: React.RefObject<HTMLInputElement>;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  compact?: boolean; // New prop for styling control
 }
 
 const SearchableSelect: React.FC<SearchableSelectProps> = ({ 
-  label, options, value, onChange, placeholder, required, disabled, inputRef, onKeyDown 
+  label, options, value, onChange, placeholder, required, disabled, inputRef, onKeyDown, compact 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Sync internal search term with external value
-  // Using a ref to prevent cyclic dependencies if options is not memoized in parent
   useEffect(() => {
     if (value) {
       const selectedOption = options.find(o => o.id === value);
@@ -35,8 +35,6 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         setSearchTerm(selectedOption.label);
       }
     } else {
-        // Only clear if user hasn't typed anything newly (this is a tricky balance)
-        // For now, if value is empty, we assume reset
         if (!isOpen) setSearchTerm('');
     }
   }, [value, options, isOpen]);
@@ -58,11 +56,8 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [value, options]);
 
-  // Optimize Filtering:
-  // 1. Limit results to 50 to prevent DOM freeze with large lists
-  // 2. Memoize to prevent recalc on every render if options haven't changed
   const filteredOptions = useMemo(() => {
-     if (!isOpen && !searchTerm) return []; // Don't filter if closed and empty
+     if (!isOpen && !searchTerm) return [];
 
      const lowerSearch = searchTerm.toLowerCase();
      let count = 0;
@@ -90,26 +85,30 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && isOpen) {
-       // Auto-select logic for scanners
-       // Exact match first
        const exactMatch = filteredOptions.find(o => o.label.toLowerCase() === searchTerm.toLowerCase());
-       
        if (exactMatch) {
           handleSelect(exactMatch);
        } else if (filteredOptions.length === 1) {
           handleSelect(filteredOptions[0]);
        } else if (filteredOptions.length > 0) {
-          // Select the first one if present
           handleSelect(filteredOptions[0]);
        }
     }
-    
     if (onKeyDown) onKeyDown(e);
   };
 
+  // Styles based on compact prop
+  const labelClass = compact 
+      ? "block text-xs font-bold text-gray-600 mb-1" 
+      : "block text-sm font-medium text-gray-700 mb-1";
+      
+  const inputClass = compact
+      ? "px-2 h-9 text-sm"
+      : "px-4 py-2";
+
   return (
     <div className="relative" ref={wrapperRef}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
+      <label className={labelClass}>
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       <div className="relative">
@@ -117,19 +116,18 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
           ref={inputRef}
           type="text"
           disabled={disabled}
-          className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
+          className={`w-full ${inputClass} border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
           placeholder={placeholder}
           value={searchTerm}
           onChange={(e) => {
             setSearchTerm(e.target.value);
             setIsOpen(true);
-            if (value) onChange(''); // Clear value while typing new search
+            if (value) onChange('');
           }}
           onFocus={() => !disabled && setIsOpen(true)}
           onKeyDown={handleKeyDown}
           autoComplete="off"
         />
-        {/* Chevron icon */}
         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
         </div>
@@ -149,7 +147,6 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   {option.subLabel && <span className="text-xs text-gray-400">{option.subLabel}</span>}
                 </li>
               ))}
-              {/* Show warning if results are truncated (we don't know total count here efficiently without recalc, but 50 is the limit) */}
               {filteredOptions.length === 50 && (
                   <li className="px-4 py-2 text-xs text-gray-400 italic text-center bg-gray-50">
                       Results limited. Keep typing to search...

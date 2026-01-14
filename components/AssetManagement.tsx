@@ -706,6 +706,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                             }}
                                             disabled={!formData.locationId}
                                             required
+                                            compact={true}
                                         />
                                         {formData.locationId && machinesForAssetDropdown.length === 0 && (
                                             <p className="text-[10px] text-red-500 mt-0.5 font-bold leading-tight">⚠️ لا توجد أصول</p>
