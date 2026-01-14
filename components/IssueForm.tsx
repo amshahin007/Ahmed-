@@ -743,17 +743,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
                     onChange={setCurrentItemId} 
                     placeholder="Search by name..." 
                  />
-                 
-                 {/* STOCK DISPLAY - NEW */}
-                 {selectedItemObj && (
-                    <div className="text-xs md:text-sm mt-1 bg-white inline-block px-3 py-1.5 rounded-lg border border-blue-200 shadow-sm">
-                        <span className="text-gray-500 font-medium">Available Stock: </span> 
-                        <span className={`font-bold text-lg ml-1 ${(selectedItemObj.stockQuantity || 0) <= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {selectedItemObj.stockQuantity !== undefined ? selectedItemObj.stockQuantity : 0} 
-                        </span>
-                        <span className="text-xs text-gray-400 ml-1">{selectedItemObj.unit}</span>
-                    </div>
-                 )}
                </div>
                <div className="w-full md:w-24">
                  <label className="block text-sm font-medium text-gray-700 mb-1">Qty</label>
@@ -775,6 +764,17 @@ const IssueForm: React.FC<IssueFormProps> = ({
                >
                  + Add
                </button>
+
+               {/* STOCK DISPLAY - MOVED HERE */}
+               {selectedItemObj && (
+                  <div className="w-full md:w-auto bg-white px-3 py-2 rounded-lg border border-blue-200 shadow-sm whitespace-nowrap h-[42px] flex items-center justify-center md:justify-start">
+                      <span className="text-gray-500 font-medium text-xs uppercase mr-2">Stock:</span>
+                      <span className={`font-bold text-lg ${(selectedItemObj.stockQuantity || 0) <= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {selectedItemObj.stockQuantity !== undefined ? selectedItemObj.stockQuantity : 0} 
+                      </span>
+                      <span className="text-xs text-gray-400 ml-1">{selectedItemObj.unit}</span>
+                  </div>
+               )}
             </div>
 
             {/* Added Items Table */}
