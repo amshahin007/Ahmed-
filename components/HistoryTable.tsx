@@ -1,97 +1,128 @@
 
-import React, { useState } from 'react';
-import { IssueRecord, Location } from '../types';
+import React, { useState, useMemo } from 'react';
+import { IssueRecord, Location, Item } from '../types';
 import * as XLSX from 'xlsx';
 import { uploadFileToDrive, DEFAULT_SCRIPT_URL, locateRemoteData } from '../services/googleSheetsService';
 
 interface HistoryTableProps {
   history: IssueRecord[];
   locations: Location[];
+  items: Item[];
 }
 
-const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
+type TabType = 'stock' | 'history';
+
+const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items }) => {
+  const [activeTab, setActiveTab] = useState<TabType>('stock');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [uploading, setUploading] = useState(false);
   const [driveLink, setDriveLink] = useState('');
   const [locatingFolder, setLocatingFolder] = useState(false);
 
-  const filteredHistory = history.filter(record => {
-    const matchesSearch = 
-      record.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (record.maintenancePlan || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.locationId.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesLocation = selectedLocation ? record.locationId === selectedLocation : true;
+  // Filter history based on search terms
+  const filteredHistory = useMemo(() => {
+    return history.filter(record => {
+      const matchesSearch = 
+        record.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (record.maintenancePlan || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.locationId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.itemId.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesLocation = selectedLocation ? record.locationId === selectedLocation : true;
 
-    return matchesSearch && matchesLocation;
-  });
+      return matchesSearch && matchesLocation;
+    });
+  }, [history, searchTerm, selectedLocation]);
+
+  // Aggregate for Stock View
+  const stockData = useMemo(() => {
+    const map = new Map<string, {
+        itemNumber: string;
+        fullName: string;
+        transUm: string;
+        sites: Set<string>;
+        sumOfQnty: number;
+    }>();
+
+    filteredHistory.forEach(h => {
+        // Find master item to get Full Name and Unit
+        const masterItem = items.find(i => i.id === h.itemId);
+        
+        if(!map.has(h.itemId)) {
+            map.set(h.itemId, {
+                itemNumber: h.itemId,
+                // Prioritize Master Data Full Name, then Name, then History Record Name
+                fullName: masterItem?.fullName || masterItem?.name || h.itemName,
+                transUm: masterItem?.unit || 'EA',
+                sites: new Set(),
+                sumOfQnty: 0
+            });
+        }
+        
+        const entry = map.get(h.itemId)!;
+        entry.sumOfQnty += h.quantity;
+        entry.sites.add(h.locationId);
+    });
+
+    // Convert Set to string for display and array for map
+    return Array.from(map.values()).map(x => ({
+        ...x,
+        sitesDisplay: Array.from(x.sites).join(', ')
+    }));
+  }, [filteredHistory, items]);
 
   const generateWorkbook = () => {
-    const headers = [
-      "ID", 
-      "Date", 
-      "Location", 
-      "Site Email", 
-      "Sector", 
-      "Division", 
-      "Machine", 
-      "Maint. Plan", 
-      "Item Number", 
-      "Item Name", 
-      "Quantity", 
-      "Status", 
-      "Notes"
-    ];
-    
-    const rows = filteredHistory.map(h => [
-        h.id,
-        h.timestamp,
-        h.locationId,
-        h.requesterEmail || '',
-        h.sectorName || '',
-        h.divisionName || '',
-        h.machineName,
-        h.maintenancePlan || '',
-        h.itemId,
-        h.itemName,
-        h.quantity,
-        h.status,
-        h.notes || ''
-    ]);
-
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    XLSX.utils.book_append_sheet(wb, ws, "History");
+
+    // Sheet 1: Stock Summary
+    const stockHeaders = ["Item Number", "Full Name", "Trans UM", "Sites", "Sum of Qnty"];
+    const stockRows = stockData.map(s => [
+        s.itemNumber,
+        s.fullName,
+        s.transUm,
+        s.sitesDisplay,
+        s.sumOfQnty
+    ]);
+    const wsStock = XLSX.utils.aoa_to_sheet([stockHeaders, ...stockRows]);
+    XLSX.utils.book_append_sheet(wb, wsStock, "Stock");
+
+    // Sheet 2: Detailed History
+    const histHeaders = [
+      "ID", "Date", "Location", "Site Email", "Sector", "Division", "Machine", 
+      "Maint. Plan", "Item Number", "Item Name", "Quantity", "Status", "Notes"
+    ];
+    const histRows = filteredHistory.map(h => [
+        h.id, h.timestamp, h.locationId, h.requesterEmail || '', h.sectorName || '', 
+        h.divisionName || '', h.machineName, h.maintenancePlan || '', h.itemId, 
+        h.itemName, h.quantity, h.status, h.notes || ''
+    ]);
+    const wsHist = XLSX.utils.aoa_to_sheet([histHeaders, ...histRows]);
+    XLSX.utils.book_append_sheet(wb, wsHist, "History");
+
     return wb;
   };
 
   const downloadExcel = () => {
     const wb = generateWorkbook();
-    XLSX.writeFile(wb, `warehouse_issues_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, `Inventory_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   const saveToDrive = async () => {
-      // Fallback to default if not in localStorage
       const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
       if (!scriptUrl) {
           alert("Web App URL not configured in Master Data settings.");
           return;
       }
       
-      if (filteredHistory.length === 0) {
-          alert("No data to save.");
-          return;
-      }
-
       setUploading(true);
       setDriveLink('');
       try {
           const wb = generateWorkbook();
           const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-          const fileName = `Full_History_Backup_${new Date().toISOString().slice(0,10)}.xlsx`;
+          const fileName = `Inventory_Report_${new Date().toISOString().slice(0,10)}.xlsx`;
           
           const url = await uploadFileToDrive(scriptUrl, fileName, wbOut);
           
@@ -129,27 +160,43 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-4 font-cairo">
+      
+      {/* Top Bar: Tabs & Controls */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
         
-        {/* Search Bar */}
-        <div className="relative flex-1 max-w-md">
-            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">🔍</span>
-            <input
-                type="text"
-                placeholder="Search history..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+        {/* Tabs */}
+        <div className="flex bg-gray-100 p-1 rounded-lg">
+            <button 
+                onClick={() => setActiveTab('stock')}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'stock' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                Stock
+            </button>
+            <button 
+                onClick={() => setActiveTab('history')}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'history' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                History
+            </button>
         </div>
 
-        {/* Location Filter Dropdown */}
-        <div className="w-full md:w-64">
+        {/* Search & Location Filter */}
+        <div className="flex flex-1 w-full md:w-auto gap-3">
+            <div className="relative flex-1">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">🔍</span>
+                <input
+                    type="text"
+                    placeholder="Search items, ID, location..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+            </div>
             <select
                 value={selectedLocation}
                 onChange={(e) => setSelectedLocation(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700"
             >
                 <option value="">All Locations</option>
                 {locations.map(loc => (
@@ -158,141 +205,119 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations }) => {
             </select>
         </div>
 
+        {/* Actions */}
         <div className="flex gap-2">
-            {/* Open Folder Button */}
-            <button
-                onClick={openDriveFolder}
-                disabled={locatingFolder}
-                className="flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition shadow-sm whitespace-nowrap"
-                title="Open Google Drive Folder"
-            >
+            <button onClick={openDriveFolder} disabled={locatingFolder} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg border border-gray-300" title="Open Drive Folder">
                 {locatingFolder ? <span className="animate-spin">↻</span> : <span>📂</span>}
-                <span className="hidden sm:inline ml-2">Open Folder</span>
             </button>
-
-            <button
-                onClick={downloadExcel}
-                className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-sm whitespace-nowrap"
-            >
-                <span className="mr-2">📊</span> Excel
+            <button onClick={downloadExcel} className="p-2 text-green-700 hover:bg-green-50 rounded-lg border border-green-200 bg-green-50" title="Export Excel">
+                📊 Excel
             </button>
-            
             {driveLink && driveLink !== 'saved' ? (
-               <a 
-                   href={driveLink} 
-                   target="_blank" 
-                   rel="noopener noreferrer"
-                   className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm whitespace-nowrap font-bold"
-               >
-                   <span>📂</span> Open File ↗
-               </a>
+               <a href={driveLink} target="_blank" rel="noopener noreferrer" className="p-2 text-blue-700 bg-blue-50 border border-blue-200 rounded-lg font-bold">Open ↗</a>
             ) : (
-               <button
-                  onClick={saveToDrive}
-                  disabled={uploading}
-                  className="flex items-center justify-center px-4 py-2 bg-yellow-100 text-yellow-800 border border-yellow-200 rounded-lg hover:bg-yellow-200 transition shadow-sm whitespace-nowrap"
-               >
-                  {uploading ? <span className="animate-spin mr-2">↻</span> : <span className="mr-2">☁️</span>}
-                  {driveLink === 'saved' ? 'Saved (Check Drive)' : 'Save to Drive'}
+               <button onClick={saveToDrive} disabled={uploading} className="p-2 text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg" title="Save to Drive">
+                  {uploading ? <span className="animate-spin">↻</span> : <span>☁️</span>}
                </button>
             )}
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-auto max-h-[75vh] relative">
-            <table className="w-full text-left text-sm text-gray-600 border-separate border-spacing-0">
-                <thead className="bg-gray-50 text-gray-700 font-semibold">
-                    <tr>
-                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Issue ID</th>
-                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Date</th>
-                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Location (Site)</th>
-                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Sector/Div</th>
-                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Machine</th>
-                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Item Details</th>
-                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Qty</th>
-                        <th className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-6 py-4 whitespace-nowrap">Status</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                    {filteredHistory.length > 0 ? (
-                        filteredHistory.map((record) => (
-                            <tr key={record.id} className="hover:bg-gray-50 transition">
-                                {/* ID */}
-                                <td className="px-6 py-4 font-medium text-gray-900 align-middle whitespace-nowrap border-b border-gray-50">
-                                  {record.id}
-                                </td>
-                                
-                                {/* Date */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
-                                  <div>{new Date(record.timestamp).toLocaleDateString()}</div>
-                                  <div className="text-xs text-gray-400">{new Date(record.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                </td>
-                                
-                                {/* Location / Site */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
-                                    <div className="font-medium text-gray-800">{record.locationId}</div>
-                                    {record.requesterEmail && (
-                                      <div className="text-xs text-blue-600 mt-1">{record.requesterEmail}</div>
-                                    )}
-                                </td>
+      {/* Content Area */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[500px]">
+         
+         {/* STOCK VIEW */}
+         {activeTab === 'stock' && (
+             <div className="overflow-auto max-h-[70vh]">
+                 <table className="w-full text-left text-sm border-separate border-spacing-0">
+                     <thead className="bg-blue-50 text-blue-900 font-bold sticky top-0 z-10">
+                         <tr>
+                             <th className="px-6 py-4 border-b border-blue-100">Item Number</th>
+                             <th className="px-6 py-4 border-b border-blue-100">Full Name</th>
+                             <th className="px-6 py-4 border-b border-blue-100">Trans UM</th>
+                             <th className="px-6 py-4 border-b border-blue-100">Sites</th>
+                             <th className="px-6 py-4 border-b border-blue-100 text-right">Sum of Qnty</th>
+                         </tr>
+                     </thead>
+                     <tbody className="divide-y divide-gray-100">
+                         {stockData.length > 0 ? (
+                             stockData.map((row, idx) => (
+                                 <tr key={idx} className="hover:bg-gray-50 transition">
+                                     <td className="px-6 py-3 font-mono font-bold text-gray-700">{row.itemNumber}</td>
+                                     <td className="px-6 py-3 text-gray-800">{row.fullName}</td>
+                                     <td className="px-6 py-3 text-gray-500">{row.transUm}</td>
+                                     <td className="px-6 py-3 text-gray-600 text-xs">{row.sitesDisplay}</td>
+                                     <td className="px-6 py-3 text-right font-bold text-gray-900">{row.sumOfQnty}</td>
+                                 </tr>
+                             ))
+                         ) : (
+                             <tr><td colSpan={5} className="p-8 text-center text-gray-400">No stock data found based on current history filters.</td></tr>
+                         )}
+                         {stockData.length > 0 && (
+                             <tr className="bg-gray-50 font-bold">
+                                 <td colSpan={4} className="px-6 py-3 text-right">Total Items:</td>
+                                 <td className="px-6 py-3 text-right">{stockData.reduce((acc, curr) => acc + curr.sumOfQnty, 0)}</td>
+                             </tr>
+                         )}
+                     </tbody>
+                 </table>
+             </div>
+         )}
 
-                                {/* Sector / Div */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
-                                    <div className="text-xs text-gray-500">{record.sectorName || '-'}</div>
-                                    <div className="text-xs text-gray-400">{record.divisionName || '-'}</div>
-                                </td>
-                                
-                                {/* Machine & Plan */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
-                                    <div className="text-gray-900 font-medium">{record.machineName}</div>
-                                    {record.maintenancePlan && (
-                                      <div className="mt-1 inline-block px-2 py-0.5 bg-orange-50 text-orange-700 text-[10px] rounded border border-orange-100 whitespace-nowrap">
-                                        {record.maintenancePlan}
-                                      </div>
-                                    )}
-                                </td>
-
-                                {/* Item Details */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
-                                    <div className="text-gray-900 font-medium">{record.itemName}</div>
-                                    <div className="text-xs text-gray-500 font-mono">{record.itemId}</div>
-                                </td>
-                                
-                                {/* Qty */}
-                                <td className="px-6 py-4 font-mono font-bold align-middle whitespace-nowrap border-b border-gray-50">
-                                  {record.quantity}
-                                </td>
-                                
-                                {/* Status */}
-                                <td className="px-6 py-4 align-middle whitespace-nowrap border-b border-gray-50">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium inline-block whitespace-nowrap ${
-                                        record.status === 'Completed' || record.status === 'Approved' ? 'bg-green-100 text-green-700' :
-                                        record.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
-                                        record.status === 'Rejected' ? 'bg-red-100 text-red-700' :
-                                        'bg-gray-100 text-gray-700'
-                                    }`}>
-                                        {record.status}
-                                    </span>
-                                    {record.notes && (
-                                      <div className="text-xs text-gray-500 mt-2 italic whitespace-nowrap">
-                                        "{record.notes}"
-                                      </div>
-                                    )}
-                                </td>
-                            </tr>
-                        ))
-                    ) : (
+         {/* HISTORY VIEW (Original Table) */}
+         {activeTab === 'history' && (
+            <div className="overflow-auto max-h-[70vh]">
+                <table className="w-full text-left text-sm text-gray-600 border-separate border-spacing-0">
+                    <thead className="bg-gray-50 text-gray-700 font-semibold sticky top-0 z-10">
                         <tr>
-                            <td colSpan={10} className="px-6 py-12 text-center text-gray-400">
-                                No records found matching your search.
-                            </td>
+                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Issue ID</th>
+                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Date</th>
+                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Location</th>
+                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Machine</th>
+                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Item Details</th>
+                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap text-right">Qty</th>
+                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Status</th>
                         </tr>
-                    )}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {filteredHistory.length > 0 ? (
+                            filteredHistory.map((record) => (
+                                <tr key={record.id} className="hover:bg-gray-50 transition">
+                                    <td className="px-6 py-4 font-medium text-gray-900">{record.id}</td>
+                                    <td className="px-6 py-4">
+                                      <div>{new Date(record.timestamp).toLocaleDateString()}</div>
+                                      <div className="text-xs text-gray-400">{new Date(record.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                    </td>
+                                    <td className="px-6 py-4">{record.locationId}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-gray-900 font-medium">{record.machineName}</div>
+                                        {record.maintenancePlan && <span className="text-[10px] bg-gray-100 px-1 rounded">{record.maintenancePlan}</span>}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-gray-900 font-medium">{record.itemName}</div>
+                                        <div className="text-xs text-gray-500 font-mono">{record.itemId}</div>
+                                    </td>
+                                    <td className="px-6 py-4 font-mono font-bold text-right">{record.quantity}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                            record.status === 'Completed' || record.status === 'Approved' ? 'bg-green-100 text-green-700' :
+                                            record.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                                        }`}>
+                                            {record.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No history records found.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+         )}
       </div>
       <div className="text-right text-xs text-gray-400">
-        Showing {filteredHistory.length} records
+        {activeTab === 'stock' ? `${stockData.length} unique items` : `${filteredHistory.length} transaction records`}
       </div>
     </div>
   );
