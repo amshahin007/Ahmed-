@@ -490,19 +490,27 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       
       {/* --- FORM MODAL --- */}
       {showForm && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in-up">
-                  <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                      <h3 className="font-bold text-gray-800">
-                          {activeTab === 'assets' ? (isEditing ? 'Edit Asset' : 'New Asset') : (isEditing ? 'Edit Breakdown' : 'New Breakdown')}
-                      </h3>
-                      <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" dir={activeTab === 'breakdowns' ? 'rtl' : 'ltr'}>
+              <div className={`bg-white rounded-lg shadow-2xl w-full ${activeTab === 'breakdowns' ? 'max-w-4xl font-cairo' : 'max-w-lg'} overflow-hidden animate-fade-in-up flex flex-col max-h-[90vh]`}>
+                  
+                  {/* Header */}
+                  <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white sticky top-0 z-10">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900">
+                            {activeTab === 'assets' ? (isEditing ? 'Edit Asset' : 'New Asset') : (isEditing ? 'تعديل عطل (Edit Breakdown)' : 'تسجيل عطل جديد (New Breakdown)')}
+                        </h3>
+                        {activeTab === 'breakdowns' && <p className="text-sm text-gray-500 mt-1">يرجى ملء كافة التفاصيل الفنية بدقة</p>}
+                      </div>
+                      <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-700 transition p-2 hover:bg-gray-100 rounded-full">
+                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
                   </div>
-                  <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
+
+                  <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto bg-gray-50/50 p-6">
                       
                       {activeTab === 'assets' ? (
-                          <>
-                            {/* ASSET FIELDS */}
+                          <div className="space-y-4">
+                            {/* ASSET FIELDS (Keep original simple layout for Assets tab) */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Asset ID</label>
                                 <input type="text" className="w-full border rounded p-2" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} required />
@@ -554,136 +562,183 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                     </select>
                                 </div>
                             </div>
-                          </>
+                          </div>
                       ) : (
-                          <>
-                             {/* BREAKDOWN FIELDS */}
-                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                                <select 
-                                    className="w-full border rounded p-2" 
-                                    value={formData.locationId || ''} 
-                                    onChange={e => setFormData({
-                                        ...formData, 
-                                        locationId: e.target.value, 
-                                        machineId: '',
-                                        machineName: ''
-                                    })}
-                                >
-                                    <option value="">Select Location...</option>
-                                    {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                                </select>
-                             </div>
-
-                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Machine Name</label>
-                                <select 
-                                    className="w-full border rounded p-2" 
-                                    value={formData.machineName || ''} 
-                                    onChange={e => setFormData({
-                                        ...formData, 
-                                        machineName: e.target.value,
-                                        machineId: '' // Clear asset ID if category/name changes
-                                    })}
-                                    disabled={!formData.locationId}
-                                >
-                                    <option value="">{formData.locationId ? '-- Select Machine Name --' : 'Select Location First'}</option>
-                                    {machineNamesInLocation.map(name => (
-                                        <option key={name} value={name}>{name}</option>
-                                    ))}
-                                </select>
-                             </div>
-
-                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Machine Asset No (ID)</label>
-                                <SearchableSelect 
-                                    label=""
-                                    placeholder={!formData.locationId ? 'Select Location First' : 'Select specific asset ID...'}
-                                    options={machineAssetOptions}
-                                    value={formData.machineId || ''}
-                                    onChange={(val) => {
-                                        const m = machines.find(mac => mac.id === val);
-                                        setFormData({
-                                            ...formData, 
-                                            machineId: val, 
-                                            machineName: m?.category || formData.machineName
-                                            // Don't overwrite locationId, it's already set by the user filter
-                                        });
-                                    }}
-                                    disabled={!formData.locationId}
-                                    required
-                                />
-                                {formData.locationId && machinesForAssetDropdown.length === 0 && (
-                                    <p className="text-xs text-red-500 mt-1">
-                                        No assets found for this location/name filter.
-                                    </p>
-                                )}
-                             </div>
-                             
-                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
-                                    <input 
-                                        type="datetime-local" 
-                                        className="w-full border rounded p-2" 
-                                        value={formData.startTime ? formData.startTime.slice(0, 16) : ''} 
-                                        onChange={e => setFormData({...formData, startTime: e.target.value})} 
-                                        required 
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
-                                    <input 
-                                        type="datetime-local" 
-                                        className="w-full border rounded p-2" 
-                                        value={formData.endTime ? formData.endTime.slice(0, 16) : ''} 
-                                        onChange={e => setFormData({...formData, endTime: e.target.value})} 
-                                    />
+                          <div className="space-y-8">
+                             {/* SECTION 1: IDENTIFICATION */}
+                             <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                                <h4 className="text-sm font-bold text-gray-900 mb-4 pb-2 border-b border-gray-100 flex items-center gap-2">
+                                    <span className="text-blue-600">📍</span> تحديد الأصل (Asset Identification)
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">الموقع / Location</label>
+                                        <select 
+                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm bg-white" 
+                                            value={formData.locationId || ''} 
+                                            onChange={e => setFormData({
+                                                ...formData, 
+                                                locationId: e.target.value, 
+                                                machineId: '',
+                                                machineName: ''
+                                            })}
+                                        >
+                                            <option value="">-- اختر الموقع --</option>
+                                            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">اسم المعدة / Machine Name</label>
+                                        <select 
+                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400" 
+                                            value={formData.machineName || ''} 
+                                            onChange={e => setFormData({
+                                                ...formData, 
+                                                machineName: e.target.value,
+                                                machineId: '' // Clear asset ID if category/name changes
+                                            })}
+                                            disabled={!formData.locationId}
+                                        >
+                                            <option value="">{formData.locationId ? '-- تصفية حسب الاسم --' : 'اختر الموقع أولاً'}</option>
+                                            {machineNamesInLocation.map(name => (
+                                                <option key={name} value={name}>{name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        {/* Wrapped SearchableSelect for consistent styling */}
+                                        <div className="relative">
+                                            <SearchableSelect 
+                                                label="كود الأصل / Asset ID"
+                                                placeholder={!formData.locationId ? '...' : 'بحث عن الكود...'}
+                                                options={machineAssetOptions}
+                                                value={formData.machineId || ''}
+                                                onChange={(val) => {
+                                                    const m = machines.find(mac => mac.id === val);
+                                                    setFormData({
+                                                        ...formData, 
+                                                        machineId: val, 
+                                                        machineName: m?.category || formData.machineName
+                                                    });
+                                                }}
+                                                disabled={!formData.locationId}
+                                                required
+                                            />
+                                        </div>
+                                        {formData.locationId && machinesForAssetDropdown.length === 0 && (
+                                            <p className="text-xs text-red-500 mt-1 font-bold">⚠️ لا توجد أصول بهذا الاسم في الموقع المحدد</p>
+                                        )}
+                                    </div>
                                 </div>
                              </div>
 
-                             <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Failure Type</label>
-                                    <input type="text" list="failureTypes" className="w-full border rounded p-2" value={formData.failureType || ''} onChange={e => setFormData({...formData, failureType: e.target.value})} placeholder="e.g. Mechanical" required />
-                                    <datalist id="failureTypes">
-                                        <option value="Mechanical" />
-                                        <option value="Electrical" />
-                                        <option value="Software" />
-                                        <option value="Hydraulic" />
-                                        <option value="Operator Error" />
-                                    </datalist>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                                    <select className="w-full border rounded p-2" value={formData.status || 'Open'} onChange={e => setFormData({...formData, status: e.target.value})}>
-                                        <option value="Open">Open (Active)</option>
-                                        <option value="Closed">Closed (Resolved)</option>
-                                    </select>
+                             {/* SECTION 2: TIMING & STATUS */}
+                             <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                                <h4 className="text-sm font-bold text-gray-900 mb-4 pb-2 border-b border-gray-100 flex items-center gap-2">
+                                    <span className="text-orange-600">⏱️</span> التوقيت والحالة (Timing & Status)
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">وقت البداية / Start Time</label>
+                                        <input 
+                                            type="datetime-local" 
+                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm"
+                                            value={formData.startTime ? formData.startTime.slice(0, 16) : ''} 
+                                            onChange={e => setFormData({...formData, startTime: e.target.value})} 
+                                            required 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">وقت النهاية / End Time</label>
+                                        <input 
+                                            type="datetime-local" 
+                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm"
+                                            value={formData.endTime ? formData.endTime.slice(0, 16) : ''} 
+                                            onChange={e => setFormData({...formData, endTime: e.target.value})} 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">نوع العطل / Failure Type</label>
+                                        <input 
+                                            type="text" 
+                                            list="failureTypes" 
+                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm"
+                                            value={formData.failureType || ''} 
+                                            onChange={e => setFormData({...formData, failureType: e.target.value})} 
+                                            placeholder="اختر أو اكتب..."
+                                            required 
+                                        />
+                                        <datalist id="failureTypes">
+                                            <option value="Mechanical" />
+                                            <option value="Electrical" />
+                                            <option value="Software" />
+                                            <option value="Hydraulic" />
+                                            <option value="Operator Error" />
+                                        </datalist>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">حالة العطل / Status</label>
+                                        <select 
+                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm bg-white"
+                                            value={formData.status || 'Open'} 
+                                            onChange={e => setFormData({...formData, status: e.target.value})}
+                                        >
+                                            <option value="Open">🔴 مفتوح (Open)</option>
+                                            <option value="Closed">🟢 مغلق (Closed)</option>
+                                        </select>
+                                    </div>
                                 </div>
                              </div>
 
-                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Operator Name</label>
-                                <input type="text" className="w-full border rounded p-2" value={formData.operatorName || ''} onChange={e => setFormData({...formData, operatorName: e.target.value})} />
+                             {/* SECTION 3: DETAILS */}
+                             <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                                <h4 className="text-sm font-bold text-gray-900 mb-4 pb-2 border-b border-gray-100 flex items-center gap-2">
+                                    <span className="text-gray-600">📝</span> التفاصيل الفنية (Details)
+                                </h4>
+                                <div className="space-y-6">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1.5">اسم المشغل / Operator Name</label>
+                                        <input 
+                                            type="text" 
+                                            className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-11 px-3 text-gray-900 text-sm"
+                                            value={formData.operatorName || ''} 
+                                            onChange={e => setFormData({...formData, operatorName: e.target.value})} 
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-1.5">السبب الجذري / Root Cause</label>
+                                            <textarea 
+                                                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3 text-gray-900 text-sm min-h-[80px]" 
+                                                rows={3} 
+                                                value={formData.rootCause || ''} 
+                                                onChange={e => setFormData({...formData, rootCause: e.target.value})} 
+                                                placeholder="وصف سبب العطل..." 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 mb-1.5">الإجراء المتخذ / Action Taken</label>
+                                            <textarea 
+                                                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3 text-gray-900 text-sm min-h-[80px]" 
+                                                rows={3} 
+                                                value={formData.actionTaken || ''} 
+                                                onChange={e => setFormData({...formData, actionTaken: e.target.value})} 
+                                                placeholder="وصف الإصلاح..." 
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
                              </div>
-
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-700 mb-1">Root Cause</label>
-                                 <textarea className="w-full border rounded p-2" rows={2} value={formData.rootCause || ''} onChange={e => setFormData({...formData, rootCause: e.target.value})} placeholder="Describe the cause..." />
-                             </div>
-                             
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-700 mb-1">Action Taken</label>
-                                 <textarea className="w-full border rounded p-2" rows={2} value={formData.actionTaken || ''} onChange={e => setFormData({...formData, actionTaken: e.target.value})} placeholder="Describe the fix..." />
-                             </div>
-                          </>
+                          </div>
                       )}
 
-                       <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
-                           <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border rounded hover:bg-gray-50">Cancel</button>
-                           <button type="submit" className={`px-4 py-2 text-white rounded shadow-sm ${activeTab === 'assets' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}>
-                               {activeTab === 'assets' ? 'Save Asset' : 'Save Breakdown'}
+                       {/* FOOTER ACTIONS */}
+                       <div className="mt-8 pt-4 border-t border-gray-200 sticky bottom-0 bg-white flex items-center justify-between gap-4">
+                           <button type="button" onClick={() => setShowForm(false)} className="px-6 py-2.5 border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition shadow-sm w-32">
+                               إلغاء
+                           </button>
+                           <button type="submit" className={`px-8 py-2.5 text-white font-bold rounded-lg shadow-md transition transform active:scale-95 flex-1 md:flex-none md:w-48 ${activeTab === 'assets' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}>
+                               {activeTab === 'assets' ? 'Save Asset' : 'حفظ البيانات (Save)'}
                            </button>
                        </div>
                   </form>
