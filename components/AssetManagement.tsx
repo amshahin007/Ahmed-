@@ -43,7 +43,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   const [showForm, setShowForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({});
-  const [ignoreLocationFilter, setIgnoreLocationFilter] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -73,8 +72,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       
       try {
           const cleanId = extractSheetIdFromUrl(config.sheetId);
-          // Assuming GID logic is similar to MasterData or simplified (fetch first tab if GID not specified)
-          // For simplicity here, we assume user pastes full URL or we default to '0' if not found.
           const rows = await fetchRawCSV(cleanId, '0'); // defaulting to first tab
           if(rows && rows.length > 1) {
              processImport(rows, tabKey);
@@ -175,7 +172,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   };
 
   const openBreakdownForm = (bd?: BreakdownRecord) => {
-      setIgnoreLocationFilter(false);
       if (bd) {
           setFormData({ ...bd });
           setIsEditing(true);
@@ -187,6 +183,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
               failureType: 'Mechanical',
               operatorName: '',
               machineId: '',
+              machineName: '',
               locationId: filterLocationId || '' // Pre-fill with filter location if selected
           });
           setIsEditing(false);
@@ -229,17 +226,26 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       (!filterLocationId || b.locationId === filterLocationId)
   ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
-  // Filter machines in form based on selected location in form
-  // If "Ignore Location Filter" is checked OR locationId is empty, show all.
-  const formMachines = (!formData.locationId || ignoreLocationFilter)
-      ? machines
-      : machines.filter(m => m.locationId === formData.locationId);
+  // BREAKDOWN FORM LOGIC
+  
+  // 1. Get machines strictly in the selected location
+  const machinesInLocation = formData.locationId 
+      ? machines.filter(m => m.locationId === formData.locationId) 
+      : [];
+
+  // 2. Get unique machine names (categories) in that location
+  const machineNamesInLocation = Array.from(new Set(machinesInLocation.map(m => m.category).filter(Boolean))) as string[];
+
+  // 3. Filter specific assets based on the selected Name/Category (if any)
+  const machinesForAssetDropdown = machinesInLocation.filter(m => 
+      !formData.machineName || m.category === formData.machineName
+  );
 
   // Prepare options for SearchableSelect
-  const machineOptions: Option[] = formMachines.map(m => ({
+  const machineAssetOptions: Option[] = machinesForAssetDropdown.map(m => ({
       id: m.id,
-      label: m.category || m.id, // Primary display
-      subLabel: `ID: ${m.id} | ${m.brand || ''} ${m.modelNo || ''} (${m.locationId || 'No Loc'})` // Searchable metadata
+      label: `${m.id} ${m.category ? `- ${m.category}` : ''}`, 
+      subLabel: `${m.brand || ''} ${m.modelNo || ''} (Chase: ${m.chaseNo})`
   }));
 
   const handleSelectAllAssets = () => {
@@ -551,7 +557,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                 <select 
                                     className="w-full border rounded p-2" 
                                     value={formData.locationId || ''} 
-                                    onChange={e => setFormData({...formData, locationId: e.target.value, machineId: ''})}
+                                    onChange={e => setFormData({
+                                        ...formData, 
+                                        locationId: e.target.value, 
+                                        machineId: '',
+                                        machineName: ''
+                                    })}
                                 >
                                     <option value="">Select Location...</option>
                                     {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -559,43 +570,46 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                              </div>
 
                              <div>
-                                <div className="flex justify-between items-center mb-1">
-                                    <label className="block text-sm font-medium text-gray-700">Select Machine</label>
-                                    <label className="flex items-center text-xs text-blue-600 cursor-pointer">
-                                        <input 
-                                            type="checkbox" 
-                                            className="mr-1 rounded text-blue-600"
-                                            checked={ignoreLocationFilter}
-                                            onChange={(e) => setIgnoreLocationFilter(e.target.checked)}
-                                        />
-                                        Show all machines
-                                    </label>
-                                </div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Machine Name</label>
+                                <select 
+                                    className="w-full border rounded p-2" 
+                                    value={formData.machineName || ''} 
+                                    onChange={e => setFormData({
+                                        ...formData, 
+                                        machineName: e.target.value,
+                                        machineId: '' // Clear asset ID if category/name changes
+                                    })}
+                                    disabled={!formData.locationId}
+                                >
+                                    <option value="">{formData.locationId ? '-- Select Machine Name --' : 'Select Location First'}</option>
+                                    {machineNamesInLocation.map(name => (
+                                        <option key={name} value={name}>{name}</option>
+                                    ))}
+                                </select>
+                             </div>
+
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Machine Asset No (ID)</label>
                                 <SearchableSelect 
                                     label=""
-                                    placeholder={formData.locationId && !ignoreLocationFilter ? 'Type name or ID to filter...' : 'Search all machines...'}
-                                    options={machineOptions}
+                                    placeholder={!formData.locationId ? 'Select Location First' : 'Select specific asset ID...'}
+                                    options={machineAssetOptions}
                                     value={formData.machineId || ''}
                                     onChange={(val) => {
                                         const m = machines.find(mac => mac.id === val);
-                                        if (m) {
-                                            setFormData({
-                                                ...formData, 
-                                                machineId: val, 
-                                                machineName: m.category || '',
-                                                locationId: (m.locationId && !ignoreLocationFilter) ? m.locationId : formData.locationId
-                                            });
-                                        } else {
-                                             setFormData({ ...formData, machineId: val });
-                                        }
+                                        setFormData({
+                                            ...formData, 
+                                            machineId: val, 
+                                            machineName: m?.category || formData.machineName,
+                                            locationId: m?.locationId || formData.locationId
+                                        });
                                     }}
-                                    disabled={!formData.locationId && formMachines.length === machines.length && !ignoreLocationFilter}
+                                    disabled={!formData.locationId}
                                     required
                                 />
-                                {formData.locationId && formMachines.length === 0 && !ignoreLocationFilter && (
+                                {formData.locationId && machinesForAssetDropdown.length === 0 && (
                                     <p className="text-xs text-red-500 mt-1">
-                                        No machines found in this location. 
-                                        <button type="button" onClick={() => setIgnoreLocationFilter(true)} className="ml-1 underline font-bold">Show All</button>
+                                        No assets found for this location/name filter.
                                     </p>
                                 )}
                              </div>
