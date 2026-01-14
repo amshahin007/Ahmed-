@@ -36,13 +36,12 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({ orders, onAddOrder, onUpd
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Derived/Static Lists (Mocking what's in the screenshot dropdowns)
+  // Derived/Static Lists
   const attachedOptions = ["مقطورة_سطحة", "معدة ذاتية_باليومية", "مقطورة حصاد", "اوتومايزر_بدلة", "ماكينة فوج", "مقطورة كسح"];
   const driverOptions = ["درويش شحاته شحاته درويش", "عادل طلبه السيد الشرقاوي", "محمد فرجاني عبدالقادر فرجاني", "عبدالرازق محمد عبد السلام حسين", "سائق أهالي", "بدون_سائق"];
   const departments = ["الادارة", "الصوب", "العنب", "الموالح"];
   const unitTypes = ["يومية", "فدان", "ساعة"];
   
-  // Calculate Diff/Time logic if needed (Basic implementation)
   useEffect(() => {
      // Example auto-calc
      const calc = (formData.endCounter || 0) - (formData.startCounter || 0);
@@ -55,14 +54,9 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({ orders, onAddOrder, onUpd
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = () => {
-      if (!formData.branch || !formData.tractor) {
-          alert("Please fill required fields (Branch, Tractor)");
-          return;
-      }
-      
-      const newRecord: AgriOrderRecord = {
-          id: selectedId || (orders.length > 0 ? String(Math.max(...orders.map(o => Number(o.id))) + 1) : "1250"),
+  const getRecordFromForm = (id: string): AgriOrderRecord => {
+      return {
+          id: id,
           date: formData.date || new Date().toISOString().slice(0, 10),
           branch: formData.branch || "",
           tractor: formData.tractor || "",
@@ -81,16 +75,32 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({ orders, onAddOrder, onUpd
           calculated: Number(formData.calculated) || 0,
           timeSpent: Number(formData.timeSpent) || 0,
           notes: formData.notes || "",
-          sector: "قطاع شمال", // Default/Mock for Data Out
-          services: "532" // Default/Mock for Data Out
+          sector: "قطاع شمال", 
+          services: "532"
       };
+  };
 
-      if (selectedId) {
-          onUpdateOrder(newRecord);
-          alert("Updated successfully");
-      } else {
-          onAddOrder(newRecord);
+  const handleCreate = () => {
+      if (!formData.branch || !formData.tractor) {
+          alert("Please fill required fields (Branch, Tractor)");
+          return;
       }
+      // Generate new ID
+      const newId = orders.length > 0 ? String(Math.max(...orders.map(o => Number(o.id))) + 1) : "1250";
+      const newRecord = getRecordFromForm(newId);
+      
+      onAddOrder(newRecord);
+      handleReset();
+  };
+
+  const handleUpdate = () => {
+      if (!selectedId) {
+          alert("No record selected for update. Click a row in the table first.");
+          return;
+      }
+      const updatedRecord = getRecordFromForm(selectedId);
+      onUpdateOrder(updatedRecord);
+      alert("Record Updated");
       handleReset();
   };
 
@@ -106,7 +116,14 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({ orders, onAddOrder, onUpd
         calculated: 0,
         department: 'الادارة',
         machineLocalNo: '1',
-        attachedLocalNo: '1'
+        attachedLocalNo: '1',
+        pivot: '',
+        branch: '',
+        tractor: '',
+        attached: '',
+        driver: '',
+        rowNumber: '',
+        notes: ''
       });
       setSelectedId(null);
   };
@@ -134,7 +151,6 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({ orders, onAddOrder, onUpd
     XLSX.writeFile(wb, "AgriWorkOrders.xlsx");
   };
 
-  // Helper for input classes to match the dense style
   const labelClass = "block text-xs font-bold text-teal-800 bg-teal-50 px-2 py-1 border border-teal-200 rounded-t-sm mb-0 text-center";
   const inputClass = "w-full px-2 py-1 text-sm border-x border-b border-teal-200 rounded-b-sm focus:ring-1 focus:ring-teal-500 outline-none font-bold text-center text-gray-700 bg-white h-9";
   const wrapperClass = "flex flex-col";
@@ -149,7 +165,7 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({ orders, onAddOrder, onUpd
                 <span className="absolute -top-3 right-4 bg-white px-2 text-sm font-bold text-gray-600">Enter Detailes</span>
                 
                 <div className="grid grid-cols-6 gap-2 mb-2">
-                    {/* Row 1: Counters */}
+                    {/* Row 1 */}
                     <div className={wrapperClass}>
                         <label className={labelClass}>نهاية العداد</label>
                         <input type="number" className={inputClass} value={formData.endCounter} onChange={e => handleChange('endCounter', e.target.value)} />
@@ -161,7 +177,6 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({ orders, onAddOrder, onUpd
                     </div>
 
                     <div className="col-span-2">
-                        {/* Empty spacer or Branch Select */}
                         <div className="flex w-full">
                            <span className="bg-teal-700 text-white px-2 py-1 text-xs flex items-center w-20 justify-center">اسم الفرع</span>
                            <select className="flex-1 border p-1 font-bold text-sm" value={formData.branch} onChange={e => handleChange('branch', e.target.value)}>
@@ -337,27 +352,46 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({ orders, onAddOrder, onUpd
             </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex justify-center gap-4 py-2 border-t border-b bg-white">
-            <button onClick={handleExcelExport} className="flex flex-col items-center text-green-700 hover:text-green-900 px-4">
-                <span className="text-2xl">📊</span>
-                <span className="text-sm font-bold">اكسل</span>
+        {/* Action Buttons (Reordered for RTL: ADD is rightmost, EXCEL is leftmost) */}
+        <div className="flex justify-center gap-6 py-4 border-t border-b bg-white rounded-lg shadow-sm">
+            {/* ADD (Rightmost in RTL) */}
+            <button onClick={handleCreate} className="flex flex-col items-center text-green-700 hover:text-green-900 px-4 group transition-transform hover:scale-105">
+                <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5v0m0-3v3m0 0h3m-3 0H9" /></svg>
+                </div>
+                <span className="text-sm font-bold">إضافة</span>
             </button>
-            <button onClick={handleDelete} className="flex flex-col items-center text-green-700 hover:text-green-900 px-4">
-                <span className="text-2xl">🗑️</span>
-                <span className="text-sm font-bold">حذف</span>
-            </button>
-            <button onClick={handleSubmit} className="flex flex-col items-center text-green-700 hover:text-green-900 px-4">
-                <span className="text-2xl">📝</span>
-                <span className="text-sm font-bold">تعديل</span>
-            </button>
-            <button onClick={handleReset} className="flex flex-col items-center text-green-700 hover:text-green-900 px-4">
-                <span className="text-2xl">🔄</span>
+
+            {/* RESTORE */}
+            <button onClick={handleReset} className="flex flex-col items-center text-green-700 hover:text-green-900 px-4 group transition-transform hover:scale-105">
+                <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                </div>
                 <span className="text-sm font-bold">استرجاع</span>
             </button>
-            <button onClick={handleSubmit} className="flex flex-col items-center text-green-700 hover:text-green-900 px-4">
-                <span className="text-2xl">💾</span>
-                <span className="text-sm font-bold">إضافة</span>
+
+             {/* EDIT */}
+            <button onClick={handleUpdate} className="flex flex-col items-center text-green-700 hover:text-green-900 px-4 group transition-transform hover:scale-105">
+                <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                </div>
+                <span className="text-sm font-bold">تعديل</span>
+            </button>
+
+            {/* DELETE */}
+            <button onClick={handleDelete} className="flex flex-col items-center text-green-700 hover:text-green-900 px-4 group transition-transform hover:scale-105">
+                <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </div>
+                <span className="text-sm font-bold">حذف</span>
+            </button>
+
+            {/* EXCEL (Leftmost in RTL) */}
+            <button onClick={handleExcelExport} className="flex flex-col items-center text-green-700 hover:text-green-900 px-4 group transition-transform hover:scale-105">
+                <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                </div>
+                <span className="text-sm font-bold">اكسل</span>
             </button>
         </div>
 
