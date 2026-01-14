@@ -606,8 +606,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                         setFormData({
                                             ...formData, 
                                             machineId: val, 
-                                            machineName: m?.category || formData.machineName,
-                                            locationId: m?.locationId || formData.locationId
+                                            machineName: m?.category || formData.machineName
+                                            // Don't overwrite locationId, it's already set by the user filter
                                         });
                                     }}
                                     disabled={!formData.locationId}
