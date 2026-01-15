@@ -68,8 +68,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const itemInputRef = useRef<HTMLInputElement>(null);
   const qtyInputRef = useRef<HTMLInputElement>(null);
   
-  // Flag to ignore resetting division when prefilling
+  // Flags to ignore resetting fields when prefilling
   const ignoreNextSectorChange = useRef(false);
+  const ignoreNextDivisionChange = useRef(false);
 
   // --- PRE-FILL LOGIC from LocalStorage ---
   useEffect(() => {
@@ -77,24 +78,36 @@ const IssueForm: React.FC<IssueFormProps> = ({
      if (prefillStr) {
          try {
              const data = JSON.parse(prefillStr);
+             
+             let prefillSectorId = data.sectorId;
+             
+             // Infer Sector from Division if missing (common if machine doesn't have sectorId explicitly)
+             if (!prefillSectorId && data.divisionId) {
+                 const div = divisions.find(d => d.id === data.divisionId);
+                 if (div) prefillSectorId = div.sectorId;
+             }
+
              if (data.locationId) setLocationId(data.locationId);
              
              // Set flag to prevent useEffect from clearing division immediately
-             if (data.sectorId) {
+             if (prefillSectorId) {
                  ignoreNextSectorChange.current = true;
-                 setSectorId(data.sectorId);
+                 setSectorId(prefillSectorId);
              }
              
-             if (data.divisionId) setDivisionId(data.divisionId);
+             if (data.divisionId) {
+                 ignoreNextDivisionChange.current = true;
+                 setDivisionId(data.divisionId);
+             }
+
              if (data.machineId) setMachineId(data.machineId);
              
-             // Also try to set Maintenance Plan if applicable? No, usually manual.
          } catch(e) { console.error("Prefill error", e); }
          
          // Clear it so it doesn't persist on reload
          localStorage.removeItem('wf_issue_prefill');
      }
-  }, []);
+  }, [divisions]); // Add divisions dependency to ensure we can lookup sector
 
   // Auto-lookup Item Name for current input (Maintains the string for Line Item creation)
   const selectedItemObj = useMemo(() => items.find(i => i.id === currentItemId), [items, currentItemId]);
@@ -119,6 +132,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
   }, [sectorId]);
 
   useEffect(() => {
+    if (ignoreNextDivisionChange.current) {
+        ignoreNextDivisionChange.current = false;
+        return;
+    }
     setMachineId('');
   }, [divisionId]);
 
