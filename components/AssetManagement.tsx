@@ -17,12 +17,13 @@ interface AssetManagementProps {
   onAddBreakdown: (breakdown: BreakdownRecord) => void;
   onUpdateBreakdown: (breakdown: BreakdownRecord) => void;
   onBulkImport: (tab: string, added: any[], updated: any[]) => void;
+  setCurrentView: (view: string) => void;
 }
 
 const AssetManagement: React.FC<AssetManagementProps> = ({
   machines, locations, sectors, divisions, breakdowns,
   onAddMachine, onUpdateMachine, onDeleteMachines,
-  onAddBreakdown, onUpdateBreakdown, onBulkImport
+  onAddBreakdown, onUpdateBreakdown, onBulkImport, setCurrentView
 }) => {
   const [activeTab, setActiveTab] = useState<'assets' | 'breakdowns'>('assets');
   const [searchTerm, setSearchTerm] = useState('');
@@ -198,6 +199,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
               machineId: '',
               machineName: '',
               locationId: filterLocationId || '',
+              sectorId: '', // Ensure these are initialized
+              divisionId: '',
               duration: ''
           });
           setIsEditing(false);
@@ -219,7 +222,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           }
       } else if (formData.duration) {
           // If Duration exists but End Time is empty (or invalid), recalc End Time? 
-          // Usually easier to clear duration if start changes drastically, but let's try to preserve duration
           const start = new Date(val).getTime();
           const dur = parseFloat(formData.duration);
           if (!isNaN(start) && !isNaN(dur) && dur > 0) {
@@ -285,7 +287,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
              ...cleanData,
              machineName: selectedMachine?.category || formData.machineName || 'Unknown',
              locationId: formData.locationId || selectedMachine?.locationId || 'Unknown',
-             sectorId: selectedMachine?.sectorId || formData.sectorId || '',
+             sectorId: formData.sectorId || selectedMachine?.sectorId || '', // Prioritize form selection if manual override allowed
           };
           if(isEditing) onUpdateBreakdown(finalRecord);
           else onAddBreakdown(finalRecord);
@@ -300,6 +302,23 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           }
       }
       setShowForm(false);
+  };
+
+  const handleMaterialRequest = () => {
+    if (!formData.locationId || !formData.machineId) {
+        alert("Please select Location and Machine first.");
+        return;
+    }
+    // Save context to local storage to be picked up by IssueForm
+    localStorage.setItem('wf_issue_prefill', JSON.stringify({
+        locationId: formData.locationId,
+        sectorId: formData.sectorId,
+        divisionId: formData.divisionId,
+        machineId: formData.machineId
+    }));
+    // Close modal and switch view
+    setShowForm(false);
+    setCurrentView('issue-form');
   };
 
   // --- RENDER HELPERS ---
@@ -326,7 +345,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   // BREAKDOWN FORM LOGIC
   
   // 1. Get machines strictly in the selected location
-  // Update: Check both ID and Name to handle potential import inconsistencies
   const selectedLocation = locations.find(l => l.id === formData.locationId);
   
   const machinesInLocation = formData.locationId 
@@ -350,6 +368,9 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       label: `${m.id} ${m.category ? `- ${m.category}` : ''}`, 
       subLabel: `${m.brand || ''} ${m.modelNo || ''} (Chase: ${m.chaseNo})`
   }));
+  
+  // Filtered Divisions based on selected Sector
+  const filteredDivisions = divisions.filter(d => !formData.sectorId || d.sectorId === formData.sectorId);
 
   const handleSelectAllAssets = () => {
       const allSelected = filteredMachines.length > 0 && filteredMachines.every(m => selectedAssetIds.has(m.id));
@@ -691,7 +712,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                           <div className="space-y-3">
                              {/* ROW 1: IDENTIFICATION & CONTEXT */}
                              <div className="bg-white p-3 rounded border border-gray-200 shadow-sm">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                                     <div className="md:col-span-1">
                                         <label className="block text-xs font-bold text-gray-600 mb-1">الموقع / Location</label>
                                         <select 
@@ -706,6 +727,33 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                         >
                                             <option value="">-- الموقع --</option>
                                             {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="md:col-span-1">
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">القطاع / Sector</label>
+                                        <select 
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 text-sm px-2 bg-white" 
+                                            value={formData.sectorId || ''} 
+                                            onChange={e => setFormData({
+                                                ...formData, 
+                                                sectorId: e.target.value, 
+                                                divisionId: '' // Clear division when sector changes
+                                            })}
+                                        >
+                                            <option value="">-- القطاع --</option>
+                                            {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="md:col-span-1">
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">القسم / Division</label>
+                                        <select 
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 text-sm px-2 bg-white disabled:bg-gray-100 disabled:text-gray-400" 
+                                            value={formData.divisionId || ''} 
+                                            onChange={e => setFormData({...formData, divisionId: e.target.value})}
+                                            disabled={!formData.sectorId}
+                                        >
+                                            <option value="">{formData.sectorId ? '-- القسم --' : '-'}</option>
+                                            {filteredDivisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                                         </select>
                                     </div>
                                     <div className="md:col-span-1">
@@ -737,7 +785,9 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                                 setFormData({
                                                     ...formData, 
                                                     machineId: val, 
-                                                    machineName: m?.category || formData.machineName
+                                                    machineName: m?.category || formData.machineName,
+                                                    sectorId: m?.sectorId || formData.sectorId,
+                                                    divisionId: m?.divisionId || formData.divisionId
                                                 });
                                             }}
                                             disabled={!formData.locationId}
@@ -859,9 +909,20 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                            <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2 border border-gray-300 text-gray-700 font-bold text-sm rounded hover:bg-gray-50 transition w-28">
                                إلغاء
                            </button>
-                           <button type="submit" className={`px-6 py-2 text-white font-bold text-sm rounded shadow-sm transition transform active:scale-95 flex-1 md:flex-none md:w-40 ${activeTab === 'assets' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}>
-                               {activeTab === 'assets' ? 'Save Asset' : 'حفظ (Save)'}
-                           </button>
+                           <div className="flex gap-3">
+                               {activeTab === 'breakdowns' && (
+                                   <button 
+                                      type="button"
+                                      onClick={handleMaterialRequest}
+                                      className="px-5 py-2 bg-blue-100 text-blue-700 font-bold text-sm rounded hover:bg-blue-200 transition"
+                                   >
+                                      طلب صرف (Material Request)
+                                   </button>
+                               )}
+                               <button type="submit" className={`px-6 py-2 text-white font-bold text-sm rounded shadow-sm transition transform active:scale-95 w-40 ${activeTab === 'assets' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}>
+                                   {activeTab === 'assets' ? 'Save Asset' : 'حفظ (Save)'}
+                               </button>
+                           </div>
                        </div>
                   </form>
               </div>

@@ -320,6 +320,7 @@ const App: React.FC = () => {
             onAddBreakdown={handleAddBreakdown}
             onUpdateBreakdown={handleUpdateBreakdown}
             onBulkImport={handleBulkImport}
+            setCurrentView={setCurrentView}
           />
         );
       case 'issue-form':

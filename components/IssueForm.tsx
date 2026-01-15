@@ -67,6 +67,34 @@ const IssueForm: React.FC<IssueFormProps> = ({
   // --- Refs for Scanner Navigation ---
   const itemInputRef = useRef<HTMLInputElement>(null);
   const qtyInputRef = useRef<HTMLInputElement>(null);
+  
+  // Flag to ignore resetting division when prefilling
+  const ignoreNextSectorChange = useRef(false);
+
+  // --- PRE-FILL LOGIC from LocalStorage ---
+  useEffect(() => {
+     const prefillStr = localStorage.getItem('wf_issue_prefill');
+     if (prefillStr) {
+         try {
+             const data = JSON.parse(prefillStr);
+             if (data.locationId) setLocationId(data.locationId);
+             
+             // Set flag to prevent useEffect from clearing division immediately
+             if (data.sectorId) {
+                 ignoreNextSectorChange.current = true;
+                 setSectorId(data.sectorId);
+             }
+             
+             if (data.divisionId) setDivisionId(data.divisionId);
+             if (data.machineId) setMachineId(data.machineId);
+             
+             // Also try to set Maintenance Plan if applicable? No, usually manual.
+         } catch(e) { console.error("Prefill error", e); }
+         
+         // Clear it so it doesn't persist on reload
+         localStorage.removeItem('wf_issue_prefill');
+     }
+  }, []);
 
   // Auto-lookup Item Name for current input (Maintains the string for Line Item creation)
   const selectedItemObj = useMemo(() => items.find(i => i.id === currentItemId), [items, currentItemId]);
@@ -82,6 +110,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
   // Reset downstream fields when upstream changes (Org Structure)
   useEffect(() => {
+    if (ignoreNextSectorChange.current) {
+        ignoreNextSectorChange.current = false;
+        return;
+    }
     setDivisionId('');
     setMachineId('');
   }, [sectorId]);
