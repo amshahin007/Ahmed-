@@ -96,6 +96,16 @@ export interface BreakdownRecord {
   status: 'Open' | 'Closed';
 }
 
+// NEW: BOM Record
+export interface BOMRecord {
+  id: string;
+  machineCategory: string; // Machine Name
+  modelNo: string;         // Machine Model
+  itemId: string;          // Link to Item Master
+  quantity: number;        // Standard Qty per unit
+  notes?: string;
+}
+
 // NEW: Agri Work Order Record
 export interface AgriOrderRecord {
   id: string;

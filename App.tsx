@@ -25,7 +25,7 @@ import {
   MAINTENANCE_PLANS as INIT_PLANS,
   INITIAL_BREAKDOWNS // Imported initial breakdowns
 } from './constants';
-import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan, AgriOrderRecord, BreakdownRecord, IrrigationLogRecord } from './types';
+import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan, AgriOrderRecord, BreakdownRecord, IrrigationLogRecord, BOMRecord } from './types';
 
 // Helper to load small configs from LocalStorage safely (kept for non-data prefs)
 const loadConfig = <T,>(key: string, fallback: T): T => {
@@ -59,6 +59,7 @@ const App: React.FC = () => {
   const [agriOrders, setAgriOrders] = useState<AgriOrderRecord[]>([]);
   const [breakdowns, setBreakdowns] = useState<BreakdownRecord[]>(INITIAL_BREAKDOWNS); // Breakdown State
   const [irrigationLogs, setIrrigationLogs] = useState<IrrigationLogRecord[]>([]);
+  const [bomRecords, setBomRecords] = useState<BOMRecord[]>([]);
 
   // --- Load Data from IndexedDB on Mount ---
   useEffect(() => {
@@ -66,7 +67,7 @@ const App: React.FC = () => {
       try {
         const [
           loadedHistory, loadedItems, loadedMachines, loadedLocations, 
-          loadedSectors, loadedDivisions, loadedPlans, loadedUsers, loadedAgri, loadedBreakdowns, loadedIrrigation
+          loadedSectors, loadedDivisions, loadedPlans, loadedUsers, loadedAgri, loadedBreakdowns, loadedIrrigation, loadedBoms
         ] = await Promise.all([
           storageService.getItem<IssueRecord[]>('wf_history'),
           storageService.getItem<Item[]>('wf_items'),
@@ -79,6 +80,7 @@ const App: React.FC = () => {
           storageService.getItem<AgriOrderRecord[]>('wf_agri_orders'),
           storageService.getItem<BreakdownRecord[]>('wf_breakdowns'),
           storageService.getItem<IrrigationLogRecord[]>('wf_irrigation_logs'),
+          storageService.getItem<BOMRecord[]>('wf_boms'),
         ]);
 
         if (loadedHistory) setHistory(loadedHistory);
@@ -106,6 +108,7 @@ const App: React.FC = () => {
         if (loadedAgri) setAgriOrders(loadedAgri);
         if (loadedBreakdowns) setBreakdowns(loadedBreakdowns);
         if (loadedIrrigation) setIrrigationLogs(loadedIrrigation);
+        if (loadedBoms) setBomRecords(loadedBoms);
 
       } catch (err) {
         console.error("Failed to load data from database:", err);
@@ -128,6 +131,7 @@ const App: React.FC = () => {
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_agri_orders', agriOrders); }, [agriOrders, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_breakdowns', breakdowns); }, [breakdowns, isDataLoaded]); 
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_irrigation_logs', irrigationLogs); }, [irrigationLogs, isDataLoaded]);
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_boms', bomRecords); }, [bomRecords, isDataLoaded]);
   
   useEffect(() => { localStorage.setItem('wf_user', JSON.stringify(user)); }, [user]);
 
@@ -182,10 +186,15 @@ const App: React.FC = () => {
   const handleUpdateIrrigationLog = (log: IrrigationLogRecord) => setIrrigationLogs(prev => prev.map(l => l.id === log.id ? log : l));
   const handleDeleteIrrigationLogs = (ids: string[]) => setIrrigationLogs(prev => prev.filter(l => !ids.includes(l.id)));
 
-
   // Breakdown Handlers
   const handleAddBreakdown = (bd: BreakdownRecord) => setBreakdowns(prev => [bd, ...prev]);
   const handleUpdateBreakdown = (bd: BreakdownRecord) => setBreakdowns(prev => prev.map(b => b.id === bd.id ? bd : b));
+
+  // BOM Handlers
+  const handleAddBOM = (bom: BOMRecord) => setBomRecords(prev => [...prev, bom]);
+  const handleUpdateBOM = (bom: BOMRecord) => setBomRecords(prev => prev.map(b => b.id === bom.id ? bom : b));
+  const handleDeleteBOMs = (ids: string[]) => setBomRecords(prev => prev.filter(b => !ids.includes(b.id)));
+
 
   const handleUpdateItem = (updatedItem: Item) => {
     setItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
@@ -252,6 +261,7 @@ const App: React.FC = () => {
         case 'plans': updateIdBasedState(setPlans); break;
         case 'history': updateIdBasedState(setHistory); break; // Added History Import Support
         case 'breakdowns': updateIdBasedState(setBreakdowns); break; // Added Breakdowns
+        case 'bom': updateIdBasedState(setBomRecords); break; // Added BOMs
         case 'users': 
             setUsersList(prev => {
                 const updateMap = new Map(updated.map((u: any) => [u.username, u]));
@@ -310,6 +320,8 @@ const App: React.FC = () => {
         return (
           <AssetManagement
             machines={machines}
+            items={items}
+            bomRecords={bomRecords}
             locations={locations}
             sectors={sectors}
             divisions={divisions}
@@ -319,6 +331,9 @@ const App: React.FC = () => {
             onDeleteMachines={handleDeleteMachines}
             onAddBreakdown={handleAddBreakdown}
             onUpdateBreakdown={handleUpdateBreakdown}
+            onAddBOM={handleAddBOM}
+            onUpdateBOM={handleUpdateBOM}
+            onDeleteBOMs={handleDeleteBOMs}
             onBulkImport={handleBulkImport}
             setCurrentView={setCurrentView}
           />
@@ -333,6 +348,7 @@ const App: React.FC = () => {
             sectors={sectors}
             divisions={divisions}
             maintenancePlans={plans}
+            bomRecords={bomRecords}
             currentUser={user}
           />
         );

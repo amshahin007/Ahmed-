@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { IssueRecord, Item, Location, Machine, Sector, Division, User, MaintenancePlan } from '../types';
+import { IssueRecord, Item, Location, Machine, Sector, Division, User, MaintenancePlan, BOMRecord } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
 import { sendIssueToSheet, uploadFileToDrive, DEFAULT_SCRIPT_URL } from '../services/googleSheetsService';
 import SearchableSelect, { Option } from './SearchableSelect';
@@ -9,12 +9,13 @@ import * as XLSX from 'xlsx';
 interface IssueFormProps {
   onAddIssue: (issue: IssueRecord) => void;
   items: Item[];
-  locations: Location[];
   machines: Machine[];
+  locations: Location[];
   sectors: Sector[];
   divisions: Division[];
   maintenancePlans: MaintenancePlan[];
   currentUser: User;
+  bomRecords?: BOMRecord[]; // Added optional prop for BOMs
 }
 
 interface LineItem {
@@ -25,7 +26,7 @@ interface LineItem {
 }
 
 const IssueForm: React.FC<IssueFormProps> = ({ 
-  onAddIssue, items, locations, machines, sectors, divisions, maintenancePlans, currentUser 
+  onAddIssue, items, machines, locations, sectors, divisions, maintenancePlans, currentUser, bomRecords = [] 
 }) => {
   // --- Header State (Context) ---
   const [locationId, setLocationId] = useState('');
@@ -205,6 +206,13 @@ const IssueForm: React.FC<IssueFormProps> = ({
     setCurrentItemName('');
     setCurrentQuantity('');
     setTimeout(() => itemInputRef.current?.focus(), 50);
+  };
+
+  const handleUseSuggestedPart = (bom: BOMRecord) => {
+      setCurrentItemId(bom.itemId);
+      setCurrentQuantity(bom.quantity);
+      // Item name will auto-populate via useEffect, then user just clicks Add or adjusts Qty
+      setTimeout(() => qtyInputRef.current?.focus(), 100);
   };
 
   const handleRemoveLineItem = (index: number) => {
@@ -453,6 +461,17 @@ const IssueForm: React.FC<IssueFormProps> = ({
           subLabel: `Local: ${m.machineLocalNo || '-'} | Chase: ${m.chaseNo || '-'}`
       }));
   }, [machinesFinal]);
+
+  // --- SUGGESTED PARTS (BOM) ---
+  const suggestedParts = useMemo(() => {
+      if (!filterCategory || !filterModelNo) return [];
+      
+      // Filter BOM records matching Category and Model
+      return bomRecords.filter(b => 
+          b.machineCategory === filterCategory && b.modelNo === filterModelNo
+      );
+  }, [bomRecords, filterCategory, filterModelNo]);
+
 
   // --- Handlers for Hierarchy ---
   const handleCategoryChange = (val: string) => {
@@ -731,6 +750,53 @@ const IssueForm: React.FC<IssueFormProps> = ({
                     </table>
                 </div>
             ) : <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">List is empty.</div>}
+
+            {/* SUGGESTED PARTS (BOM) */}
+            {suggestedParts.length > 0 && (
+                <div className="mt-6 border-t pt-4">
+                    <h4 className="text-sm font-bold text-blue-700 mb-2 flex items-center">
+                        <span className="mr-1">💡</span> Recommended Spare Parts (BOM) for {filterModelNo}
+                    </h4>
+                    <div className="overflow-x-auto rounded-lg border border-blue-100 bg-blue-50/50">
+                        <table className="w-full text-xs text-left">
+                            <thead className="bg-blue-100 text-blue-800">
+                                <tr>
+                                    <th className="px-3 py-2">Part No</th>
+                                    <th className="px-3 py-2">Item Code</th>
+                                    <th className="px-3 py-2">Full Name</th>
+                                    <th className="px-3 py-2">Std Qty</th>
+                                    <th className="px-3 py-2">Stock</th>
+                                    <th className="px-3 py-2 w-20">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-blue-100">
+                                {suggestedParts.map(bom => {
+                                    const item = items.find(i => i.id === bom.itemId);
+                                    if (!item) return null;
+                                    return (
+                                        <tr key={bom.id} className="hover:bg-blue-100/50">
+                                            <td className="px-3 py-2">{item.partNumber || '-'}</td>
+                                            <td className="px-3 py-2 font-mono font-semibold">{bom.itemId}</td>
+                                            <td className="px-3 py-2">{item.fullName || item.name}</td>
+                                            <td className="px-3 py-2 font-bold">{bom.quantity} {item.unit}</td>
+                                            <td className={`px-3 py-2 font-bold ${(item.stockQuantity || 0) > 0 ? 'text-green-600' : 'text-red-500'}`}>{item.stockQuantity || 0}</td>
+                                            <td className="px-3 py-2">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleUseSuggestedPart(bom)}
+                                                    className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-[10px] font-bold shadow-sm"
+                                                >
+                                                    + Use
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
           </div>
           
           {/* Section 4: Maintenance Plan */}
