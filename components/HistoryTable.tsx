@@ -93,11 +93,12 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
     // Sheet 2: Detailed History
     const histHeaders = [
       "ID", "Date", "Location ID", "Location Name", "Sector", "Division", "Local No", 
-      "Machine", "Maint. Plan", "Item Number", "Item Name", "Quantity", "Unit", "Status", "Notes"
+      "Machine", "Maint. Plan", "Item Number", "Item Name", "Model No", "Quantity", "Unit", "Status", "Notes"
     ];
     const histRows = filteredHistory.map(h => {
         const loc = locations.find(l => l.id === h.locationId);
         const mac = machines.find(m => m.id === h.machineId);
+        const item = items.find(i => i.id === h.itemId);
         return [
             h.id, 
             h.timestamp, 
@@ -109,7 +110,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
             h.machineName, 
             h.maintenancePlan || '', 
             h.itemId, 
-            h.itemName, 
+            h.itemName,
+            item?.modelNo || '',
             h.quantity, 
             h.unit || 'pcs',
             h.status, 
@@ -246,7 +248,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
          {/* STOCK VIEW */}
          {activeTab === 'stock' && (
              <div className="overflow-auto max-h-[70vh]">
-                 <table className="w-full text-left text-xs border-separate border-spacing-0">
+                 <table className="w-full text-left text-xs border-separate border-spacing-0 whitespace-nowrap">
                      <thead className="bg-blue-50 text-blue-900 font-bold sticky top-0 z-10">
                          <tr>
                              <th className="px-3 py-2 border-b border-blue-100">Item Number</th>
@@ -284,26 +286,29 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
          {/* HISTORY VIEW (Detailed Table) */}
          {activeTab === 'history' && (
             <div className="overflow-auto max-h-[70vh]">
-                <table className="w-full text-left text-xs text-gray-600 border-separate border-spacing-0">
+                <table className="w-full text-left text-xs text-gray-600 border-separate border-spacing-0 whitespace-nowrap">
                     <thead className="bg-gray-50 text-gray-700 font-semibold sticky top-0 z-10">
                         <tr>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Issue ID</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Date</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Location</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Sector</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Division</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Local No</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Machine</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Maint. Type</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Item Number</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Item Name</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap text-right">Qty</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Status</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Issue ID</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Date</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Location</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Sector</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Division</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Local No</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Machine</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Maint. Type</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Item Number</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Item Name</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Model No</th>
+                            <th className="px-3 py-2 border-b border-gray-200 text-right">Qty</th>
+                            <th className="px-3 py-2 border-b border-gray-200">Status</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {filteredHistory.length > 0 ? (
-                            filteredHistory.map((record) => (
+                            filteredHistory.map((record) => {
+                                const item = items.find(i => i.id === record.itemId);
+                                return (
                                 <tr key={record.id} className="hover:bg-gray-50 transition">
                                     <td className="px-3 py-2 font-medium text-gray-900">{record.id}</td>
                                     <td className="px-3 py-2">
@@ -331,6 +336,9 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                     <td className="px-3 py-2 text-gray-800">
                                         {record.itemName}
                                     </td>
+                                    <td className="px-3 py-2 text-gray-600">
+                                        {item?.modelNo || '-'}
+                                    </td>
                                     <td className="px-3 py-2 font-mono font-bold text-right">{record.quantity}</td>
                                     <td className="px-3 py-2">
                                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
@@ -341,9 +349,9 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                         </span>
                                     </td>
                                 </tr>
-                            ))
+                            )})
                         ) : (
-                            <tr><td colSpan={12} className="px-6 py-12 text-center text-gray-400">No history records found.</td></tr>
+                            <tr><td colSpan={13} className="px-6 py-12 text-center text-gray-400">No history records found.</td></tr>
                         )}
                     </tbody>
                 </table>
