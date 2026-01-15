@@ -85,6 +85,7 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
   const [selectedMachineName, setSelectedMachineName] = useState<string>('');
+  const [selectedBrandName, setSelectedBrandName] = useState<string>('');
 
   useEffect(() => {
     // Only fetch insights if there's history and we haven't loaded yet
@@ -96,10 +97,16 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
     }
   }, [history.length]);
 
-  // Reset machine selection when location changes to avoid invalid combinations
+  // Reset machine and brand selection when location changes to avoid invalid combinations
   useEffect(() => {
     setSelectedMachineName('');
+    setSelectedBrandName('');
   }, [selectedLocationId]);
+
+  // Reset brand selection when machine name changes
+  useEffect(() => {
+    setSelectedBrandName('');
+  }, [selectedMachineName]);
 
   const metrics = useMemo(() => {
     const totalIssues = history.length;
@@ -149,12 +156,34 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
     }));
   }, [machinesInLocation]);
 
-  // 3. Final Machine Status Calculation (filtered by Location AND Machine Name)
-  const machineStats = useMemo(() => {
-    // Apply Machine Name filter on top of the Location filter
-    const finalFilteredMachines = selectedMachineName 
+  // 3. Get unique brand names based on location AND machine filter
+  const availableBrandOptions = useMemo(() => {
+    // If a machine name is selected, narrow down the machines first
+    const relevantMachines = selectedMachineName
         ? machinesInLocation.filter(m => m.category === selectedMachineName)
         : machinesInLocation;
+
+    const brands = new Set(relevantMachines.map(m => m.brand).filter(Boolean));
+    return Array.from(brands).sort().map(brand => ({
+        id: brand as string,
+        label: brand as string
+    }));
+  }, [machinesInLocation, selectedMachineName]);
+
+  // 4. Final Machine Status Calculation (filtered by Location, Machine Name, AND Brand)
+  const machineStats = useMemo(() => {
+    // Start with location filter
+    let finalFilteredMachines = machinesInLocation;
+
+    // Apply Machine Name filter
+    if (selectedMachineName) {
+        finalFilteredMachines = finalFilteredMachines.filter(m => m.category === selectedMachineName);
+    }
+
+    // Apply Brand filter
+    if (selectedBrandName) {
+        finalFilteredMachines = finalFilteredMachines.filter(m => m.brand === selectedBrandName);
+    }
 
     // Helper for robust status checking (case-insensitive)
     const getStatus = (s?: string) => {
@@ -186,7 +215,7 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
     ].filter(d => d.value > 0);
 
     return { total, working, notWorking, maintenance, chartData };
-  }, [machinesInLocation, selectedMachineName]);
+  }, [machinesInLocation, selectedMachineName, selectedBrandName]);
 
   // Filter nav items based on user role
   const visibleNavItems = QUICK_NAV_ITEMS.filter(item => item.roles.includes(currentUser.role));
@@ -260,7 +289,7 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
                    <span className="mr-2">🏗️</span> Machines Analysis
                </h2>
                <div className="w-full md:w-auto flex flex-col md:flex-row gap-2">
-                   <div className="w-full md:w-56">
+                   <div className="w-full md:w-48">
                        <label className="block text-xs font-bold text-gray-600 mb-1">Filter by Location</label>
                        <select 
                             className="w-full h-9 pl-3 pr-8 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
@@ -273,7 +302,7 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
                            ))}
                        </select>
                    </div>
-                   <div className="w-full md:w-56">
+                   <div className="w-full md:w-48">
                        <SearchableSelect 
                             label="Filter by Machine"
                             options={availableMachineOptions}
@@ -281,7 +310,18 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
                             onChange={setSelectedMachineName}
                             placeholder="All Machines"
                             compact={true}
-                            disabled={machineStats.total === 0 && !selectedMachineName}
+                            disabled={availableMachineOptions.length === 0}
+                       />
+                   </div>
+                   <div className="w-full md:w-48">
+                       <SearchableSelect 
+                            label="Filter by Brand"
+                            options={availableBrandOptions}
+                            value={selectedBrandName}
+                            onChange={setSelectedBrandName}
+                            placeholder="All Brands"
+                            compact={true}
+                            disabled={availableBrandOptions.length === 0}
                        />
                    </div>
                </div>
