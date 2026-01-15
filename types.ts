@@ -81,6 +81,8 @@ export interface BreakdownRecord {
   machineName: string;
   locationId: string; // Required for filtering/context
   sectorId?: string;
+  divisionId?: string; // Added
+  machineLocalNo?: string; // Added
   
   startTime: string; // ISO String
   endTime?: string; // ISO String (nullable if open)

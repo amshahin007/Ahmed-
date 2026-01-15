@@ -190,9 +190,9 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                   durationStr = ((end - start) / (1000 * 60 * 60)).toFixed(2);
               }
           }
-          // Find machine to get Local No
+          // Find machine to get Local No if not saved
           const m = machines.find(mac => mac.id === bd.machineId);
-          setFormData({ ...bd, duration: durationStr, machineLocalNo: m?.machineLocalNo || '' });
+          setFormData({ ...bd, duration: durationStr, machineLocalNo: bd.machineLocalNo || m?.machineLocalNo || '' });
           setIsEditing(true);
       } else {
           setFormData({
@@ -286,15 +286,18 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           }
 
           const selectedMachine = machines.find(m => m.id === formData.machineId);
-          // Clean up form data (remove UI-only duration if needed, or keep it)
-          const { duration, machineLocalNo, ...cleanData } = formData;
+          
+          const { duration, ...cleanData } = formData;
           
           const finalRecord: BreakdownRecord = {
              ...cleanData,
              machineName: selectedMachine?.category || formData.machineName || 'Unknown',
              locationId: formData.locationId || selectedMachine?.locationId || 'Unknown',
-             sectorId: formData.sectorId || selectedMachine?.sectorId || '', // Prioritize form selection if manual override allowed
+             sectorId: formData.sectorId || selectedMachine?.sectorId || '', 
+             divisionId: formData.divisionId || selectedMachine?.divisionId || '',
+             machineLocalNo: formData.machineLocalNo || selectedMachine?.machineLocalNo || '',
           };
+          
           if(isEditing) onUpdateBreakdown(finalRecord);
           else onAddBreakdown(finalRecord);
 
@@ -809,9 +812,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                        <thead className="bg-gray-100 text-gray-700 sticky top-0 border-b border-gray-200">
                            <tr>
                                <th className="p-4">ID</th>
-                               <th className="p-4">Start Time</th>
-                               <th className="p-4">End Time</th>
-                               <th className="p-4">Location</th>
+                               <th className="p-4">Date</th>
+                               <th className="p-4">Loc ID</th>
+                               <th className="p-4">Loc Name</th>
+                               <th className="p-4">Sector</th>
+                               <th className="p-4">Division</th>
+                               <th className="p-4">Local No</th>
                                <th className="p-4">Machine</th>
                                <th className="p-4">Type</th>
                                <th className="p-4">Operator</th>
@@ -824,10 +830,13 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                        <tbody className="divide-y divide-gray-100">
                            {filteredBreakdowns.map(b => (
                                <tr key={b.id} className="hover:bg-red-50">
-                                   <td className="p-4 font-mono">{b.id}</td>
-                                   <td className="p-4">{new Date(b.startTime).toLocaleString()}</td>
-                                   <td className="p-4 text-gray-500">{b.endTime ? new Date(b.endTime).toLocaleString() : '-'}</td>
-                                   <td className="p-4">{locations.find(l => l.id === b.locationId)?.name || b.locationId}</td>
+                                   <td className="p-4 font-mono text-gray-500 text-xs">{b.id}</td>
+                                   <td className="p-4">{new Date(b.startTime).toLocaleDateString()}</td>
+                                   <td className="p-4 text-xs font-mono">{b.locationId}</td>
+                                   <td className="p-4 font-bold">{locations.find(l => l.id === b.locationId)?.name || '-'}</td>
+                                   <td className="p-4 text-gray-600">{sectors.find(s => s.id === b.sectorId)?.name || b.sectorId || '-'}</td>
+                                   <td className="p-4 text-gray-600">{divisions.find(d => d.id === b.divisionId)?.name || b.divisionId || '-'}</td>
+                                   <td className="p-4 font-mono text-blue-600 font-bold">{b.machineLocalNo || '-'}</td>
                                    <td className="p-4 font-bold">{b.machineName}</td>
                                    <td className="p-4">{b.failureType}</td>
                                    <td className="p-4">{b.operatorName}</td>
@@ -844,7 +853,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                </tr>
                            ))}
                            {filteredBreakdowns.length === 0 && (
-                               <tr><td colSpan={11} className="p-8 text-center text-gray-400">No breakdowns found.</td></tr>
+                               <tr><td colSpan={14} className="p-8 text-center text-gray-400">No breakdowns found.</td></tr>
                            )}
                        </tbody>
                    </table>
