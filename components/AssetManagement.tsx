@@ -33,6 +33,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   const [filterLocationId, setFilterLocationId] = useState('');
   const [filterStatus, setFilterStatus] = useState<'All' | 'Open' | 'Closed'>('All'); // For Breakdowns
   const [assetFilterStatus, setAssetFilterStatus] = useState('All'); // For Machines
+  const [filterLocalNo, setFilterLocalNo] = useState(''); // New
+  const [filterMachineName, setFilterMachineName] = useState(''); // New
   
   // Sync State
   const [syncConfig, setSyncConfig] = useState<Record<string, { sheetId: string }>>(() => {
@@ -342,8 +344,22 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       (m.brand || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (m.mainGroup || '').toLowerCase().includes(searchTerm.toLowerCase())) &&
       (!filterLocationId || m.locationId === filterLocationId || (selectedFilterLocation && m.locationId === selectedFilterLocation.name)) &&
-      (assetFilterStatus === 'All' || m.status === assetFilterStatus)
+      (assetFilterStatus === 'All' || m.status === assetFilterStatus) &&
+      (!filterLocalNo || m.machineLocalNo === filterLocalNo) &&
+      (!filterMachineName || m.category === filterMachineName)
   );
+
+  const localNoOptions = useMemo(() => {
+      const set = new Set<string>();
+      machines.forEach(m => { if(m.machineLocalNo) set.add(m.machineLocalNo); });
+      return Array.from(set).sort().map(l => ({ id: l, label: l }));
+  }, [machines]);
+
+  const machineNameOptions = useMemo(() => {
+      const set = new Set<string>();
+      machines.forEach(m => { if(m.category) set.add(m.category); });
+      return Array.from(set).sort().map(n => ({ id: n, label: n }));
+  }, [machines]);
 
   const filteredBreakdowns = breakdowns.filter(b => 
       (b.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -581,32 +597,60 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           {/* --- TAB 1: ASSETS --- */}
           {activeTab === 'assets' && (
               <>
-                <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between bg-gray-50 items-start sm:items-center gap-4">
-                    <h3 className="font-bold text-gray-700">Machine List</h3>
-                    <div className="flex gap-2 w-full sm:w-auto">
-                        <select 
-                            value={filterLocationId} 
-                            onChange={(e) => setFilterLocationId(e.target.value)}
-                            className="px-3 py-1.5 border border-gray-300 rounded text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-48"
-                        >
-                            <option value="">All Locations</option>
-                            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                        </select>
-                        <select 
-                            value={assetFilterStatus} 
-                            onChange={(e) => setAssetFilterStatus(e.target.value)}
-                            className="px-3 py-1.5 border border-gray-300 rounded text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-40"
-                        >
-                            <option value="All">All Status</option>
-                            <option value="Working">Working</option>
-                            <option value="Not Working">Not Working</option>
-                            <option value="Outside Maintenance">Outside Maintenance</option>
-                        </select>
+                <div className="p-4 border-b border-gray-100 flex flex-col lg:flex-row justify-between bg-gray-50 items-start lg:items-end gap-4">
+                    <h3 className="font-bold text-gray-700 pb-2">Machine List</h3>
+                    <div className="flex flex-wrap gap-2 w-full lg:w-auto items-end">
+                        <div className="w-full sm:w-36">
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Location</label>
+                            <select 
+                                value={filterLocationId} 
+                                onChange={(e) => setFilterLocationId(e.target.value)}
+                                className="w-full h-9 px-2 border border-gray-300 rounded text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                            >
+                                <option value="">All Locations</option>
+                                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                            </select>
+                        </div>
+                        <div className="w-full sm:w-28">
+                            <SearchableSelect 
+                                label="Local No"
+                                options={localNoOptions} 
+                                value={filterLocalNo} 
+                                onChange={setFilterLocalNo} 
+                                placeholder="All" 
+                                compact={true}
+                            />
+                        </div>
+                        <div className="w-full sm:w-40">
+                            <SearchableSelect 
+                                label="Machine Name"
+                                options={machineNameOptions} 
+                                value={filterMachineName} 
+                                onChange={setFilterMachineName} 
+                                placeholder="All Machines" 
+                                compact={true}
+                            />
+                        </div>
+                        <div className="w-full sm:w-36">
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Status</label>
+                            <select 
+                                value={assetFilterStatus} 
+                                onChange={(e) => setAssetFilterStatus(e.target.value)}
+                                className="w-full h-9 px-2 border border-gray-300 rounded text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                            >
+                                <option value="All">All Status</option>
+                                <option value="Working">Working</option>
+                                <option value="Not Working">Not Working</option>
+                                <option value="Outside Maintenance">Outside Maintenance</option>
+                            </select>
+                        </div>
                         
-                        {selectedAssetIds.size > 0 && (
-                            <button onClick={handleDeleteAssets} className="px-3 py-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 text-xs font-bold transition">Delete ({selectedAssetIds.size})</button>
-                        )}
-                        <button onClick={() => openAssetForm()} className="px-4 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-bold transition shadow-sm whitespace-nowrap">+ New Asset</button>
+                        <div className="flex gap-2 pb-0.5">
+                            {selectedAssetIds.size > 0 && (
+                                <button onClick={handleDeleteAssets} className="h-9 px-3 bg-red-100 text-red-600 rounded hover:bg-red-200 text-xs font-bold transition flex items-center">Delete ({selectedAssetIds.size})</button>
+                            )}
+                            <button onClick={() => openAssetForm()} className="h-9 px-4 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-bold transition shadow-sm whitespace-nowrap flex items-center">+ New</button>
+                        </div>
                     </div>
                 </div>
                 <div className="flex-1 overflow-auto">
