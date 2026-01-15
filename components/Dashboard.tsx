@@ -83,6 +83,7 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
   const [insights, setInsights] = useState<string>('Generating AI insights...');
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+  const [selectedMachineName, setSelectedMachineName] = useState<string>('');
 
   useEffect(() => {
     // Only fetch insights if there's history and we haven't loaded yet
@@ -93,6 +94,11 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
         .finally(() => setLoadingInsights(false));
     }
   }, [history.length]);
+
+  // Reset machine selection when location changes to avoid invalid combinations
+  useEffect(() => {
+    setSelectedMachineName('');
+  }, [selectedLocationId]);
 
   const metrics = useMemo(() => {
     const totalIssues = history.length;
@@ -124,21 +130,32 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
     };
   }, [history]);
 
-  // Machine Status Calculation
-  const machineStats = useMemo(() => {
-    // Determine which machines to include based on location filter
-    const filteredMachines = selectedLocationId 
-        ? machines.filter(m => {
-            // Check both locationId (code) and handle if locationId stores name by mistake from import
-            const locName = locations.find(l => l.id === selectedLocationId)?.name;
-            return m.locationId === selectedLocationId || m.locationId === locName;
-        })
-        : machines;
+  // 1. Filter machines by Location first (to populate Machine dropdown options)
+  const machinesInLocation = useMemo(() => {
+    if (!selectedLocationId) return machines;
+    return machines.filter(m => {
+        const locName = locations.find(l => l.id === selectedLocationId)?.name;
+        return m.locationId === selectedLocationId || m.locationId === locName;
+    });
+  }, [machines, selectedLocationId, locations]);
 
-    const working = filteredMachines.filter(m => m.status === 'Working').length;
-    const notWorking = filteredMachines.filter(m => m.status === 'Not Working').length;
-    const maintenance = filteredMachines.filter(m => m.status === 'Outside Maintenance').length;
-    const total = filteredMachines.length;
+  // 2. Get unique machine names for the dropdown based on location filter
+  const availableMachineNames = useMemo(() => {
+    const names = new Set(machinesInLocation.map(m => m.category).filter(Boolean));
+    return Array.from(names).sort();
+  }, [machinesInLocation]);
+
+  // 3. Final Machine Status Calculation (filtered by Location AND Machine Name)
+  const machineStats = useMemo(() => {
+    // Apply Machine Name filter on top of the Location filter
+    const finalFilteredMachines = selectedMachineName 
+        ? machinesInLocation.filter(m => m.category === selectedMachineName)
+        : machinesInLocation;
+
+    const working = finalFilteredMachines.filter(m => m.status === 'Working').length;
+    const notWorking = finalFilteredMachines.filter(m => m.status === 'Not Working').length;
+    const maintenance = finalFilteredMachines.filter(m => m.status === 'Outside Maintenance').length;
+    const total = finalFilteredMachines.length;
 
     const chartData = [
         { name: 'Working', value: working, color: STATUS_COLORS['Working'] },
@@ -147,7 +164,7 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
     ].filter(d => d.value > 0);
 
     return { total, working, notWorking, maintenance, chartData };
-  }, [machines, selectedLocationId, locations]);
+  }, [machinesInLocation, selectedMachineName]);
 
   // Filter nav items based on user role
   const visibleNavItems = QUICK_NAV_ITEMS.filter(item => item.roles.includes(currentUser.role));
@@ -218,19 +235,34 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
       <section>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                <h2 className="text-xl font-bold text-gray-800 flex items-center">
-                   <span className="mr-2">🏗️</span> Machine Fleet Analysis
+                   <span className="mr-2">🏗️</span> Machines Analysis
                </h2>
-               <div className="w-full md:w-64">
-                   <select 
-                        className="w-full h-10 pl-3 pr-8 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
-                        value={selectedLocationId}
-                        onChange={(e) => setSelectedLocationId(e.target.value)}
-                   >
-                       <option value="">All Locations</option>
-                       {locations.map(loc => (
-                           <option key={loc.id} value={loc.id}>{loc.name}</option>
-                       ))}
-                   </select>
+               <div className="w-full md:w-auto flex flex-col md:flex-row gap-2">
+                   <div className="w-full md:w-56">
+                       <select 
+                            className="w-full h-10 pl-3 pr-8 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
+                            value={selectedLocationId}
+                            onChange={(e) => setSelectedLocationId(e.target.value)}
+                       >
+                           <option value="">All Locations</option>
+                           {locations.map(loc => (
+                               <option key={loc.id} value={loc.id}>{loc.name}</option>
+                           ))}
+                       </select>
+                   </div>
+                   <div className="w-full md:w-56">
+                       <select 
+                            className="w-full h-10 pl-3 pr-8 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
+                            value={selectedMachineName}
+                            onChange={(e) => setSelectedMachineName(e.target.value)}
+                            disabled={machineStats.total === 0 && !selectedMachineName}
+                       >
+                           <option value="">All Machines</option>
+                           {availableMachineNames.map(name => (
+                               <option key={name} value={name as string}>{name}</option>
+                           ))}
+                       </select>
+                   </div>
                </div>
           </div>
           
@@ -283,7 +315,7 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
                             </ResponsiveContainer>
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                                No machines found in this location.
+                                No machines found for current filters.
                             </div>
                         )}
                     </div>
