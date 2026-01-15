@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Machine, Location, Sector, Division, BreakdownRecord } from '../types';
 import * as XLSX from 'xlsx';
 import { fetchRawCSV, extractSheetIdFromUrl, DEFAULT_SHEET_ID } from '../services/googleSheetsService';
@@ -199,7 +199,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
               machineId: '',
               machineName: '',
               locationId: filterLocationId || '',
-              sectorId: '', // Ensure these are initialized
+              sectorId: '', 
               divisionId: '',
               duration: ''
           });
@@ -352,54 +352,81 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
   // --- BREAKDOWN FORM CASCADING FILTER LOGIC ---
-  
-  // 1. Filter by Location
-  const selectedFormLocation = locations.find(l => l.id === formData.locationId);
-  let relevantMachines = machines;
+  // Calculates derived options for dropdowns based on strict hierarchy:
+  // Location -> Sector -> Division -> Machine Name -> Asset
 
-  if (formData.locationId) {
-      relevantMachines = relevantMachines.filter(m => 
+  const selectedFormLocation = locations.find(l => l.id === formData.locationId);
+
+  // 1. Machines in Location
+  const machinesInLoc = useMemo(() => {
+      if (!formData.locationId) return []; // Require location first
+      return machines.filter(m => 
           m.locationId === formData.locationId || 
           (selectedFormLocation && m.locationId === selectedFormLocation.name)
       );
-  }
+  }, [machines, formData.locationId, selectedFormLocation]);
 
-  // 2. Filter by Sector
-  if (formData.sectorId) {
-      relevantMachines = relevantMachines.filter(m => {
-          // If machine has explicit sector, check match
-          if (m.sectorId && m.sectorId !== formData.sectorId) return false;
-          // If machine has division, check if division belongs to this sector
+  // 2. Sectors available in Location (via machines)
+  const availableSectors = useMemo(() => {
+      const ids = new Set<string>();
+      machinesInLoc.forEach(m => {
+          if (m.sectorId) ids.add(m.sectorId);
           if (m.divisionId) {
               const div = divisions.find(d => d.id === m.divisionId);
-              if (div && div.sectorId !== formData.sectorId) return false;
+              if (div) ids.add(div.sectorId);
           }
-          return true;
       });
-  }
+      return sectors.filter(s => ids.has(s.id));
+  }, [machinesInLoc, divisions, sectors]);
 
-  // 3. Filter by Division
-  if (formData.divisionId) {
-      relevantMachines = relevantMachines.filter(m => !m.divisionId || m.divisionId === formData.divisionId);
-  }
+  // 3. Machines in Selected Sector
+  const machinesInSec = useMemo(() => {
+      if (!formData.sectorId) return machinesInLoc;
+      return machinesInLoc.filter(m => {
+          if (m.sectorId === formData.sectorId) return true;
+          if (m.divisionId) {
+              const div = divisions.find(d => d.id === m.divisionId);
+              return div?.sectorId === formData.sectorId;
+          }
+          return false;
+      });
+  }, [machinesInLoc, formData.sectorId, divisions]);
 
-  // 4. Derive unique machine names from the filtered list
-  const machineNamesInContext = Array.from(new Set(relevantMachines.map(m => m.category).filter(Boolean))).sort();
+  // 4. Divisions available in Sector (via machines)
+  const availableDivisions = useMemo(() => {
+      const ids = new Set<string>();
+      machinesInSec.forEach(m => {
+          if (m.divisionId) ids.add(m.divisionId);
+      });
+      return divisions.filter(d => 
+          (formData.sectorId ? d.sectorId === formData.sectorId : true) && 
+          ids.has(d.id)
+      );
+  }, [machinesInSec, divisions, formData.sectorId]);
 
-  // 5. Filter Assets based on selected Machine Name (Category)
-  const assetsInContext = relevantMachines.filter(m => 
-      !formData.machineName || m.category === formData.machineName
-  );
+  // 5. Machines in Selected Division
+  const machinesInDiv = useMemo(() => {
+      if (!formData.divisionId) return machinesInSec;
+      return machinesInSec.filter(m => m.divisionId === formData.divisionId);
+  }, [machinesInSec, formData.divisionId]);
 
-  // Prepare options for Asset ID dropdown
-  const machineAssetOptions: Option[] = assetsInContext.map(m => ({
-      id: m.id,
-      label: `${m.id} ${m.category ? `- ${m.category}` : ''}`, 
-      subLabel: `${m.brand || ''} ${m.modelNo || ''} (Chase: ${m.chaseNo})`
-  }));
-  
-  // Filtered Divisions based on selected Sector
-  const filteredDivisions = divisions.filter(d => !formData.sectorId || d.sectorId === formData.sectorId);
+  // 6. Available Machine Names
+  const availableMachineNames = useMemo(() => {
+      return Array.from(new Set(machinesInDiv.map(m => m.category).filter(Boolean))).sort();
+  }, [machinesInDiv]);
+
+  // 7. Final Assets (Filtered by Name if selected)
+  const finalAssetOptions = useMemo(() => {
+      let filtered = machinesInDiv;
+      if (formData.machineName) {
+          filtered = filtered.filter(m => m.category === formData.machineName);
+      }
+      return filtered.map(m => ({
+          id: m.id,
+          label: `${m.id} ${m.category ? `- ${m.category}` : ''}`, 
+          subLabel: `${m.brand || ''} ${m.modelNo || ''} (Chase: ${m.chaseNo})`
+      }));
+  }, [machinesInDiv, formData.machineName]);
 
   const handleSelectAllAssets = () => {
       const allSelected = filteredMachines.length > 0 && filteredMachines.every(m => selectedAssetIds.has(m.id));
@@ -750,8 +777,10 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                             onChange={e => setFormData({
                                                 ...formData, 
                                                 locationId: e.target.value, 
-                                                machineId: '',
-                                                machineName: ''
+                                                sectorId: '',
+                                                divisionId: '',
+                                                machineName: '',
+                                                machineId: ''
                                             })}
                                         >
                                             <option value="">-- الموقع --</option>
@@ -761,16 +790,19 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                     <div className="md:col-span-1">
                                         <label className="block text-xs font-bold text-gray-600 mb-1">القطاع / Sector</label>
                                         <select 
-                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 text-sm px-2 bg-white" 
+                                            className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 text-sm px-2 bg-white disabled:bg-gray-100 disabled:text-gray-400" 
                                             value={formData.sectorId || ''} 
                                             onChange={e => setFormData({
                                                 ...formData, 
                                                 sectorId: e.target.value, 
-                                                divisionId: '' // Clear division when sector changes
+                                                divisionId: '',
+                                                machineName: '',
+                                                machineId: ''
                                             })}
+                                            disabled={!formData.locationId}
                                         >
-                                            <option value="">-- القطاع --</option>
-                                            {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                            <option value="">{formData.locationId ? '-- القطاع --' : '-'}</option>
+                                            {availableSectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                         </select>
                                     </div>
                                     <div className="md:col-span-1">
@@ -778,11 +810,16 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                         <select 
                                             className="block w-full rounded border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-9 text-sm px-2 bg-white disabled:bg-gray-100 disabled:text-gray-400" 
                                             value={formData.divisionId || ''} 
-                                            onChange={e => setFormData({...formData, divisionId: e.target.value})}
+                                            onChange={e => setFormData({
+                                                ...formData, 
+                                                divisionId: e.target.value,
+                                                machineName: '',
+                                                machineId: ''
+                                            })}
                                             disabled={!formData.sectorId}
                                         >
                                             <option value="">{formData.sectorId ? '-- القسم --' : '-'}</option>
-                                            {filteredDivisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                            {availableDivisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                                         </select>
                                     </div>
                                     <div className="md:col-span-1">
@@ -795,10 +832,10 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                                 machineName: e.target.value,
                                                 machineId: '' // Clear asset ID if category/name changes
                                             })}
-                                            disabled={!formData.locationId}
+                                            disabled={!formData.locationId} // Available even if intermediate steps skipped, though list logic handles it
                                         >
                                             <option value="">{formData.locationId ? '-- الاسم --' : '-'}</option>
-                                            {machineNamesInContext.map(name => (
+                                            {availableMachineNames.map(name => (
                                                 <option key={name} value={name}>{name}</option>
                                             ))}
                                         </select>
@@ -807,41 +844,35 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                         <SearchableSelect 
                                             label="كود الأصل / Asset ID"
                                             placeholder={!formData.locationId ? '...' : 'Code...'}
-                                            options={machineAssetOptions}
+                                            options={finalAssetOptions}
                                             value={formData.machineId || ''}
                                             onChange={(val) => {
                                                 const m = machines.find(mac => mac.id === val);
-                                                
-                                                // Resolve Sector/Division if not already set in form
-                                                let newSectorId = formData.sectorId;
-                                                let newDivisionId = formData.divisionId;
+                                                const updates: any = { machineId: val };
                                                 
                                                 if (m) {
-                                                    if (!newDivisionId && m.divisionId) newDivisionId = m.divisionId;
-                                                    
-                                                    if (!newSectorId) {
-                                                        if (m.sectorId) newSectorId = m.sectorId;
-                                                        else if (newDivisionId) {
-                                                            const div = divisions.find(d => d.id === newDivisionId);
-                                                            if (div) newSectorId = div.sectorId;
+                                                    updates.machineName = m.category;
+                                                    // Back-fill hierarchy only if missing (Optional, but helps data integrity)
+                                                    if (!formData.sectorId) {
+                                                        if (m.sectorId) updates.sectorId = m.sectorId;
+                                                        else if (m.divisionId) {
+                                                            const div = divisions.find(d => d.id === m.divisionId);
+                                                            if (div) updates.sectorId = div.sectorId;
                                                         }
                                                     }
+                                                    if (!formData.divisionId && m.divisionId) {
+                                                        updates.divisionId = m.divisionId;
+                                                    }
                                                 }
-
-                                                setFormData({
-                                                    ...formData, 
-                                                    machineId: val, 
-                                                    machineName: m?.category || formData.machineName,
-                                                    sectorId: newSectorId,
-                                                    divisionId: newDivisionId
-                                                });
+                                                
+                                                setFormData(prev => ({ ...prev, ...updates }));
                                             }}
                                             disabled={!formData.locationId}
                                             required
                                             compact={true}
                                         />
-                                        {formData.locationId && assetsInContext.length === 0 && (
-                                            <p className="text-[10px] text-red-500 mt-0.5 font-bold leading-tight">⚠️ لا توجد أصول</p>
+                                        {formData.locationId && finalAssetOptions.length === 0 && (
+                                            <p className="text-[10px] text-red-500 mt-0.5 font-bold leading-tight">⚠️ لا توجد أصول (No Assets)</p>
                                         )}
                                     </div>
                                     <div className="md:col-span-1">
