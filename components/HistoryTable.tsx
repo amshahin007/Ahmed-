@@ -294,7 +294,9 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                             <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Division</th>
                             <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Local No</th>
                             <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Machine</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Maint. Type</th>
                             <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Item Number</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Item Name</th>
                             <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap text-right">Qty</th>
                             <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Status</th>
                         </tr>
@@ -319,11 +321,15 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                     </td>
                                     <td className="px-3 py-2">
                                         <div className="text-gray-900 font-medium">{record.machineName}</div>
-                                        {record.maintenancePlan && <span className="text-[9px] bg-gray-100 px-1 rounded">{record.maintenancePlan}</span>}
                                     </td>
                                     <td className="px-3 py-2">
-                                        <div className="text-gray-900 font-medium font-mono">{record.itemId}</div>
-                                        <div className="text-[10px] text-gray-500">{record.itemName}</div>
+                                        <span className="text-[10px] bg-gray-100 px-1 rounded whitespace-nowrap">{record.maintenancePlan || '-'}</span>
+                                    </td>
+                                    <td className="px-3 py-2 font-mono font-bold text-gray-700">
+                                        {record.itemId}
+                                    </td>
+                                    <td className="px-3 py-2 text-gray-800">
+                                        {record.itemName}
                                     </td>
                                     <td className="px-3 py-2 font-mono font-bold text-right">{record.quantity}</td>
                                     <td className="px-3 py-2">
@@ -337,7 +343,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                 </tr>
                             ))
                         ) : (
-                            <tr><td colSpan={10} className="px-6 py-12 text-center text-gray-400">No history records found.</td></tr>
+                            <tr><td colSpan={12} className="px-6 py-12 text-center text-gray-400">No history records found.</td></tr>
                         )}
                     </tbody>
                 </table>
