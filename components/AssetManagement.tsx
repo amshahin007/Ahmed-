@@ -357,58 +357,97 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
 
   const selectedFormLocation = locations.find(l => l.id === formData.locationId);
 
-  // 1. Machines in Location
+  // 1. Machines in Location (Robust Check: Match ID OR Name)
   const machinesInLoc = useMemo(() => {
-      if (!formData.locationId) return []; // Require location first
-      return machines.filter(m => 
-          m.locationId === formData.locationId || 
-          (selectedFormLocation && m.locationId === selectedFormLocation.name)
-      );
+      if (!formData.locationId) return []; 
+      const locName = selectedFormLocation?.name;
+
+      return machines.filter(m => {
+          // Normalize to string to be safe against numerical IDs
+          const mLoc = String(m.locationId || '');
+          const formLocId = String(formData.locationId);
+          
+          return mLoc === formLocId || (locName && mLoc === locName);
+      });
   }, [machines, formData.locationId, selectedFormLocation]);
 
   // 2. Sectors available in Location (via machines)
   const availableSectors = useMemo(() => {
-      const ids = new Set<string>();
+      const candidates = new Set<string>();
+      
       machinesInLoc.forEach(m => {
-          if (m.sectorId) ids.add(m.sectorId);
+          // Case A: Direct Sector
+          if (m.sectorId) candidates.add(m.sectorId);
+          
+          // Case B: Via Division (Look up Division to get its Sector ID)
           if (m.divisionId) {
-              const div = divisions.find(d => d.id === m.divisionId);
-              if (div) ids.add(div.sectorId);
+              const div = divisions.find(d => d.id === m.divisionId || d.name === m.divisionId);
+              if (div) candidates.add(div.sectorId);
           }
       });
-      return sectors.filter(s => ids.has(s.id));
+
+      // Filter sectors that match ID OR Name in the candidates set
+      return sectors.filter(s => candidateContains(candidates, s.id) || candidateContains(candidates, s.name));
   }, [machinesInLoc, divisions, sectors]);
 
   // 3. Machines in Selected Sector
   const machinesInSec = useMemo(() => {
       if (!formData.sectorId) return machinesInLoc;
+      
+      const selectedSector = sectors.find(s => s.id === formData.sectorId);
+      const secName = selectedSector?.name;
+
       return machinesInLoc.filter(m => {
+          // Direct Check (ID or Name)
           if (m.sectorId === formData.sectorId) return true;
+          if (secName && m.sectorId === secName) return true;
+
+          // Via Division
           if (m.divisionId) {
-              const div = divisions.find(d => d.id === m.divisionId);
-              return div?.sectorId === formData.sectorId;
+              const div = divisions.find(d => d.id === m.divisionId || d.name === m.divisionId);
+              if (div) {
+                  // Check if the parent sector of this division matches our selected sector
+                  return div.sectorId === formData.sectorId || (secName && div.sectorId === secName);
+              }
           }
           return false;
       });
-  }, [machinesInLoc, formData.sectorId, divisions]);
+  }, [machinesInLoc, formData.sectorId, divisions, sectors]);
 
   // 4. Divisions available in Sector (via machines)
   const availableDivisions = useMemo(() => {
-      const ids = new Set<string>();
+      const candidates = new Set<string>();
       machinesInSec.forEach(m => {
-          if (m.divisionId) ids.add(m.divisionId);
+          if (m.divisionId) candidates.add(m.divisionId);
       });
-      return divisions.filter(d => 
-          (formData.sectorId ? d.sectorId === formData.sectorId : true) && 
-          ids.has(d.id)
-      );
+      
+      return divisions.filter(d => {
+          // Must belong to selected Sector
+          if (formData.sectorId && d.sectorId !== formData.sectorId) return false;
+          
+          // Must be present in filtered machines (ID or Name)
+          return candidateContains(candidates, d.id) || candidateContains(candidates, d.name);
+      });
   }, [machinesInSec, divisions, formData.sectorId]);
 
   // 5. Machines in Selected Division
   const machinesInDiv = useMemo(() => {
       if (!formData.divisionId) return machinesInSec;
-      return machinesInSec.filter(m => m.divisionId === formData.divisionId);
-  }, [machinesInSec, formData.divisionId]);
+      
+      const selectedDiv = divisions.find(d => d.id === formData.divisionId);
+      const divName = selectedDiv?.name;
+
+      return machinesInSec.filter(m => 
+          m.divisionId === formData.divisionId || 
+          (divName && m.divisionId === divName)
+      );
+  }, [machinesInSec, formData.divisionId, divisions]);
+
+  // Helper to check set efficiently
+  function candidateContains(set: Set<string>, value: string) {
+      if (!value) return false;
+      return set.has(value);
+  }
 
   // 6. Available Machine Names
   const availableMachineNames = useMemo(() => {
