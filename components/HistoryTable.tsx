@@ -294,7 +294,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                             <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Division</th>
                             <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Local No</th>
                             <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Machine</th>
-                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Item Details</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Item Number</th>
                             <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap text-right">Qty</th>
                             <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Status</th>
                         </tr>
@@ -322,8 +322,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                         {record.maintenancePlan && <span className="text-[9px] bg-gray-100 px-1 rounded">{record.maintenancePlan}</span>}
                                     </td>
                                     <td className="px-3 py-2">
-                                        <div className="text-gray-900 font-medium">{record.itemName}</div>
-                                        <div className="text-[10px] text-gray-500 font-mono">{record.itemId}</div>
+                                        <div className="text-gray-900 font-medium font-mono">{record.itemId}</div>
+                                        <div className="text-[10px] text-gray-500">{record.itemName}</div>
                                     </td>
                                     <td className="px-3 py-2 font-mono font-bold text-right">{record.quantity}</td>
                                     <td className="px-3 py-2">
