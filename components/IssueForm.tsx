@@ -20,6 +20,7 @@ interface IssueFormProps {
 interface LineItem {
   itemId: string;
   itemName: string;
+  unit: string;
   quantity: number;
 }
 
@@ -194,6 +195,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     const newItem: LineItem = {
       itemId: currentItemId,
       itemName: currentItemName,
+      unit: selectedItemObj?.unit || 'pcs',
       quantity: Number(currentQuantity)
     };
 
@@ -687,8 +689,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
             {lineItems.length > 0 ? (
                 <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
                     <table className="w-full text-sm text-left min-w-[500px]">
-                        <thead className="bg-gray-100 text-gray-700 font-semibold"><tr><th className="px-4 py-2">Item Number</th><th className="px-4 py-2">Item Name</th><th className="px-4 py-2 text-center">Qty</th><th className="px-4 py-2 text-center">Action</th></tr></thead>
-                        <tbody className="divide-y divide-gray-100">{lineItems.map((line, idx) => (<tr key={idx} className="hover:bg-gray-50"><td className="px-4 py-2 font-mono text-gray-600 font-bold">{line.itemId}</td><td className="px-4 py-2">{line.itemName}</td><td className="px-4 py-2 text-center font-bold text-lg">{line.quantity}</td><td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveLineItem(idx)} className="text-red-500 hover:text-red-700 font-medium">Remove</button></td></tr>))}</tbody>
+                        <thead className="bg-gray-100 text-gray-700 font-semibold"><tr><th className="px-4 py-2">Item Number</th><th className="px-4 py-2">Item Name</th><th className="px-4 py-2">Unit</th><th className="px-4 py-2 text-center">Qty</th><th className="px-4 py-2 text-center">Action</th></tr></thead>
+                        <tbody className="divide-y divide-gray-100">{lineItems.map((line, idx) => (<tr key={idx} className="hover:bg-gray-50"><td className="px-4 py-2 font-mono text-gray-600 font-bold">{line.itemId}</td><td className="px-4 py-2">{line.itemName}</td><td className="px-4 py-2 text-sm text-gray-500">{line.unit}</td><td className="px-4 py-2 text-center font-bold text-lg">{line.quantity}</td><td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveLineItem(idx)} className="text-red-500 hover:text-red-700 font-medium">Remove</button></td></tr>))}</tbody>
                     </table>
                 </div>
             ) : <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">List is empty.</div>}
