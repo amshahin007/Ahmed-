@@ -66,6 +66,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   // --- Refs for Scanner Navigation ---
   const itemInputRef = useRef<HTMLInputElement>(null);
   const qtyInputRef = useRef<HTMLInputElement>(null);
+  const sectorInputRef = useRef<HTMLInputElement>(null); // Added Ref for Sector
   
   // Flags to ignore resetting fields when prefilling
   const ignoreNextSectorChange = useRef(false);
@@ -174,9 +175,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
     } else {
       setRequesterEmail('');
     }
-    // When location changes, focus item input if it's not the first load
+    // When location changes, focus Sector input to guide user flow
     if (locationId) {
-        setTimeout(() => itemInputRef.current?.focus(), 100);
+        setTimeout(() => sectorInputRef.current?.focus(), 100);
     }
   }, [locationId, locations]);
 
@@ -586,7 +587,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Org Filters */}
-                <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder={!locationId ? "Select Location First" : "Select Sector..."} disabled={!locationId} />
+                <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder={!locationId ? "Select Location First" : "Select Sector..."} disabled={!locationId} inputRef={sectorInputRef} />
                 <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
              </div>
 
