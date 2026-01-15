@@ -190,7 +190,9 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                   durationStr = ((end - start) / (1000 * 60 * 60)).toFixed(2);
               }
           }
-          setFormData({ ...bd, duration: durationStr });
+          // Find machine to get Local No
+          const m = machines.find(mac => mac.id === bd.machineId);
+          setFormData({ ...bd, duration: durationStr, machineLocalNo: m?.machineLocalNo || '' });
           setIsEditing(true);
       } else {
           setFormData({
@@ -201,6 +203,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
               operatorName: '',
               machineId: '',
               machineName: '',
+              machineLocalNo: '',
               locationId: filterLocationId || '',
               sectorId: '', 
               divisionId: '',
@@ -284,7 +287,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
 
           const selectedMachine = machines.find(m => m.id === formData.machineId);
           // Clean up form data (remove UI-only duration if needed, or keep it)
-          const { duration, ...cleanData } = formData;
+          const { duration, machineLocalNo, ...cleanData } = formData;
           
           const finalRecord: BreakdownRecord = {
              ...cleanData,
@@ -544,6 +547,19 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           subLabel: `${m.brand || ''} ${m.modelNo || ''} (Chase: ${m.chaseNo})`
       }));
   }, [machinesInSec, formData.machineName, formData.divisionId, divisions]);
+
+  // 8. Available Local Nos in Form Context
+  const formLocalNoOptions = useMemo(() => {
+      const machinesToConsider = machinesInSec;
+      const set = new Set<string>();
+      machinesToConsider.forEach(m => { if(m.machineLocalNo) set.add(m.machineLocalNo); });
+      return Array.from(set).sort((a, b) => {
+          const na = parseInt(a);
+          const nb = parseInt(b);
+          if (!isNaN(na) && !isNaN(nb)) return na - nb;
+          return a.localeCompare(b);
+      }).map(l => ({ id: l, label: l }));
+  }, [machinesInSec]);
 
   const handleSelectAllAssets = () => {
       const allSelected = filteredMachines.length > 0 && filteredMachines.every(m => selectedAssetIds.has(m.id));
@@ -933,7 +949,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                                 sectorId: '',
                                                 divisionId: '',
                                                 machineName: '',
-                                                machineId: ''
+                                                machineId: '',
+                                                machineLocalNo: ''
                                             })}
                                         >
                                             <option value="">-- الموقع --</option>
@@ -950,7 +967,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                                 sectorId: e.target.value, 
                                                 divisionId: '',
                                                 machineName: '',
-                                                machineId: ''
+                                                machineId: '',
+                                                machineLocalNo: ''
                                             })}
                                             disabled={!formData.locationId}
                                         >
@@ -967,7 +985,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                                 ...formData, 
                                                 divisionId: e.target.value,
                                                 machineName: '',
-                                                machineId: ''
+                                                machineId: '',
+                                                machineLocalNo: ''
                                             })}
                                             disabled={!formData.sectorId}
                                         >
@@ -983,7 +1002,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                             onChange={e => setFormData({
                                                 ...formData, 
                                                 machineName: e.target.value,
-                                                machineId: '' // Clear asset ID if category/name changes
+                                                machineId: '', // Clear asset ID if category/name changes
+                                                machineLocalNo: ''
                                             })}
                                             disabled={!formData.locationId} // Available even if intermediate steps skipped, though list logic handles it
                                         >
@@ -992,6 +1012,31 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                                 <option key={name} value={name}>{name}</option>
                                             ))}
                                         </select>
+                                    </div>
+                                    <div className="md:col-span-1">
+                                        <SearchableSelect 
+                                            label="رقم محلي / Local No"
+                                            placeholder="Select..."
+                                            options={formLocalNoOptions}
+                                            value={formData.machineLocalNo || ''}
+                                            onChange={(val) => {
+                                                const m = machinesInSec.find(mac => mac.machineLocalNo === val);
+                                                if (m) {
+                                                     setFormData({
+                                                         ...formData,
+                                                         machineLocalNo: val,
+                                                         machineId: m.id,
+                                                         machineName: m.category,
+                                                         sectorId: formData.sectorId || m.sectorId,
+                                                         divisionId: formData.divisionId || m.divisionId
+                                                     });
+                                                } else {
+                                                     setFormData({ ...formData, machineLocalNo: val });
+                                                }
+                                            }}
+                                            disabled={!formData.locationId}
+                                            compact={true}
+                                        />
                                     </div>
                                     <div className="md:col-span-1">
                                         <SearchableSelect 
@@ -1005,6 +1050,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                                 
                                                 if (m) {
                                                     updates.machineName = m.category;
+                                                    updates.machineLocalNo = m.machineLocalNo;
                                                     // Back-fill hierarchy only if missing (Optional, but helps data integrity)
                                                     if (!formData.sectorId) {
                                                         if (m.sectorId) updates.sectorId = m.sectorId;

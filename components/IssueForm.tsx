@@ -31,6 +31,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const [sectorId, setSectorId] = useState('');
   const [divisionId, setDivisionId] = useState('');
   const [machineId, setMachineId] = useState('');
+  const [selectedLocalNo, setSelectedLocalNo] = useState(''); // New Local No state
   
   // --- Maintenance Plan State ---
   const [selectedPlanId, setSelectedPlanId] = useState('');
@@ -133,6 +134,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     }
     setDivisionId('');
     setMachineId('');
+    setSelectedLocalNo('');
   }, [sectorId]);
 
   useEffect(() => {
@@ -141,6 +143,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
         return;
     }
     setMachineId('');
+    setSelectedLocalNo('');
   }, [divisionId]);
 
   // Auto-fill Requester (Site) Email based on Location
@@ -280,6 +283,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
         
         // 4. Reset Form logic
         setMachineId('');
+        setSelectedLocalNo('');
         setLineItems([]);
         setSelectedPlanId('');
         
@@ -415,27 +419,27 @@ const IssueForm: React.FC<IssueFormProps> = ({
   };
 
   const handleMainGroupChange = (val: string) => {
-    setFilterMainGroup(val); setFilterSubGroup(''); setFilterCategory(''); setFilterBrand(''); setFilterChaseNo(''); setFilterModelNo(''); setMachineId('');
+    setFilterMainGroup(val); setFilterSubGroup(''); setFilterCategory(''); setFilterBrand(''); setFilterChaseNo(''); setFilterModelNo(''); setMachineId(''); setSelectedLocalNo('');
     inferUpstreamFilters(val, '', '', '', '', '');
   };
   const handleSubGroupChange = (val: string) => {
-    setFilterSubGroup(val); setFilterCategory(''); setFilterBrand(''); setFilterChaseNo(''); setFilterModelNo(''); setMachineId('');
+    setFilterSubGroup(val); setFilterCategory(''); setFilterBrand(''); setFilterChaseNo(''); setFilterModelNo(''); setMachineId(''); setSelectedLocalNo('');
     inferUpstreamFilters(filterMainGroup, val, '', '', '', '');
   };
   const handleCategoryChange = (val: string) => {
-    setFilterCategory(val); setFilterBrand(''); setFilterChaseNo(''); setFilterModelNo(''); setMachineId('');
+    setFilterCategory(val); setFilterBrand(''); setFilterChaseNo(''); setFilterModelNo(''); setMachineId(''); setSelectedLocalNo('');
     inferUpstreamFilters(filterMainGroup, filterSubGroup, val, '', '', '');
   };
   const handleBrandChange = (val: string) => {
-    setFilterBrand(val); setFilterChaseNo(''); setFilterModelNo(''); setMachineId('');
+    setFilterBrand(val); setFilterChaseNo(''); setFilterModelNo(''); setMachineId(''); setSelectedLocalNo('');
     inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, val, '', '');
   };
   const handleChaseNoChange = (val: string) => {
-    setFilterChaseNo(val); setFilterModelNo(''); setMachineId('');
+    setFilterChaseNo(val); setFilterModelNo(''); setMachineId(''); setSelectedLocalNo('');
     inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, filterBrand, val, '');
   };
   const handleModelNoChange = (val: string) => {
-    setFilterModelNo(val); setMachineId('');
+    setFilterModelNo(val); setMachineId(''); setSelectedLocalNo('');
     inferUpstreamFilters(filterMainGroup, filterSubGroup, filterCategory, filterBrand, filterChaseNo, val);
   };
   const handleMachineChange = (val: string) => {
@@ -448,7 +452,23 @@ const IssueForm: React.FC<IssueFormProps> = ({
         if (m.brand) setFilterBrand(m.brand);
         if (m.chaseNo) setFilterChaseNo(m.chaseNo);
         if (m.modelNo) setFilterModelNo(m.modelNo);
+        // Sync local no
+        if (m.machineLocalNo) setSelectedLocalNo(m.machineLocalNo);
+    } else {
+        setSelectedLocalNo('');
     }
+  };
+
+  const handleLocalNoSelect = (val: string) => {
+      setSelectedLocalNo(val);
+      const m = availableMachines.find(m => m.machineLocalNo === val);
+      if (m) {
+          setMachineId(m.id);
+          // Sync filters
+          if (m.mainGroup) setFilterMainGroup(m.mainGroup);
+          if (m.subGroup) setFilterSubGroup(m.subGroup);
+          if (m.category) setFilterCategory(m.category);
+      }
   };
 
   const mainGroupOptions = useMemo(() => {
@@ -566,15 +586,28 @@ const IssueForm: React.FC<IssueFormProps> = ({
     });
   }, [machines, divisionId, filterMainGroup, filterSubGroup, filterCategory, filterBrand, filterChaseNo, filterModelNo]);
 
-  const locationOptions: Option[] = useMemo(() => allowedLocations.map(l => ({ id: l.id, label: l.name })), [allowedLocations]);
-  const sectorOptions: Option[] = useMemo(() => allowedSectors.map(s => ({ id: s.id, label: s.name })), [allowedSectors]);
-  const divisionOptions: Option[] = useMemo(() => allowedDivisions.map(d => ({ id: d.id, label: d.name })), [allowedDivisions]);
   const machineOptions: Option[] = useMemo(() => availableMachines.map(m => {
       let label = m.category || `Machine ${m.id}`;
       let sub = `Chase No: ${m.chaseNo}`;
       if (m.brand) sub += ` | Brand: ${m.brand}`;
       return { id: m.id, label: label, subLabel: sub };
   }), [availableMachines]);
+
+  // Derive Local No Options from available machines
+  const localNoOptions: Option[] = useMemo(() => {
+      const set = new Set<string>();
+      availableMachines.forEach(m => { if(m.machineLocalNo) set.add(m.machineLocalNo); });
+      return Array.from(set).sort((a,b) => {
+          const na = parseInt(a);
+          const nb = parseInt(b);
+          if(!isNaN(na) && !isNaN(nb)) return na - nb;
+          return a.localeCompare(b);
+      }).map(l => ({ id: l, label: l }));
+  }, [availableMachines]);
+  
+  const locationOptions: Option[] = useMemo(() => allowedLocations.map(l => ({ id: l.id, label: l.name })), [allowedLocations]);
+  const sectorOptions: Option[] = useMemo(() => allowedSectors.map(s => ({ id: s.id, label: s.name })), [allowedSectors]);
+  const divisionOptions: Option[] = useMemo(() => allowedDivisions.map(d => ({ id: d.id, label: d.name })), [allowedDivisions]);
   
   const itemOptions: Option[] = useMemo(() => items.map(i => {
       const parts = [];
@@ -755,15 +788,26 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 </div>
                 
                 {/* Machine Select */}
-                <div className="md:col-span-2">
-                    <SearchableSelect 
-                       label="Machine Selection" 
-                       required 
-                       options={machineOptions} 
-                       value={machineId} 
-                       onChange={handleMachineChange} 
-                       placeholder={availableMachines.length === 0 ? "No machines found match filters" : "Select Specific Equipment / Machine..."} 
-                    />
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <SearchableSelect 
+                           label="Select by Local No" 
+                           options={localNoOptions} 
+                           value={selectedLocalNo} 
+                           onChange={handleLocalNoSelect} 
+                           placeholder="Local No..." 
+                        />
+                    </div>
+                    <div>
+                        <SearchableSelect 
+                           label="Asset ID / Code (Auto-Filled)" 
+                           required 
+                           options={machineOptions} 
+                           value={machineId} 
+                           onChange={handleMachineChange} 
+                           placeholder={availableMachines.length === 0 ? "No machines found match filters" : "Select Specific Equipment / Machine..."} 
+                        />
+                    </div>
                 </div>
              </div>
           </div>
