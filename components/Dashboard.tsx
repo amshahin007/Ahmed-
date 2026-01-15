@@ -3,6 +3,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { IssueRecord, User, Machine, Location } from '../types';
 import { generateDashboardInsights } from '../services/geminiService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import SearchableSelect from './SearchableSelect';
 
 interface DashboardProps {
   history: IssueRecord[];
@@ -140,9 +141,12 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
   }, [machines, selectedLocationId, locations]);
 
   // 2. Get unique machine names for the dropdown based on location filter
-  const availableMachineNames = useMemo(() => {
+  const availableMachineOptions = useMemo(() => {
     const names = new Set(machinesInLocation.map(m => m.category).filter(Boolean));
-    return Array.from(names).sort();
+    return Array.from(names).sort().map(name => ({
+        id: name as string,
+        label: name as string
+    }));
   }, [machinesInLocation]);
 
   // 3. Final Machine Status Calculation (filtered by Location AND Machine Name)
@@ -257,8 +261,9 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
                </h2>
                <div className="w-full md:w-auto flex flex-col md:flex-row gap-2">
                    <div className="w-full md:w-56">
+                       <label className="block text-xs font-bold text-gray-600 mb-1">Filter by Location</label>
                        <select 
-                            className="w-full h-10 pl-3 pr-8 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
+                            className="w-full h-9 pl-3 pr-8 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
                             value={selectedLocationId}
                             onChange={(e) => setSelectedLocationId(e.target.value)}
                        >
@@ -269,16 +274,15 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
                        </select>
                    </div>
                    <div className="w-full md:w-56">
-                       <select 
-                            className="w-full h-10 pl-3 pr-8 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
+                       <SearchableSelect 
+                            label="Filter by Machine"
+                            options={availableMachineOptions}
                             value={selectedMachineName}
-                            onChange={(e) => setSelectedMachineName(e.target.value)}
-                       >
-                           <option value="">All Machines</option>
-                           {availableMachineNames.map(name => (
-                               <option key={name} value={name as string}>{name}</option>
-                           ))}
-                       </select>
+                            onChange={setSelectedMachineName}
+                            placeholder="All Machines"
+                            compact={true}
+                            disabled={machineStats.total === 0 && !selectedMachineName}
+                       />
                    </div>
                </div>
           </div>
