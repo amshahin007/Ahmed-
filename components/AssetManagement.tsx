@@ -152,6 +152,20 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           });
           
           if(obj.id) {
+              // Ensure defaults for critical fields to prevent crashes
+              if (tab === 'machines') {
+                  obj.category = obj.category || 'Unknown Machine';
+                  obj.status = obj.status || 'Working';
+                  obj.machineLocalNo = obj.machineLocalNo || '';
+              } else if (tab === 'breakdowns') {
+                  obj.machineName = obj.machineName || 'Unknown Machine';
+                  obj.status = obj.status || 'Open';
+              } else if (tab === 'bom') {
+                  obj.machineCategory = obj.machineCategory || 'Unknown';
+                  obj.modelNo = obj.modelNo || 'Unknown';
+                  obj.itemId = obj.itemId || 'Unknown';
+              }
+
               // check existence
               const list = tab === 'machines' ? machines : (tab === 'breakdowns' ? breakdowns : bomRecords);
               const exists = list.find((i:any) => i.id === obj.id);
@@ -329,7 +343,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   // Filter machines for ASSETS View
   const filteredMachines = machines.filter(m => 
       ((m.category || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-      m.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (m.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (m.brand || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (m.mainGroup || '').toLowerCase().includes(searchTerm.toLowerCase())) &&
       (!filterLocationId || m.locationId === filterLocationId || (selectedFilterLocation && m.locationId === selectedFilterLocation.name)) &&
@@ -343,9 +357,9 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       const item = items.find(i => i.id === b.itemId);
       const term = searchTerm.toLowerCase();
       const matchesSearch = 
-        b.machineCategory.toLowerCase().includes(term) ||
-        b.modelNo.toLowerCase().includes(term) ||
-        b.itemId.toLowerCase().includes(term) ||
+        (b.machineCategory || '').toLowerCase().includes(term) ||
+        (b.modelNo || '').toLowerCase().includes(term) ||
+        (b.itemId || '').toLowerCase().includes(term) ||
         (item?.name || '').toLowerCase().includes(term) ||
         (item?.partNumber || '').toLowerCase().includes(term);
 
@@ -356,8 +370,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   });
 
   const filteredBreakdowns = breakdowns.filter(b => 
-      (b.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.id.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      ((b.machineName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (b.id || '').toLowerCase().includes(searchTerm.toLowerCase())) &&
       (!filterLocationId || b.locationId === filterLocationId || (selectedFilterLocation && b.locationId === selectedFilterLocation.name)) &&
       (filterStatus === 'All' || b.status === filterStatus)
   ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
