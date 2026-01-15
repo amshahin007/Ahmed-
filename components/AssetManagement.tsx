@@ -338,6 +338,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   // Determine the location name if a location ID is selected for filtering
   const selectedFilterLocation = locations.find(l => l.id === filterLocationId);
 
+  // Filter machines for TABLE view (matches current filter state)
   const filteredMachines = machines.filter(m => 
       ((m.category || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
       m.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -349,17 +350,57 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       (!filterMachineName || m.category === filterMachineName)
   );
 
-  const localNoOptions = useMemo(() => {
-      const set = new Set<string>();
-      machines.forEach(m => { if(m.machineLocalNo) set.add(m.machineLocalNo); });
-      return Array.from(set).sort().map(l => ({ id: l, label: l }));
-  }, [machines]);
+  // --- CASCADING FILTER LOGIC ---
 
+  // 1. Machines filtered by selected Location (Used to populate Machine Name options)
+  const machinesInSelectedLocation = useMemo(() => {
+      if (!filterLocationId) return machines;
+      const locName = locations.find(l => l.id === filterLocationId)?.name;
+      return machines.filter(m => 
+          m.locationId === filterLocationId || (locName && m.locationId === locName)
+      );
+  }, [machines, filterLocationId, locations]);
+
+  // 2. Machine Name Options (Dependent on Location)
   const machineNameOptions = useMemo(() => {
       const set = new Set<string>();
-      machines.forEach(m => { if(m.category) set.add(m.category); });
+      machinesInSelectedLocation.forEach(m => { if(m.category) set.add(m.category); });
       return Array.from(set).sort().map(n => ({ id: n, label: n }));
-  }, [machines]);
+  }, [machinesInSelectedLocation]);
+
+  // 3. Machines filtered by Location AND Machine Name (Used to populate Local No options)
+  const machinesForLocalNo = useMemo(() => {
+      let result = machinesInSelectedLocation;
+      if (filterMachineName) {
+          result = result.filter(m => m.category === filterMachineName);
+      }
+      return result;
+  }, [machinesInSelectedLocation, filterMachineName]);
+
+  // 4. Local No Options (Dependent on Location + Machine Name)
+  const localNoOptions = useMemo(() => {
+      const set = new Set<string>();
+      machinesForLocalNo.forEach(m => { if(m.machineLocalNo) set.add(m.machineLocalNo); });
+      return Array.from(set).sort((a, b) => {
+          // Numeric sort if possible
+          const na = parseInt(a);
+          const nb = parseInt(b);
+          if (!isNaN(na) && !isNaN(nb)) return na - nb;
+          return a.localeCompare(b);
+      }).map(l => ({ id: l, label: l }));
+  }, [machinesForLocalNo]);
+
+  // Handlers to ensuring resetting downstream filters
+  const handleLocationFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      setFilterLocationId(e.target.value);
+      setFilterMachineName('');
+      setFilterLocalNo('');
+  };
+
+  const handleMachineNameFilterChange = (val: string) => {
+      setFilterMachineName(val);
+      setFilterLocalNo('');
+  };
 
   const filteredBreakdowns = breakdowns.filter(b => 
       (b.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -604,12 +645,22 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                             <label className="block text-xs font-bold text-gray-600 mb-1">Location</label>
                             <select 
                                 value={filterLocationId} 
-                                onChange={(e) => setFilterLocationId(e.target.value)}
+                                onChange={handleLocationFilterChange}
                                 className="w-full h-9 px-2 border border-gray-300 rounded text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                             >
                                 <option value="">All Locations</option>
                                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                             </select>
+                        </div>
+                        <div className="w-full sm:w-40">
+                            <SearchableSelect 
+                                label="Machine Name"
+                                options={machineNameOptions} 
+                                value={filterMachineName} 
+                                onChange={handleMachineNameFilterChange} 
+                                placeholder="All Machines" 
+                                compact={true}
+                            />
                         </div>
                         <div className="w-full sm:w-28">
                             <SearchableSelect 
@@ -618,16 +669,6 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                 value={filterLocalNo} 
                                 onChange={setFilterLocalNo} 
                                 placeholder="All" 
-                                compact={true}
-                            />
-                        </div>
-                        <div className="w-full sm:w-40">
-                            <SearchableSelect 
-                                label="Machine Name"
-                                options={machineNameOptions} 
-                                value={filterMachineName} 
-                                onChange={setFilterMachineName} 
-                                placeholder="All Machines" 
                                 compact={true}
                             />
                         </div>
