@@ -126,28 +126,28 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
           const obj: any = {};
           headers.forEach((h, i) => {
              // Map headers to keys
-             if(h.includes('id') && !obj.id) obj.id = row[i];
+             if(h.includes('id') && !obj.id) obj.id = String(row[i]);
              else if(h.includes('name') || h.includes('desc')) {
-                 if(tab === 'machines') obj.category = row[i];
-                 if(tab === 'breakdowns') obj.machineName = row[i];
+                 if(tab === 'machines') obj.category = String(row[i]);
+                 if(tab === 'breakdowns') obj.machineName = String(row[i]);
              }
-             else if (h.includes('status')) obj.status = row[i];
-             else if (h.includes('brand')) obj.brand = row[i];
-             else if (h.includes('model') && tab !== 'bom') obj.modelNo = row[i]; // for machines
-             else if (h.includes('model') && tab === 'bom') obj.modelNo = row[i]; // for bom
-             else if (h.includes('chase')) obj.chaseNo = row[i];
-             else if (h.includes('division')) obj.divisionId = row[i];
-             else if (h.includes('sector')) obj.sectorId = row[i];
-             else if (h.includes('location')) obj.locationId = row[i];
-             else if ((h.includes('main') && h.includes('group'))) obj.mainGroup = row[i];
-             else if ((h.includes('sub') && h.includes('group'))) obj.subGroup = row[i];
-             else if (h.includes('local') && h.includes('no')) obj.machineLocalNo = row[i];
+             else if (h.includes('status')) obj.status = String(row[i]);
+             else if (h.includes('brand')) obj.brand = String(row[i]);
+             else if (h.includes('model') && tab !== 'bom') obj.modelNo = String(row[i]); // for machines
+             else if (h.includes('model') && tab === 'bom') obj.modelNo = String(row[i]); // for bom
+             else if (h.includes('chase')) obj.chaseNo = String(row[i]);
+             else if (h.includes('division')) obj.divisionId = String(row[i]);
+             else if (h.includes('sector')) obj.sectorId = String(row[i]);
+             else if (h.includes('location')) obj.locationId = String(row[i]);
+             else if ((h.includes('main') && h.includes('group'))) obj.mainGroup = String(row[i]);
+             else if ((h.includes('sub') && h.includes('group'))) obj.subGroup = String(row[i]);
+             else if (h.includes('local') && h.includes('no')) obj.machineLocalNo = String(row[i]);
              
              // BOM Specifics
              if (tab === 'bom') {
-                 if (h.includes('machine') && h.includes('name')) obj.machineCategory = row[i];
-                 if (h.includes('item') && h.includes('id')) obj.itemId = row[i];
-                 if (h.includes('qty') || h.includes('quantity')) obj.quantity = row[i];
+                 if (h.includes('machine') && h.includes('name')) obj.machineCategory = String(row[i]);
+                 if (h.includes('item') && h.includes('id')) obj.itemId = String(row[i]);
+                 if (h.includes('qty') || h.includes('quantity')) obj.quantity = Number(row[i]);
              }
           });
           
@@ -364,13 +364,13 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
 
 
   // --- OPTIONS GENERATORS ---
-  const machineNameOptions = useMemo(() => Array.from(new Set(machines.map(m => m.category).filter(Boolean))).sort().map(n => ({ id: n, label: n })), [machines]);
+  const machineNameOptions = useMemo(() => Array.from(new Set(machines.map(m => m.category).filter(Boolean))).sort().map(n => ({ id: String(n), label: String(n) })), [machines]);
   
   const bomModelOptions = useMemo(() => {
       if (!bomFilterMachine) return [];
       const relevantMachines = machines.filter(m => m.category === bomFilterMachine);
       const models = new Set(relevantMachines.map(m => m.modelNo).filter(Boolean));
-      return Array.from(models).sort().map(m => ({ id: m as string, label: m as string }));
+      return Array.from(models).sort().map(m => ({ id: String(m), label: String(m) }));
   }, [machines, bomFilterMachine]);
 
   const itemOptions = useMemo(() => items.map(i => ({ id: i.id, label: i.id, subLabel: i.name })), [items]);

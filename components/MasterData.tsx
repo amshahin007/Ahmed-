@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
@@ -99,7 +100,6 @@ const MasterData: React.FC<MasterDataProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<Exclude<TabType, 'history'>>('items');
   const [showForm, setShowForm] = useState(false);
-  const [showSyncModal, setShowSyncModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({});
   
@@ -163,7 +163,6 @@ const MasterData: React.FC<MasterDataProps> = ({
     return defaults;
   });
 
-  const [showColumnMenu, setShowColumnMenu] = useState(false);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -185,59 +184,25 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   // -- Config Handlers --
   
-  const updateSyncConfig = (tabKey: string, field: 'sheetId' | 'gid', value: string) => {
-      setSyncConfig(prev => ({
-          ...prev,
-          [tabKey]: {
-              ...(prev[tabKey] || { sheetId: '', gid: '' }),
-              [field]: value
-          }
-      }));
-  };
-
   const handleSheetUrlPaste = (val: string) => {
     const extractedId = extractSheetIdFromUrl(val);
     const extractedGid = extractGidFromUrl(val);
 
     setSyncConfig(prev => {
         const currentForTab = prev[activeTab] || { sheetId: '', gid: '' };
+        // Logic to allow clearing the field: if val is empty, set to empty. Else use extracted or current.
+        const newSheetId = val === '' ? '' : (extractedId || currentForTab.sheetId);
+        
         return {
             ...prev,
             [activeTab]: {
-                sheetId: extractedId || currentForTab.sheetId,
+                sheetId: newSheetId,
                 gid: extractedGid || currentForTab.gid 
             }
         };
     });
   };
 
-  const handleResetDefaults = () => {
-    setSyncConfig(prev => ({
-        ...prev,
-        [activeTab]: { sheetId: DEFAULT_SHEET_ID, gid: activeTab === 'items' ? DEFAULT_ITEMS_GID : '0' }
-    }));
-    setSyncMsg('Defaults restored for this tab.');
-  };
-
-  const handleLocateData = async () => {
-      if (!scriptUrl) {
-          setSyncMsg('Please ensure Web App URL is set.');
-          return;
-      }
-      setSyncLoading(true);
-      setSyncMsg('Locating storage folder and database...');
-      const result = await locateRemoteData(scriptUrl);
-      setSyncLoading(false);
-      
-      if (result) {
-          setRemoteLinks(result);
-          setSyncMsg('Data located successfully! Use the links below.');
-      } else {
-          setSyncMsg('Failed to locate data. Check URL or permissions.');
-      }
-  };
-
-  // --- AUTO CONFIG FROM SHEET LOGIC ---
   const handleAutoConfigFromSheet = async () => {
       const currentId = syncConfig[activeTab]?.sheetId || '';
       if (!currentId) {
@@ -456,68 +421,6 @@ const MasterData: React.FC<MasterDataProps> = ({
     } finally {
       if (targetTab === activeTab) setSyncLoading(false); // Only unset if single sync
     }
-  };
-
-  const handleFullSync = async () => {
-      const tabs: string[] = ['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users', 'history'];
-      setSyncLoading(true);
-      let successCount = 0;
-      let errors = [];
-
-      for (const tab of tabs) {
-          if (syncConfig[tab]?.sheetId && syncConfig[tab]?.gid) {
-              setSyncMsg(`Restoring ${tab}...`);
-              try {
-                  const cleanId = extractSheetIdFromUrl(syncConfig[tab].sheetId);
-                  const rawRows = await fetchRawCSV(cleanId, syncConfig[tab].gid);
-                  if (rawRows && rawRows.length > 1) {
-                      processImportData(rawRows, tab);
-                      successCount++;
-                  }
-              } catch (e) {
-                  errors.push(`${tab}: ${(e as Error).message}`);
-              }
-              // Small delay to prevent rate limits
-              await new Promise(r => setTimeout(r, 200));
-          }
-      }
-      
-      setSyncLoading(false);
-      if (errors.length > 0) {
-          setSyncMsg(`Restored ${successCount} tabs. Errors: ${errors.join(', ')}`);
-      } else {
-          setSyncMsg(`Full Restore Complete! ${successCount} tabs updated.`);
-      }
-  };
-
-  const handleExportHistory = async () => {
-    if (!scriptUrl) {
-      setSyncMsg("Error: Please enter and save the Web App URL first.");
-      return;
-    }
-    if (history.length === 0) {
-      setSyncMsg("No history to export.");
-      return;
-    }
-    if (!confirm(`Are you sure you want to export ${history.length} historical records to the Google Sheet?`)) return;
-
-    setSyncLoading(true);
-    setSyncMsg(`Starting export of ${history.length} records...`);
-    
-    let successCount = 0;
-    for (let i = 0; i < history.length; i++) {
-        const record = history[i];
-        setSyncMsg(`Exporting ${i + 1}/${history.length}...`);
-        try {
-            await sendIssueToSheet(scriptUrl, record);
-            successCount++;
-            await new Promise(r => setTimeout(r, 600)); 
-        } catch (e) {
-            console.error(e);
-        }
-    }
-    setSyncLoading(false);
-    setSyncMsg(`Export Complete! Sent ${successCount} records.`);
   };
 
   const handleExportDataToExcel = (onlySelected: boolean = false) => {
@@ -791,20 +694,15 @@ const MasterData: React.FC<MasterDataProps> = ({
   const handleDrop = (e: React.DragEvent<HTMLTableHeaderCellElement>) => {
     if (dragItem.current === null || dragOverItem.current === null) return;
     
-    // We are reordering the 'visibleColumns' list visually
-    // We need to apply this reordering to 'columnSettings'
     const currentColumns = [...columnSettings[activeTab]];
     const visibleCols = currentColumns.filter(c => c.visible);
     
-    // Get the item being dragged and the target item from visible list
     const itemToMove = visibleCols[dragItem.current];
     const itemTarget = visibleCols[dragOverItem.current];
     
-    // Find their actual indices in the main list
     const realFromIndex = currentColumns.findIndex(c => c.key === itemToMove.key);
     const realToIndex = currentColumns.findIndex(c => c.key === itemTarget.key);
     
-    // Perform move in main list
     currentColumns.splice(realFromIndex, 1);
     currentColumns.splice(realToIndex, 0, itemToMove);
 
