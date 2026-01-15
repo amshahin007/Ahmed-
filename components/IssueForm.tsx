@@ -141,7 +141,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
         return;
     }
     setDivisionId('');
-    resetTechnicalFilters();
+    // NOTE: We do NOT reset Technical Filters here anymore to allow disconnection if desired, 
+    // BUT typically if Sector changes, machines change. 
+    // Given the request "disconnect division from equipment name", Sector is still a parent.
+    resetTechnicalFilters(); 
   }, [sectorId]);
 
   useEffect(() => {
@@ -149,7 +152,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
         ignoreNextDivisionChange.current = false;
         return;
     }
-    resetTechnicalFilters();
+    // REQUEST: "disconnect division from equipment name"
+    // So we do NOT reset Technical Filters when Division changes.
+    // resetTechnicalFilters(); 
   }, [divisionId]);
 
   const resetTechnicalFilters = () => {
@@ -313,19 +318,45 @@ const IssueForm: React.FC<IssueFormProps> = ({
     } catch (e) { alert("Failed to upload."); } finally { setUploadingToDrive(false); }
   };
 
-  // --- CASCADING HIERARCHY LOGIC (Equipment -> Brand -> Model -> Local -> Chase -> ID) ---
+  // --- HIERARCHY LOGIC & OPTIONS ---
 
-  // 0. Base Machines (Filtered by Location, Sector, Division)
-  // UPDATED: Now includes robust Sector/Division logic (matching AssetManagement behavior)
-  const machinesInScope = useMemo(() => {
+  // 1. FILTER SECTORS BY LOCATION (New Request)
+  const availableSectors = useMemo(() => {
+      if (!locationId) return sectors; 
+      const loc = locations.find(l => l.id === locationId);
+      const locName = loc?.name;
+
+      // Find all machines in this location
+      const machinesInLoc = machines.filter(m => {
+          const mLoc = String(m.locationId || '');
+          const formLoc = String(locationId);
+          return mLoc === formLoc || mLoc === locName;
+      });
+
+      // Collect Sector IDs from these machines
+      const allowedSectorIds = new Set<string>();
+      machinesInLoc.forEach(m => {
+          if (m.sectorId) allowedSectorIds.add(m.sectorId);
+          if (m.divisionId) {
+              const div = divisions.find(d => d.id === m.divisionId || d.name === m.divisionId);
+              if (div) allowedSectorIds.add(div.sectorId);
+          }
+      });
+
+      // Filter Sector List
+      return sectors.filter(s => allowedSectorIds.has(s.id) || allowedSectorIds.has(s.name));
+  }, [locationId, machines, sectors, divisions, locations]);
+
+  // 2. MACHINES SCOPE FOR TECHNICAL FILTERS (Decoupled from Division)
+  // This list is used to populate Equipment Name, Brand, etc.
+  // It ONLY looks at Location and Sector, IGNORING Division.
+  const machinesForTechnicalFilters = useMemo(() => {
       return machines.filter(m => {
           // 1. Location Check
           if (locationId) {
               const loc = locations.find(l => l.id === locationId);
-              // Normalize comparison
               const mLoc = String(m.locationId || '');
-              const formLoc = String(locationId);
-              if (mLoc !== formLoc && mLoc !== loc?.name) return false;
+              if (mLoc !== locationId && mLoc !== loc?.name) return false;
           }
 
           // 2. Sector Check
@@ -348,27 +379,24 @@ const IssueForm: React.FC<IssueFormProps> = ({
               if (!directMatch && !divisionMatch) return false;
           }
 
-          // 3. Division Check
-          if (divisionId) {
-               const div = divisions.find(d => d.id === divisionId);
-               if (m.divisionId !== divisionId && m.divisionId !== div?.name) return false;
-          }
-          
+          // 3. Division Check - SKIPPED deliberately to decouple Equipment Name from Division
           return true;
       });
-  }, [machines, locationId, sectorId, divisionId, locations, sectors, divisions]);
+  }, [machines, locationId, sectorId, locations, sectors, divisions]);
+
+  // --- CASCADING TECHNICAL OPTIONS (Based on machinesForTechnicalFilters) ---
 
   // 1. Equipment Name (Category) Options
   const categoryOptions = useMemo(() => {
       const set = new Set<string>();
-      machinesInScope.forEach(m => { if(m.category) set.add(m.category); });
+      machinesForTechnicalFilters.forEach(m => { if(m.category) set.add(m.category); });
       return Array.from(set).sort().map(c => ({ id: c, label: c }));
-  }, [machinesInScope]);
+  }, [machinesForTechnicalFilters]);
 
   // 2. Brand Options (Filtered by Category)
   const machinesInCat = useMemo(() => {
-      return filterCategory ? machinesInScope.filter(m => m.category === filterCategory) : machinesInScope;
-  }, [machinesInScope, filterCategory]);
+      return filterCategory ? machinesForTechnicalFilters.filter(m => m.category === filterCategory) : machinesForTechnicalFilters;
+  }, [machinesForTechnicalFilters, filterCategory]);
 
   const brandOptions = useMemo(() => {
       const set = new Set<string>();
@@ -468,7 +496,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
   // Standard Options
   const locationOptions = useMemo(() => locations.map(l => ({ id: l.id, label: l.name })), [locations]);
-  const sectorOptions = useMemo(() => sectors.map(s => ({ id: s.id, label: s.name })), [sectors]);
+  // Use Available Sectors (Filtered by Location)
+  const sectorOptions = useMemo(() => availableSectors.map(s => ({ id: s.id, label: s.name })), [availableSectors]);
   const divisionOptions = useMemo(() => divisions.filter(d => !sectorId || d.sectorId === sectorId).map(d => ({ id: d.id, label: d.name })), [divisions, sectorId]);
   
   const itemOptions = useMemo(() => items.map(i => {
@@ -557,7 +586,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Org Filters */}
-                <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." />
+                <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder={!locationId ? "Select Location First" : "Select Sector..."} disabled={!locationId} />
                 <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
              </div>
 
