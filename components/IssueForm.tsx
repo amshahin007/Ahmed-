@@ -316,21 +316,47 @@ const IssueForm: React.FC<IssueFormProps> = ({
   // --- CASCADING HIERARCHY LOGIC (Equipment -> Brand -> Model -> Local -> Chase -> ID) ---
 
   // 0. Base Machines (Filtered by Location, Sector, Division)
+  // UPDATED: Now includes robust Sector/Division logic (matching AssetManagement behavior)
   const machinesInScope = useMemo(() => {
       return machines.filter(m => {
+          // 1. Location Check
           if (locationId) {
               const loc = locations.find(l => l.id === locationId);
-              if (m.locationId !== locationId && m.locationId !== loc?.name) return false; // Optional: Strict location check if needed
+              // Normalize comparison
+              const mLoc = String(m.locationId || '');
+              const formLoc = String(locationId);
+              if (mLoc !== formLoc && mLoc !== loc?.name) return false;
           }
+
+          // 2. Sector Check
           if (sectorId) {
               const sec = sectors.find(s => s.id === sectorId);
-              if (m.sectorId && m.sectorId !== sectorId && m.sectorId !== sec?.name) return false;
-              // If division is selected, we assume sector matches, but if not, check division
+              const secName = sec?.name;
+              
+              // Direct Match
+              const directMatch = m.sectorId === sectorId || (secName && m.sectorId === secName);
+              
+              // Match via Division (if direct doesn't match)
+              let divisionMatch = false;
+              if (m.divisionId) {
+                  const div = divisions.find(d => d.id === m.divisionId || d.name === m.divisionId);
+                  if (div) {
+                      divisionMatch = div.sectorId === sectorId || (secName && div.sectorId === secName);
+                  }
+              }
+
+              if (!directMatch && !divisionMatch) return false;
           }
-          if (divisionId && m.divisionId !== divisionId) return false;
+
+          // 3. Division Check
+          if (divisionId) {
+               const div = divisions.find(d => d.id === divisionId);
+               if (m.divisionId !== divisionId && m.divisionId !== div?.name) return false;
+          }
+          
           return true;
       });
-  }, [machines, locationId, sectorId, divisionId, locations, sectors]);
+  }, [machines, locationId, sectorId, divisionId, locations, sectors, divisions]);
 
   // 1. Equipment Name (Category) Options
   const categoryOptions = useMemo(() => {
