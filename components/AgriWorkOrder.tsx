@@ -128,7 +128,7 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({
           id: selectedAgriId
       };
       onUpdateOrder(updatedRecord);
-      alert("Record Updated");
+      alert("Agri Record Updated");
       handleResetAgri();
   };
 
@@ -202,7 +202,7 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({
           id: selectedIrrigationId
       };
       onUpdateIrrigationLog(updatedRecord);
-      alert("Record Updated");
+      alert("Irrigation Record Updated");
       handleResetIrrigation();
   };
 
@@ -230,345 +230,397 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({
       }
   };
 
+
   const handleExcelExport = () => {
     const wb = XLSX.utils.book_new();
-    const data = activeTab === 'agri' ? orders : irrigationLogs;
-    const ws = XLSX.utils.json_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, activeTab === 'agri' ? "AgriOrders" : "IrrigationLogs");
-    XLSX.writeFile(wb, `${activeTab}_Export.xlsx`);
+    
+    if (activeTab === 'agri') {
+        const ws = XLSX.utils.json_to_sheet(orders);
+        XLSX.utils.book_append_sheet(wb, ws, "AgriOrders");
+        XLSX.writeFile(wb, "AgriWorkOrders.xlsx");
+    } else {
+        const ws = XLSX.utils.json_to_sheet(irrigationLogs);
+        XLSX.utils.book_append_sheet(wb, ws, "IrrigationLogs");
+        XLSX.writeFile(wb, "IrrigationLogs.xlsx");
+    }
   };
 
-  // --- COMPACT COMPONENTS ---
-  const Field = ({ label, children, colSpan = 1 }: { label: string, children: React.ReactNode, colSpan?: number }) => (
-      <div className={`flex flex-col ${colSpan > 1 ? `md:col-span-${colSpan}` : ''}`}>
-          <label className="text-[10px] font-bold text-gray-500 mb-1 truncate">{label}</label>
-          {children}
-      </div>
-  );
-
-  const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
-      <input 
-          {...props} 
-          className={`h-9 w-full rounded border border-gray-300 px-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 bg-white ${props.disabled ? 'bg-gray-100 text-gray-500' : 'text-gray-900'} ${props.className}`} 
-      />
-  );
-  
-  const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => (
-      <select 
-          {...props} 
-          className={`h-9 w-full rounded border border-gray-300 px-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 bg-white ${props.className}`} 
-      />
-  );
+  // --- STYLES ---
+  const labelStyle = "bg-[#00695c] text-white font-bold text-sm flex items-center justify-center px-1 h-8 whitespace-nowrap min-w-[110px] border border-[#004d40] rounded-sm shadow-sm";
+  const inputStyle = "border border-gray-400 px-2 h-8 text-right font-bold w-full text-gray-800 focus:outline-none focus:ring-1 focus:ring-teal-500 rounded-sm";
+  const rowStyle = "flex items-center gap-2 mb-2";
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] bg-gray-50 font-sans overflow-hidden">
+    <div className="p-4 bg-gray-100 min-h-screen font-sans">
         
-        {/* LEFT SIDEBAR - TABS */}
-        <div className="w-full lg:w-56 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
-            <div className="p-4 border-b border-gray-100">
-                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Modules</h3>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                <button 
-                    onClick={() => setActiveTab('agri')}
-                    className={`w-full text-left px-4 py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-between ${activeTab === 'agri' ? 'bg-teal-50 text-teal-700 ring-1 ring-teal-200 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                    <span>Agri Work Order</span>
-                    <span className="text-[10px] bg-white border border-gray-200 px-1.5 rounded-full">{orders.length}</span>
-                </button>
-                <button 
-                    onClick={() => setActiveTab('irrigation')}
-                    className={`w-full text-left px-4 py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-between ${activeTab === 'irrigation' ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                    <span>Irrigation Log</span>
-                    <span className="text-[10px] bg-white border border-gray-200 px-1.5 rounded-full">{irrigationLogs.length}</span>
-                </button>
-            </div>
-            <div className="p-4 border-t border-gray-100 bg-gray-50">
-                <button onClick={handleExcelExport} className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded text-xs font-bold text-gray-700 hover:bg-gray-50 shadow-sm">
-                    <span className="text-green-600">📊</span> Export Excel
-                </button>
-            </div>
+        {/* TAB NAVIGATION */}
+        <div className="flex gap-2 mb-6 border-b border-gray-300 pb-2">
+            <button 
+                onClick={() => setActiveTab('agri')}
+                className={`px-6 py-2 rounded-t-lg font-bold text-sm transition-all ${activeTab === 'agri' ? 'bg-[#00695c] text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+            >
+                Agri Work Order
+            </button>
+            <button 
+                onClick={() => setActiveTab('irrigation')}
+                className={`px-6 py-2 rounded-t-lg font-bold text-sm transition-all ${activeTab === 'irrigation' ? 'bg-[#00695c] text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+            >
+                Irrigation Run Times
+            </button>
         </div>
 
-        {/* MAIN CONTENT AREA */}
-        <div className="flex-1 flex flex-col h-full overflow-hidden" dir="rtl">
-            
-            {/* AGRI TAB */}
-            {activeTab === 'agri' && (
-                <div className="flex flex-col h-full animate-fade-in-up">
-                    {/* FORM HEADER & ACTIONS */}
-                    <div className="bg-white px-6 py-3 border-b border-gray-200 flex items-center justify-between shrink-0">
-                         <div>
-                             <h2 className="text-lg font-bold text-gray-800">أمر تشغيل زراعي</h2>
-                             <p className="text-[10px] text-gray-400 font-mono">ID: {selectedAgriId || 'New Record'}</p>
-                         </div>
-                         <div className="flex gap-2">
-                             <button onClick={handleResetAgri} className="px-4 py-1.5 rounded border border-gray-300 text-xs font-bold text-gray-600 hover:bg-gray-50">Reset</button>
-                             {selectedAgriId ? (
-                                 <>
-                                     <button onClick={handleDeleteAgri} className="px-4 py-1.5 rounded bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 border border-red-200">Delete</button>
-                                     <button onClick={handleUpdateAgri} className="px-5 py-1.5 rounded bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 shadow-sm">Update</button>
-                                 </>
-                             ) : (
-                                 <button onClick={handleCreateAgri} className="px-5 py-1.5 rounded bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 shadow-sm">Save Record</button>
-                             )}
-                         </div>
-                    </div>
+        {/* AGRI TAB CONTENT */}
+        {activeTab === 'agri' && (
+            <div className="animate-fade-in-up" dir="rtl">
+                <div className="flex flex-col lg:flex-row gap-6 items-start">
+                   <div className="w-full lg:w-48 flex flex-col gap-3 pt-6 lg:pt-8">
+                       <div className="flex items-center gap-1">
+                           <input type="number" className={inputStyle} value={agriFormData.endCounter} onChange={e => handleAgriChange('endCounter', e.target.value)} />
+                           <div className={labelStyle}>نهاية العداد</div>
+                       </div>
+                       <div className="flex items-center gap-1">
+                           <input type="number" className={inputStyle} value={agriFormData.startCounter} onChange={e => handleAgriChange('startCounter', e.target.value)} />
+                           <div className={labelStyle}>بداية العداد</div>
+                       </div>
+                       <div className="flex items-center gap-1">
+                           <input type="text" className={inputStyle} value={agriFormData.rowNumber || ''} onChange={e => handleAgriChange('rowNumber', e.target.value)} />
+                           <div className={labelStyle}>رقم الصف</div>
+                       </div>
+                       <div className="flex items-center gap-1">
+                           <input type="number" className={`${inputStyle} bg-pink-200 border-pink-300`} />
+                           <div className={labelStyle}>عدد النسخ</div>
+                       </div>
+                   </div>
 
-                    {/* COMPACT FORM GRID */}
-                    <div className="p-4 overflow-y-auto bg-gray-50/50">
-                        <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm max-w-6xl mx-auto">
-                            
-                            {/* Row 1: Key Context */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 pb-4 border-b border-gray-100">
-                                <Field label="التاريخ / Date">
-                                    <Input type="date" value={agriFormData.date} onChange={e => handleAgriChange('date', e.target.value)} />
-                                </Field>
-                                <Field label="الفرع / Branch">
-                                    <Select value={agriFormData.branch} onChange={e => handleAgriChange('branch', e.target.value)}>
-                                        <option value="">Select Branch...</option>
-                                        {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
-                                    </Select>
-                                </Field>
-                                <Field label="رقم البيفوت / Pivot">
-                                    <Select value={agriFormData.pivot} onChange={e => handleAgriChange('pivot', e.target.value)}>
-                                        <option value="">Select Pivot...</option>
-                                        {pivotOptions.map(p => <option key={p} value={p}>{p}</option>)}
-                                    </Select>
-                                </Field>
-                                <Field label="رقم الصف / Row #">
-                                    <Input value={agriFormData.rowNumber || ''} onChange={e => handleAgriChange('rowNumber', e.target.value)} />
-                                </Field>
-                            </div>
+                   <div className="flex-1 w-full bg-gray-50 p-2 rounded border border-gray-300 relative mt-4 lg:mt-0">
+                       <span className="absolute -top-3 left-3 bg-gray-100 px-2 text-sm font-bold text-gray-700 border border-gray-300 rounded">Enter Details</span>
+                       
+                       <div className="flex flex-col lg:flex-row gap-4 pt-3">
+                           <div className="flex-1">
+                               <div className={rowStyle}>
+                                    <div className={`${inputStyle} bg-white flex items-center justify-center`}>{agriFormData.date}</div>
+                                    <div className={labelStyle}>التاريخ</div>
+                               </div>
+                               <div className={rowStyle}>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold text-sm text-gray-600">ساعة</span>
+                                        <input className={`${inputStyle} w-20`} value={agriFormData.timeSpent} onChange={e => handleAgriChange('timeSpent', e.target.value)} />
+                                    </div>
+                                    <div className="flex-1 flex justify-end gap-1">
+                                         <select className={`${inputStyle} w-24`} value={agriFormData.machineLocalNo} onChange={e => handleAgriChange('machineLocalNo', e.target.value)}>
+                                             {[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
+                                         </select>
+                                         <div className={labelStyle}>محلي رقم</div>
+                                    </div>
+                               </div>
+                               <div className={rowStyle}>
+                                    <div className="flex-1 flex justify-end gap-1">
+                                         <select className={`${inputStyle} w-24`} value={agriFormData.attachedLocalNo} onChange={e => handleAgriChange('attachedLocalNo', e.target.value)}>
+                                             {[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
+                                         </select>
+                                         <div className={labelStyle}>محلي رقم</div>
+                                    </div>
+                               </div>
+                               <div className={rowStyle}>
+                                    <div className="flex-1 flex gap-1">
+                                         <select className={`${inputStyle} bg-yellow-50 w-24 text-center`} value={agriFormData.unitType} onChange={e => handleAgriChange('unitType', e.target.value)}>
+                                             {unitTypes.map(u => <option key={u} value={u}>{u}</option>)}
+                                         </select>
+                                         <input className={inputStyle} value={agriFormData.achievement} onChange={e => handleAgriChange('achievement', e.target.value)} />
+                                         <div className={labelStyle}>الإنجاز الحسابي</div>
+                                    </div>
+                               </div>
+                               <div className={rowStyle}>
+                                    <div className="flex-1 flex gap-1">
+                                         <input className={`${inputStyle} bg-yellow-50 w-24`} disabled value={0} />
+                                         <input className={inputStyle} value={agriFormData.actualOrReturn} onChange={e => handleAgriChange('actualOrReturn', e.target.value)} />
+                                         <div className={labelStyle}>الإعادة أو الفعلي</div>
+                                    </div>
+                               </div>
+                           </div>
 
-                            {/* Row 2: Equipment */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 pb-4 border-b border-gray-100">
-                                <Field label="الجرار / Tractor">
-                                    <Select value={agriFormData.tractor} onChange={e => handleAgriChange('tractor', e.target.value)}>
-                                        <option value="">Select Tractor...</option>
-                                        {machines.filter(m => m.category?.includes('جرار') || true).map(m => (
+                           <div className="flex-1">
+                               <div className={rowStyle}>
+                                   <select className={inputStyle} value={agriFormData.branch} onChange={e => handleAgriChange('branch', e.target.value)}>
+                                       <option value="">اختر الفرع...</option>
+                                       {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+                                   </select>
+                                   <div className={labelStyle}>اسم الفرع</div>
+                               </div>
+                               <div className={rowStyle}>
+                                   <select className={inputStyle} value={agriFormData.tractor} onChange={e => handleAgriChange('tractor', e.target.value)}>
+                                       <option value="">اختر موديل الجرار...</option>
+                                       {machines.filter(m => m.category?.includes('جرار') || true).map(m => (
                                            <option key={m.id} value={m.category || m.id}>{m.category || m.id}</option>
-                                        ))}
-                                    </Select>
-                                </Field>
-                                <Field label="رقم محلي / Local #">
-                                    <Select value={agriFormData.machineLocalNo} onChange={e => handleAgriChange('machineLocalNo', e.target.value)}>
-                                        {[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
-                                    </Select>
-                                </Field>
-                                <Field label="المعدة الملحقة / Attached">
-                                    <Select value={agriFormData.attached} onChange={e => handleAgriChange('attached', e.target.value)}>
-                                        <option value="">Select Attached...</option>
-                                        {attachedOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                                    </Select>
-                                </Field>
-                                <Field label="رقم محلي / Local #">
-                                    <Select value={agriFormData.attachedLocalNo} onChange={e => handleAgriChange('attachedLocalNo', e.target.value)}>
-                                        {[1,2,3,4,5,6,7,8,9].map(n => <option key={n} value={n}>{n}</option>)}
-                                    </Select>
-                                </Field>
-                            </div>
+                                       ))}
+                                   </select>
+                                   <div className={labelStyle}>موديل الجرار</div>
+                               </div>
+                               <div className={rowStyle}>
+                                   <select className={inputStyle} value={agriFormData.attached} onChange={e => handleAgriChange('attached', e.target.value)}>
+                                       <option value="">المعدة الملحقة...</option>
+                                       {attachedOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                                   </select>
+                                   <div className={labelStyle}>المعدة الملحقة</div>
+                               </div>
+                               <div className={rowStyle}>
+                                   <select className={inputStyle} value={agriFormData.pivot} onChange={e => handleAgriChange('pivot', e.target.value)}>
+                                       <option value="">رقم البيفوت...</option>
+                                       {pivotOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                                   </select>
+                                   <div className={labelStyle}>رقم البيفوت</div>
+                               </div>
+                               <div className={rowStyle}>
+                                   <select className={inputStyle} value={agriFormData.driver} onChange={e => handleAgriChange('driver', e.target.value)}>
+                                       <option value="">اختر السائق...</option>
+                                       {driverOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                                   </select>
+                                   <div className={labelStyle}>اسم السائق</div>
+                               </div>
+                           </div>
+                       </div>
 
-                            {/* Row 3: Counters & Metrics */}
-                            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4 pb-4 border-b border-gray-100 bg-gray-50/50 p-3 rounded -mx-3">
-                                <Field label="بداية العداد / Start">
-                                    <Input type="number" value={agriFormData.startCounter} onChange={e => handleAgriChange('startCounter', e.target.value)} className="font-mono font-bold text-teal-700" />
-                                </Field>
-                                <Field label="نهاية العداد / End">
-                                    <Input type="number" value={agriFormData.endCounter} onChange={e => handleAgriChange('endCounter', e.target.value)} className="font-mono font-bold text-teal-700" />
-                                </Field>
-                                <Field label="حسابي / Calc">
-                                    <Input value={agriFormData.calculated} disabled className="font-mono bg-gray-200" />
-                                </Field>
-                                <Field label="الوحدة / Unit">
-                                    <Select value={agriFormData.unitType} onChange={e => handleAgriChange('unitType', e.target.value)}>
-                                        {unitTypes.map(u => <option key={u} value={u}>{u}</option>)}
-                                    </Select>
-                                </Field>
-                                <Field label="الانجاز / Achieve">
-                                    <Input type="number" value={agriFormData.achievement} onChange={e => handleAgriChange('achievement', e.target.value)} />
-                                </Field>
-                                <Field label="ساعة / Hours">
-                                    <Input type="number" value={agriFormData.timeSpent} onChange={e => handleAgriChange('timeSpent', e.target.value)} />
-                                </Field>
-                            </div>
+                       <div className="flex gap-1 mt-2">
+                            <input className={`${inputStyle} border-purple-300`} placeholder="الملاحظات" value={agriFormData.notes} onChange={e => handleAgriChange('notes', e.target.value)} />
+                            <div className={labelStyle}>الملاحظات</div>
+                       </div>
+                   </div>
 
-                            {/* Row 4: Personnel & Data Out */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div className="md:col-span-2 grid grid-cols-2 gap-4">
-                                    <Field label="السائق / Driver" colSpan={2}>
-                                        <Select value={agriFormData.driver} onChange={e => handleAgriChange('driver', e.target.value)}>
-                                            <option value="">Select Driver...</option>
-                                            {driverOptions.map(d => <option key={d} value={d}>{d}</option>)}
-                                        </Select>
-                                    </Field>
-                                    <Field label="الادارة / Dept">
-                                        <Input value={agriFormData.department} disabled className="bg-gray-100" />
-                                    </Field>
-                                    <Field label="القطاع / Sector">
-                                        <Input value={agriFormData.sector || 'قطاع شمال'} disabled className="bg-gray-100" />
-                                    </Field>
-                                </div>
-                                <div className="md:col-span-2">
-                                     <Field label="ملاحظات / Notes">
-                                         <textarea 
-                                            className="w-full h-[76px] rounded border border-gray-300 p-2 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 resize-none"
-                                            value={agriFormData.notes}
-                                            onChange={e => handleAgriChange('notes', e.target.value)}
-                                            placeholder="..."
-                                         />
-                                     </Field>
-                                </div>
+                   <div className="w-full lg:w-48 bg-white p-2 border border-gray-300 rounded shadow-sm">
+                        <div className="text-center font-bold text-gray-600 mb-2 border-b pb-1">Data Out</div>
+                        <div className="space-y-2 text-sm">
+                             <div className="flex justify-between border-b border-gray-100 pb-1">
+                                 <span className="text-gray-500">الخدمات</span>
+                                 <span className="font-bold">{agriFormData.services || '532'}</span>
+                             </div>
+                             <div className="flex justify-between border-b border-gray-100 pb-1">
+                                 <span className="text-gray-500">الادارة</span>
+                                 <span className="font-bold">{agriFormData.department}</span>
+                             </div>
+                             <div className="flex justify-between border-b border-gray-100 pb-1">
+                                 <span className="text-gray-500">القطاع</span>
+                                 <span className="font-bold">{agriFormData.sector || 'قطاع شمال'}</span>
+                             </div>
+                        </div>
+                   </div>
+                </div>
+
+                <div className="flex justify-center gap-4 mt-6 py-4 border-t border-b bg-white rounded shadow-sm">
+                    <button onClick={handleCreateAgri} className="flex flex-col items-center text-green-700 hover:text-green-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                        </div>
+                        <span className="text-sm font-bold">إضافة</span>
+                    </button>
+                    <button onClick={handleResetAgri} className="flex flex-col items-center text-green-700 hover:text-green-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        </div>
+                        <span className="text-sm font-bold">استرجاع</span>
+                    </button>
+                    <button onClick={handleUpdateAgri} className="flex flex-col items-center text-green-700 hover:text-green-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </div>
+                        <span className="text-sm font-bold">تعديل</span>
+                    </button>
+                    <button onClick={handleDeleteAgri} className="flex flex-col items-center text-green-700 hover:text-green-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </div>
+                        <span className="text-sm font-bold">حذف</span>
+                    </button>
+                    <button onClick={handleExcelExport} className="flex flex-col items-center text-green-700 hover:text-green-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        </div>
+                        <span className="text-sm font-bold">اكسل</span>
+                    </button>
+                </div>
+
+                <div className="bg-white border border-gray-300 rounded relative shadow-sm mt-4 overflow-hidden">
+                    <div className="bg-gray-100 px-3 py-2 border-b font-bold text-gray-700 flex justify-between items-center">
+                        <span>Database</span>
+                        <span className="text-xs text-gray-400 font-normal">{orders.length} Records</span>
+                    </div>
+                    <div className="overflow-x-auto h-64">
+                        <table className="w-full text-right text-sm border-collapse">
+                            <thead className="bg-gray-50 sticky top-0">
+                                <tr>
+                                    {["م", "التاريخ", "الفرع", "موديل الجرار", "محلي", "المعدة الملحقة", "محلي2", "البيفوت", "اسم السائق", "حسابي", "الاعادة", "الانجاز", "الوحدة", "الزمن"].map(h => (
+                                        <th key={h} className="border p-2 font-bold whitespace-nowrap text-gray-700">{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {orders.length === 0 ? (
+                                    <tr><td colSpan={14} className="text-center p-4 text-gray-400">No records found</td></tr>
+                                ) : (
+                                    orders.map(o => (
+                                        <tr 
+                                            key={o.id} 
+                                            onClick={() => { setAgriFormData(o); setSelectedAgriId(o.id); }}
+                                            className={`cursor-pointer hover:bg-yellow-50 transition-colors ${selectedAgriId === o.id ? 'bg-blue-100 text-blue-900 font-bold' : ''}`}
+                                        >
+                                            <td className="border p-1">{o.id}</td>
+                                            <td className="border p-1">{o.date}</td>
+                                            <td className="border p-1">{o.branch}</td>
+                                            <td className="border p-1">{o.tractor}</td>
+                                            <td className="border p-1">{o.machineLocalNo}</td>
+                                            <td className="border p-1">{o.attached}</td>
+                                            <td className="border p-1">{o.attachedLocalNo}</td>
+                                            <td className="border p-1">{o.pivot}</td>
+                                            <td className="border p-1">{o.driver}</td>
+                                            <td className="border p-1">{o.calculated}</td>
+                                            <td className="border p-1">{o.actualOrReturn}</td>
+                                            <td className="border p-1">{o.achievement}</td>
+                                            <td className="border p-1">{o.unitType}</td>
+                                            <td className="border p-1">{o.timeSpent}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* IRRIGATION TAB CONTENT */}
+        {activeTab === 'irrigation' && (
+            <div className="animate-fade-in-up" dir="rtl">
+                <div className="bg-gray-50 p-6 rounded border border-gray-300 relative mt-4">
+                    <span className="absolute -top-3 left-3 bg-gray-100 px-2 text-sm font-bold text-gray-700 border border-gray-300 rounded">Run Times Log</span>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+                        {/* Column 1 */}
+                        <div className="space-y-3">
+                            <div className={rowStyle}>
+                                <input type="date" className={inputStyle} value={irrigationFormData.date} onChange={e => handleIrrigationChange('date', e.target.value)} />
+                                <div className={labelStyle}>التاريخ</div>
+                            </div>
+                            <div className={rowStyle}>
+                                <select className={inputStyle} value={irrigationFormData.locationName} onChange={e => handleIrrigationChange('locationName', e.target.value)}>
+                                    <option value="">اختر الموقع...</option>
+                                    {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+                                </select>
+                                <div className={labelStyle}>الموقع</div>
+                            </div>
+                            <div className={rowStyle}>
+                                <select className={inputStyle} value={irrigationFormData.generatorModel} onChange={e => handleIrrigationChange('generatorModel', e.target.value)}>
+                                    <option value="">اختر المولد...</option>
+                                    {machines.map(m => (
+                                        <option key={m.id} value={m.category || m.id}>{m.category || m.id}</option>
+                                    ))}
+                                </select>
+                                <div className={labelStyle}>موديل المولد</div>
                             </div>
                         </div>
 
-                        {/* TABLE */}
-                        <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                            <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 font-bold text-xs text-gray-500 uppercase">Recent Records</div>
-                            <div className="overflow-auto max-h-[300px]">
-                                <table className="w-full text-right text-sm border-collapse">
-                                    <thead className="bg-white sticky top-0 z-10 shadow-sm">
-                                        <tr>
-                                            {["ID", "Date", "Branch", "Tractor", "Local", "Attached", "Driver", "Calc", "Achieve", "Unit"].map(h => (
-                                                <th key={h} className="p-3 font-bold text-gray-600 border-b whitespace-nowrap">{h}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-50">
-                                        {orders.slice().reverse().map(o => (
-                                            <tr 
-                                                key={o.id} 
-                                                onClick={() => { setAgriFormData(o); setSelectedAgriId(o.id); }}
-                                                className={`cursor-pointer hover:bg-teal-50 transition-colors ${selectedAgriId === o.id ? 'bg-teal-50 ring-1 ring-teal-200' : ''}`}
-                                            >
-                                                <td className="p-2 font-mono text-gray-400 text-xs">{o.id}</td>
-                                                <td className="p-2 whitespace-nowrap">{o.date}</td>
-                                                <td className="p-2">{o.branch}</td>
-                                                <td className="p-2">{o.tractor}</td>
-                                                <td className="p-2">{o.machineLocalNo}</td>
-                                                <td className="p-2 text-gray-500">{o.attached}</td>
-                                                <td className="p-2 truncate max-w-[100px]">{o.driver}</td>
-                                                <td className="p-2 font-mono">{o.calculated}</td>
-                                                <td className="p-2 font-bold text-gray-800">{o.achievement}</td>
-                                                <td className="p-2 text-xs">{o.unitType}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                        {/* Column 2 */}
+                        <div className="space-y-3">
+                            <div className={rowStyle}>
+                                <input type="number" className={inputStyle} value={irrigationFormData.engineStart} onChange={e => handleIrrigationChange('engineStart', e.target.value)} />
+                                <div className={labelStyle}>بداية العداد</div>
+                            </div>
+                            <div className={rowStyle}>
+                                <input type="number" className={inputStyle} value={irrigationFormData.engineEnd} onChange={e => handleIrrigationChange('engineEnd', e.target.value)} />
+                                <div className={labelStyle}>نهاية العداد</div>
+                            </div>
+                             <div className={rowStyle}>
+                                <input type="number" className={`${inputStyle} bg-yellow-50`} disabled value={irrigationFormData.totalHours} />
+                                <div className={labelStyle}>اجمالي ساعات</div>
+                            </div>
+                        </div>
+
+                        {/* Column 3 */}
+                        <div className="space-y-3">
+                            <div className="flex flex-col h-full">
+                                <textarea 
+                                    className={`${inputStyle} h-full py-2 resize-none text-right`} 
+                                    placeholder="ملاحظات..." 
+                                    value={irrigationFormData.notes} 
+                                    onChange={e => handleIrrigationChange('notes', e.target.value)} 
+                                />
                             </div>
                         </div>
                     </div>
                 </div>
-            )}
 
-            {/* IRRIGATION TAB */}
-            {activeTab === 'irrigation' && (
-                <div className="flex flex-col h-full animate-fade-in-up">
-                    <div className="bg-white px-6 py-3 border-b border-gray-200 flex items-center justify-between shrink-0">
-                         <div>
-                             <h2 className="text-lg font-bold text-gray-800">سجل تشغيل الري</h2>
-                             <p className="text-[10px] text-gray-400 font-mono">ID: {selectedIrrigationId || 'New'}</p>
-                         </div>
-                         <div className="flex gap-2">
-                             <button onClick={handleResetIrrigation} className="px-4 py-1.5 rounded border border-gray-300 text-xs font-bold text-gray-600 hover:bg-gray-50">Reset</button>
-                             {selectedIrrigationId ? (
-                                 <>
-                                     <button onClick={handleDeleteIrrigation} className="px-4 py-1.5 rounded bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 border border-red-200">Delete</button>
-                                     <button onClick={handleUpdateIrrigation} className="px-5 py-1.5 rounded bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 shadow-sm">Update</button>
-                                 </>
-                             ) : (
-                                 <button onClick={handleCreateIrrigation} className="px-5 py-1.5 rounded bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 shadow-sm">Save Log</button>
-                             )}
-                         </div>
+                <div className="flex justify-center gap-4 mt-6 py-4 border-t border-b bg-white rounded shadow-sm">
+                    <button onClick={handleCreateIrrigation} className="flex flex-col items-center text-green-700 hover:text-green-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                        </div>
+                        <span className="text-sm font-bold">إضافة</span>
+                    </button>
+                    <button onClick={handleResetIrrigation} className="flex flex-col items-center text-green-700 hover:text-green-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        </div>
+                        <span className="text-sm font-bold">استرجاع</span>
+                    </button>
+                    <button onClick={handleUpdateIrrigation} className="flex flex-col items-center text-green-700 hover:text-green-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </div>
+                        <span className="text-sm font-bold">تعديل</span>
+                    </button>
+                    <button onClick={handleDeleteIrrigation} className="flex flex-col items-center text-green-700 hover:text-green-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </div>
+                        <span className="text-sm font-bold">حذف</span>
+                    </button>
+                    <button onClick={handleExcelExport} className="flex flex-col items-center text-green-700 hover:text-green-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-green-600 flex items-center justify-center mb-1 group-hover:bg-green-50">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        </div>
+                        <span className="text-sm font-bold">اكسل</span>
+                    </button>
+                </div>
+
+                <div className="bg-white border border-gray-300 rounded relative shadow-sm mt-4 overflow-hidden">
+                    <div className="bg-gray-100 px-3 py-2 border-b font-bold text-gray-700 flex justify-between items-center">
+                        <span>Database</span>
+                        <span className="text-xs text-gray-400 font-normal">{irrigationLogs.length} Records</span>
                     </div>
-
-                    <div className="p-4 overflow-y-auto bg-gray-50/50">
-                        <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm max-w-4xl mx-auto">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                {/* Col 1 */}
-                                <div className="space-y-4">
-                                    <Field label="التاريخ / Date">
-                                        <Input type="date" value={irrigationFormData.date} onChange={e => handleIrrigationChange('date', e.target.value)} />
-                                    </Field>
-                                    <Field label="الموقع / Location">
-                                        <Select value={irrigationFormData.locationName} onChange={e => handleIrrigationChange('locationName', e.target.value)}>
-                                            <option value="">Select Location...</option>
-                                            {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
-                                        </Select>
-                                    </Field>
-                                    <Field label="المولد / Generator">
-                                        <Select value={irrigationFormData.generatorModel} onChange={e => handleIrrigationChange('generatorModel', e.target.value)}>
-                                            <option value="">Select Generator...</option>
-                                            {machines.map(m => (
-                                                <option key={m.id} value={m.category || m.id}>{m.category || m.id}</option>
-                                            ))}
-                                        </Select>
-                                    </Field>
-                                </div>
-                                {/* Col 2 */}
-                                <div className="space-y-4">
-                                    <Field label="بداية العداد / Start">
-                                        <Input type="number" value={irrigationFormData.engineStart} onChange={e => handleIrrigationChange('engineStart', e.target.value)} />
-                                    </Field>
-                                    <Field label="نهاية العداد / End">
-                                        <Input type="number" value={irrigationFormData.engineEnd} onChange={e => handleIrrigationChange('engineEnd', e.target.value)} />
-                                    </Field>
-                                    <Field label="اجمالي الساعات / Total Hours">
-                                        <Input type="number" value={irrigationFormData.totalHours} disabled className="bg-blue-50 text-blue-800 font-bold" />
-                                    </Field>
-                                </div>
-                                {/* Col 3 */}
-                                <div className="h-full">
-                                    <Field label="ملاحظات / Notes" colSpan={1}>
-                                        <textarea 
-                                            className="w-full h-[180px] rounded border border-gray-300 p-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
-                                            placeholder="..."
-                                            value={irrigationFormData.notes} 
-                                            onChange={e => handleIrrigationChange('notes', e.target.value)} 
-                                        />
-                                    </Field>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* TABLE */}
-                        <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                            <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 font-bold text-xs text-gray-500 uppercase">Log History</div>
-                            <div className="overflow-auto max-h-[300px]">
-                                <table className="w-full text-right text-sm border-collapse">
-                                    <thead className="bg-white sticky top-0 z-10 shadow-sm">
-                                        <tr>
-                                            {["ID", "Date", "Loc", "Gen", "Start", "End", "Hours", "Notes"].map(h => (
-                                                <th key={h} className="p-3 font-bold text-gray-600 border-b whitespace-nowrap">{h}</th>
-                                            ))}
+                    <div className="overflow-x-auto h-64">
+                        <table className="w-full text-right text-sm border-collapse">
+                            <thead className="bg-gray-50 sticky top-0">
+                                <tr>
+                                    {["م", "التاريخ", "الموقع", "المولد", "بداية", "نهاية", "ساعات التشغيل", "ملاحظات"].map(h => (
+                                        <th key={h} className="border p-2 font-bold whitespace-nowrap text-gray-700">{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {irrigationLogs.length === 0 ? (
+                                    <tr><td colSpan={8} className="text-center p-4 text-gray-400">No records found</td></tr>
+                                ) : (
+                                    irrigationLogs.map(log => (
+                                        <tr 
+                                            key={log.id} 
+                                            onClick={() => { setIrrigationFormData(log); setSelectedIrrigationId(log.id); }}
+                                            className={`cursor-pointer hover:bg-yellow-50 transition-colors ${selectedIrrigationId === log.id ? 'bg-blue-100 text-blue-900 font-bold' : ''}`}
+                                        >
+                                            <td className="border p-1">{log.id}</td>
+                                            <td className="border p-1">{log.date}</td>
+                                            <td className="border p-1">{log.locationName}</td>
+                                            <td className="border p-1">{log.generatorModel}</td>
+                                            <td className="border p-1">{log.engineStart}</td>
+                                            <td className="border p-1">{log.engineEnd}</td>
+                                            <td className="border p-1">{log.totalHours}</td>
+                                            <td className="border p-1">{log.notes}</td>
                                         </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-50">
-                                        {irrigationLogs.slice().reverse().map(log => (
-                                            <tr 
-                                                key={log.id} 
-                                                onClick={() => { setIrrigationFormData(log); setSelectedIrrigationId(log.id); }}
-                                                className={`cursor-pointer hover:bg-blue-50 transition-colors ${selectedIrrigationId === log.id ? 'bg-blue-50 ring-1 ring-blue-200' : ''}`}
-                                            >
-                                                <td className="p-2 font-mono text-gray-400 text-xs">{log.id}</td>
-                                                <td className="p-2 whitespace-nowrap">{log.date}</td>
-                                                <td className="p-2">{log.locationName}</td>
-                                                <td className="p-2 text-xs truncate max-w-[100px]">{log.generatorModel}</td>
-                                                <td className="p-2 font-mono">{log.engineStart}</td>
-                                                <td className="p-2 font-mono">{log.engineEnd}</td>
-                                                <td className="p-2 font-bold text-blue-700">{log.totalHours}</td>
-                                                <td className="p-2 text-gray-400 text-xs truncate max-w-[150px]">{log.notes}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-            )}
-        </div>
+            </div>
+        )}
     </div>
   );
 };
