@@ -476,15 +476,14 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
       if (!val) return;
 
-      // Search in broader scope (machines in Location/Sector) to allow auto-filling parents
-      const matches = machinesForTechnicalFilters.filter(m => m.machineLocalNo === val);
+      // Use machinesInCat to ensure we only look within the selected Equipment Name
+      // This respects the user's wish to not change Category when selecting Local No
+      const matches = machinesInCat.filter(m => m.machineLocalNo === val);
       
       if (matches.length > 0) {
           const first = matches[0];
           
-          // Auto-fill parents if they are empty or need update to match selection
-          // We use the first match's details. In 99% of cases Local No is unique in a location.
-          setFilterCategory(first.category || '');
+          // Auto-fill other fields ONLY (Brand, Model), DO NOT update Category
           setFilterBrand(first.brand || '');
           setFilterModelNo(first.modelNo || '');
           
@@ -503,10 +502,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
       
       if (!val) return;
 
-      const matches = machinesForTechnicalFilters.filter(m => m.chaseNo === val);
+      // Scoped to Category for consistency
+      const matches = machinesInCat.filter(m => m.chaseNo === val);
       if (matches.length > 0) {
           const first = matches[0];
-          setFilterCategory(first.category || '');
+          // Do not update category
           setFilterBrand(first.brand || '');
           setFilterModelNo(first.modelNo || '');
           setFilterLocalNo(first.machineLocalNo || '');
@@ -514,7 +514,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
       }
   };
 
-  // NEW: Flexible Handler for Asset ID
+  // NEW: Flexible Handler for Asset ID (Global override still allowed)
   const handleMachineIdChange = (val: string) => {
       setMachineId(val);
       // Always back-fill everything from the specific Asset ID
@@ -644,7 +644,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         value={filterBrand} 
                         onChange={handleBrandChange} 
                         placeholder="Select Brand..." 
-                        disabled={false}
+                        disabled={!filterCategory}
                      />
                  </div>
 
@@ -656,7 +656,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         value={filterModelNo} 
                         onChange={handleModelChange} 
                         placeholder="Select Model..." 
-                        disabled={false}
+                        disabled={!filterCategory}
                      />
                      {/* 4. Local No */}
                      <SearchableSelect 
@@ -665,7 +665,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         value={filterLocalNo} 
                         onChange={handleLocalNoChange} 
                         placeholder="Select Local No..." 
-                        disabled={false}
+                        disabled={!filterCategory}
                      />
                  </div>
 
@@ -677,7 +677,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         value={filterChaseNo} 
                         onChange={handleChaseChange} 
                         placeholder="Select Chase..." 
-                        disabled={false}
+                        disabled={!filterCategory}
                      />
                      {/* 6. Asset ID */}
                      <SearchableSelect 
