@@ -246,25 +246,25 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
          {/* STOCK VIEW */}
          {activeTab === 'stock' && (
              <div className="overflow-auto max-h-[70vh]">
-                 <table className="w-full text-left text-sm border-separate border-spacing-0">
+                 <table className="w-full text-left text-xs border-separate border-spacing-0">
                      <thead className="bg-blue-50 text-blue-900 font-bold sticky top-0 z-10">
                          <tr>
-                             <th className="px-6 py-4 border-b border-blue-100">Item Number</th>
-                             <th className="px-6 py-4 border-b border-blue-100">Full Name</th>
-                             <th className="px-6 py-4 border-b border-blue-100">Trans UM</th>
-                             <th className="px-6 py-4 border-b border-blue-100">Sites</th>
-                             <th className="px-6 py-4 border-b border-blue-100 text-right">Sum of Qnty</th>
+                             <th className="px-3 py-2 border-b border-blue-100">Item Number</th>
+                             <th className="px-3 py-2 border-b border-blue-100">Full Name</th>
+                             <th className="px-3 py-2 border-b border-blue-100">Trans UM</th>
+                             <th className="px-3 py-2 border-b border-blue-100">Sites</th>
+                             <th className="px-3 py-2 border-b border-blue-100 text-right">Sum of Qnty</th>
                          </tr>
                      </thead>
                      <tbody className="divide-y divide-gray-100">
                          {stockData.length > 0 ? (
                              stockData.map((row, idx) => (
                                  <tr key={idx} className="hover:bg-gray-50 transition">
-                                     <td className="px-6 py-3 font-mono font-bold text-gray-700">{row.itemNumber}</td>
-                                     <td className="px-6 py-3 text-gray-800">{row.fullName}</td>
-                                     <td className="px-6 py-3 text-gray-500">{row.transUm}</td>
-                                     <td className="px-6 py-3 text-gray-600 text-xs">{row.sitesDisplay}</td>
-                                     <td className="px-6 py-3 text-right font-bold text-gray-900">{row.sumOfQnty}</td>
+                                     <td className="px-3 py-2 font-mono font-bold text-gray-700">{row.itemNumber}</td>
+                                     <td className="px-3 py-2 text-gray-800">{row.fullName}</td>
+                                     <td className="px-3 py-2 text-gray-500">{row.transUm}</td>
+                                     <td className="px-3 py-2 text-gray-600">{row.sitesDisplay}</td>
+                                     <td className="px-3 py-2 text-right font-bold text-gray-900">{row.sumOfQnty}</td>
                                  </tr>
                              ))
                          ) : (
@@ -272,8 +272,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                          )}
                          {stockData.length > 0 && (
                              <tr className="bg-gray-50 font-bold">
-                                 <td colSpan={4} className="px-6 py-3 text-right">Total Items:</td>
-                                 <td className="px-6 py-3 text-right">{stockData.reduce((acc, curr) => acc + curr.sumOfQnty, 0)}</td>
+                                 <td colSpan={4} className="px-3 py-2 text-right">Total Items:</td>
+                                 <td className="px-3 py-2 text-right">{stockData.reduce((acc, curr) => acc + curr.sumOfQnty, 0)}</td>
                              </tr>
                          )}
                      </tbody>
@@ -284,50 +284,50 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
          {/* HISTORY VIEW (Detailed Table) */}
          {activeTab === 'history' && (
             <div className="overflow-auto max-h-[70vh]">
-                <table className="w-full text-left text-sm text-gray-600 border-separate border-spacing-0">
+                <table className="w-full text-left text-xs text-gray-600 border-separate border-spacing-0">
                     <thead className="bg-gray-50 text-gray-700 font-semibold sticky top-0 z-10">
                         <tr>
-                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Issue ID</th>
-                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Date</th>
-                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Location</th>
-                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Sector</th>
-                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Division</th>
-                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Local No</th>
-                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Machine</th>
-                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Item Details</th>
-                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap text-right">Qty</th>
-                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Status</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Issue ID</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Date</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Location</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Sector</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Division</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Local No</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Machine</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Item Details</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap text-right">Qty</th>
+                            <th className="px-3 py-2 border-b border-gray-200 whitespace-nowrap">Status</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {filteredHistory.length > 0 ? (
                             filteredHistory.map((record) => (
                                 <tr key={record.id} className="hover:bg-gray-50 transition">
-                                    <td className="px-6 py-4 font-medium text-gray-900">{record.id}</td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-3 py-2 font-medium text-gray-900">{record.id}</td>
+                                    <td className="px-3 py-2">
                                       <div>{new Date(record.timestamp).toLocaleDateString()}</div>
-                                      <div className="text-xs text-gray-400">{new Date(record.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                      <div className="text-[10px] text-gray-400">{new Date(record.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-3 py-2">
                                         <div className="font-bold text-gray-900">{locations.find(l => l.id === record.locationId)?.name || record.locationId}</div>
-                                        <div className="text-xs text-gray-500">{record.locationId}</div>
+                                        <div className="text-[10px] text-gray-500">{record.locationId}</div>
                                     </td>
-                                    <td className="px-6 py-4 text-gray-600">{record.sectorName || '-'}</td>
-                                    <td className="px-6 py-4 text-gray-600">{record.divisionName || '-'}</td>
-                                    <td className="px-6 py-4 font-mono text-blue-600 font-bold">
+                                    <td className="px-3 py-2 text-gray-600">{record.sectorName || '-'}</td>
+                                    <td className="px-3 py-2 text-gray-600">{record.divisionName || '-'}</td>
+                                    <td className="px-3 py-2 font-mono text-blue-600 font-bold">
                                         {machines.find(m => m.id === record.machineId)?.machineLocalNo || '-'}
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-3 py-2">
                                         <div className="text-gray-900 font-medium">{record.machineName}</div>
-                                        {record.maintenancePlan && <span className="text-[10px] bg-gray-100 px-1 rounded">{record.maintenancePlan}</span>}
+                                        {record.maintenancePlan && <span className="text-[9px] bg-gray-100 px-1 rounded">{record.maintenancePlan}</span>}
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-3 py-2">
                                         <div className="text-gray-900 font-medium">{record.itemName}</div>
-                                        <div className="text-xs text-gray-500 font-mono">{record.itemId}</div>
+                                        <div className="text-[10px] text-gray-500 font-mono">{record.itemId}</div>
                                     </td>
-                                    <td className="px-6 py-4 font-mono font-bold text-right">{record.quantity}</td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    <td className="px-3 py-2 font-mono font-bold text-right">{record.quantity}</td>
+                                    <td className="px-3 py-2">
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
                                             record.status === 'Completed' || record.status === 'Approved' ? 'bg-green-100 text-green-700' :
                                             record.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
                                         }`}>

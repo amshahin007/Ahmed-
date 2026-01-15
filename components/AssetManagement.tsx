@@ -714,10 +714,10 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                     </div>
                 </div>
                 <div className="flex-1 overflow-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
+                    <table className="w-full text-left text-xs whitespace-nowrap">
                         <thead className="bg-gray-100 text-gray-700 sticky top-0 border-b border-gray-200">
                             <tr>
-                                <th className="p-4 w-10">
+                                <th className="p-2 w-10">
                                     <input 
                                         type="checkbox" 
                                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -725,24 +725,24 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                         onChange={handleSelectAllAssets}
                                     />
                                 </th>
-                                <th className="p-4">ID</th>
-                                <th className="p-4">Local No</th>
-                                <th className="p-4">Machine Name</th>
-                                <th className="p-4">Main Group</th>
-                                <th className="p-4">Sub Group</th>
-                                <th className="p-4">Status</th>
-                                <th className="p-4">Brand</th>
-                                <th className="p-4">Model No</th>
-                                <th className="p-4">Chase No</th>
-                                <th className="p-4">Location</th>
-                                <th className="p-4">Sector</th>
-                                <th className="p-4 text-right">Action</th>
+                                <th className="p-2">ID</th>
+                                <th className="p-2">Local No</th>
+                                <th className="p-2">Machine Name</th>
+                                <th className="p-2">Main Group</th>
+                                <th className="p-2">Sub Group</th>
+                                <th className="p-2">Status</th>
+                                <th className="p-2">Brand</th>
+                                <th className="p-2">Model No</th>
+                                <th className="p-2">Chase No</th>
+                                <th className="p-2">Location</th>
+                                <th className="p-2">Sector</th>
+                                <th className="p-2 text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {filteredMachines.map(m => (
                                 <tr key={m.id} className="hover:bg-orange-50">
-                                    <td className="p-4">
+                                    <td className="p-2">
                                         <input 
                                             type="checkbox" 
                                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -754,22 +754,22 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                             }}
                                         />
                                     </td>
-                                    <td className="p-4 font-mono">{m.id}</td>
-                                    <td className="p-4 font-mono text-blue-600">{m.machineLocalNo || '-'}</td>
-                                    <td className="p-4 font-bold text-gray-800">{m.category}</td>
-                                    <td className="p-4 text-gray-600">{m.mainGroup || '-'}</td>
-                                    <td className="p-4 text-gray-600">{m.subGroup || '-'}</td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded text-xs ${m.status === 'Working' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    <td className="p-2 font-mono">{m.id}</td>
+                                    <td className="p-2 font-mono text-blue-600">{m.machineLocalNo || '-'}</td>
+                                    <td className="p-2 font-bold text-gray-800">{m.category}</td>
+                                    <td className="p-2 text-gray-600">{m.mainGroup || '-'}</td>
+                                    <td className="p-2 text-gray-600">{m.subGroup || '-'}</td>
+                                    <td className="p-2">
+                                        <span className={`px-2 py-0.5 rounded text-[10px] ${m.status === 'Working' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                             {m.status}
                                         </span>
                                     </td>
-                                    <td className="p-4">{m.brand}</td>
-                                    <td className="p-4">{m.modelNo}</td>
-                                    <td className="p-4">{m.chaseNo}</td>
-                                    <td className="p-4">{m.locationId}</td>
-                                    <td className="p-4">{m.sectorId}</td>
-                                    <td className="p-4 text-right">
+                                    <td className="p-2">{m.brand}</td>
+                                    <td className="p-2">{m.modelNo}</td>
+                                    <td className="p-2">{m.chaseNo}</td>
+                                    <td className="p-2">{m.locationId}</td>
+                                    <td className="p-2">{m.sectorId}</td>
+                                    <td className="p-2 text-right">
                                         <button onClick={() => openAssetForm(m)} className="text-blue-600 hover:underline">Edit</button>
                                     </td>
                                 </tr>
@@ -808,46 +808,46 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                    </div>
                </div>
                <div className="flex-1 overflow-auto">
-                   <table className="w-full text-left text-sm whitespace-nowrap">
+                   <table className="w-full text-left text-xs whitespace-nowrap">
                        <thead className="bg-gray-100 text-gray-700 sticky top-0 border-b border-gray-200">
                            <tr>
-                               <th className="p-4">ID</th>
-                               <th className="p-4">Date</th>
-                               <th className="p-4">Loc ID</th>
-                               <th className="p-4">Loc Name</th>
-                               <th className="p-4">Sector</th>
-                               <th className="p-4">Division</th>
-                               <th className="p-4">Local No</th>
-                               <th className="p-4">Machine</th>
-                               <th className="p-4">Type</th>
-                               <th className="p-4">Operator</th>
-                               <th className="p-4">Root Cause</th>
-                               <th className="p-4">Action Taken</th>
-                               <th className="p-4">Status</th>
-                               <th className="p-4 text-right">Action</th>
+                               <th className="p-2">ID</th>
+                               <th className="p-2">Date</th>
+                               <th className="p-2">Loc ID</th>
+                               <th className="p-2">Loc Name</th>
+                               <th className="p-2">Sector</th>
+                               <th className="p-2">Division</th>
+                               <th className="p-2">Local No</th>
+                               <th className="p-2">Machine</th>
+                               <th className="p-2">Type</th>
+                               <th className="p-2">Operator</th>
+                               <th className="p-2">Root Cause</th>
+                               <th className="p-2">Action Taken</th>
+                               <th className="p-2">Status</th>
+                               <th className="p-2 text-right">Action</th>
                            </tr>
                        </thead>
                        <tbody className="divide-y divide-gray-100">
                            {filteredBreakdowns.map(b => (
                                <tr key={b.id} className="hover:bg-red-50">
-                                   <td className="p-4 font-mono text-gray-500 text-xs">{b.id}</td>
-                                   <td className="p-4">{new Date(b.startTime).toLocaleDateString()}</td>
-                                   <td className="p-4 text-xs font-mono">{b.locationId}</td>
-                                   <td className="p-4 font-bold">{locations.find(l => l.id === b.locationId)?.name || '-'}</td>
-                                   <td className="p-4 text-gray-600">{sectors.find(s => s.id === b.sectorId)?.name || b.sectorId || '-'}</td>
-                                   <td className="p-4 text-gray-600">{divisions.find(d => d.id === b.divisionId)?.name || b.divisionId || '-'}</td>
-                                   <td className="p-4 font-mono text-blue-600 font-bold">{b.machineLocalNo || '-'}</td>
-                                   <td className="p-4 font-bold">{b.machineName}</td>
-                                   <td className="p-4">{b.failureType}</td>
-                                   <td className="p-4">{b.operatorName}</td>
-                                   <td className="p-4 max-w-xs truncate" title={b.rootCause}>{b.rootCause || '-'}</td>
-                                   <td className="p-4 max-w-xs truncate" title={b.actionTaken}>{b.actionTaken || '-'}</td>
-                                   <td className="p-4">
-                                       <span className={`px-2 py-1 rounded-full text-xs ${b.status === 'Open' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
+                                   <td className="p-2 font-mono text-gray-500 text-[10px]">{b.id}</td>
+                                   <td className="p-2">{new Date(b.startTime).toLocaleDateString()}</td>
+                                   <td className="p-2 text-[10px] font-mono">{b.locationId}</td>
+                                   <td className="p-2 font-bold">{locations.find(l => l.id === b.locationId)?.name || '-'}</td>
+                                   <td className="p-2 text-gray-600">{sectors.find(s => s.id === b.sectorId)?.name || b.sectorId || '-'}</td>
+                                   <td className="p-2 text-gray-600">{divisions.find(d => d.id === b.divisionId)?.name || b.divisionId || '-'}</td>
+                                   <td className="p-2 font-mono text-blue-600 font-bold">{b.machineLocalNo || '-'}</td>
+                                   <td className="p-2 font-bold">{b.machineName}</td>
+                                   <td className="p-2">{b.failureType}</td>
+                                   <td className="p-2">{b.operatorName}</td>
+                                   <td className="p-2 max-w-xs truncate" title={b.rootCause}>{b.rootCause || '-'}</td>
+                                   <td className="p-2 max-w-xs truncate" title={b.actionTaken}>{b.actionTaken || '-'}</td>
+                                   <td className="p-2">
+                                       <span className={`px-2 py-0.5 rounded-full text-[10px] ${b.status === 'Open' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'}`}>
                                            {b.status}
                                        </span>
                                    </td>
-                                   <td className="p-4 text-right">
+                                   <td className="p-2 text-right">
                                        <button onClick={() => openBreakdownForm(b)} className="text-blue-600 hover:underline">Edit</button>
                                    </td>
                                </tr>
