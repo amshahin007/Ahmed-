@@ -152,9 +152,27 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
         ? machinesInLocation.filter(m => m.category === selectedMachineName)
         : machinesInLocation;
 
-    const working = finalFilteredMachines.filter(m => m.status === 'Working').length;
-    const notWorking = finalFilteredMachines.filter(m => m.status === 'Not Working').length;
-    const maintenance = finalFilteredMachines.filter(m => m.status === 'Outside Maintenance').length;
+    // Helper for robust status checking (case-insensitive)
+    const getStatus = (s?: string) => {
+        if (!s) return 'Unknown';
+        const lower = s.toLowerCase();
+        if (lower.includes('not working')) return 'Not Working';
+        if (lower.includes('working')) return 'Working';
+        if (lower.includes('maintenance')) return 'Outside Maintenance';
+        return 'Unknown';
+    };
+
+    let working = 0;
+    let notWorking = 0;
+    let maintenance = 0;
+
+    finalFilteredMachines.forEach(m => {
+        const s = getStatus(m.status);
+        if (s === 'Working') working++;
+        else if (s === 'Not Working') notWorking++;
+        else if (s === 'Outside Maintenance') maintenance++;
+    });
+
     const total = finalFilteredMachines.length;
 
     const chartData = [
@@ -255,7 +273,6 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
                             className="w-full h-10 pl-3 pr-8 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
                             value={selectedMachineName}
                             onChange={(e) => setSelectedMachineName(e.target.value)}
-                            disabled={machineStats.total === 0 && !selectedMachineName}
                        >
                            <option value="">All Machines</option>
                            {availableMachineNames.map(name => (
@@ -293,26 +310,33 @@ const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, set
                     <div className="col-span-1 lg:col-span-3 p-6 min-h-[300px] flex flex-col">
                         <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Status Distribution</h3>
                         {machineStats.total > 0 ? (
-                            <ResponsiveContainer width="100%" height={300}>
-                                <PieChart>
-                                    <Pie
-                                        data={machineStats.chartData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={80}
-                                        outerRadius={110}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                    >
-                                        {machineStats.chartData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}} />
-                                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                                </PieChart>
-                            </ResponsiveContainer>
+                            machineStats.chartData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <PieChart>
+                                        <Pie
+                                            data={machineStats.chartData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={80}
+                                            outerRadius={110}
+                                            paddingAngle={machineStats.chartData.length > 1 ? 5 : 0}
+                                            dataKey="value"
+                                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                        >
+                                            {machineStats.chartData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}} />
+                                        <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                                    <p className="font-medium">Machines found: {machineStats.total}</p>
+                                    <p className="text-xs mt-1 text-gray-500">But no valid statuses (Working/Not Working) detected.</p>
+                                </div>
+                            )
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
                                 No machines found for current filters.
