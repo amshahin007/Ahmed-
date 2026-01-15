@@ -467,34 +467,64 @@ const IssueForm: React.FC<IssueFormProps> = ({
       setFilterModelNo(val);
       setFilterLocalNo(''); setFilterChaseNo(''); setMachineId('');
   };
+  
+  // NEW: Flexible Handler for Local No
   const handleLocalNoChange = (val: string) => {
       setFilterLocalNo(val);
       setFilterChaseNo(''); 
-      // Auto-select machine if it's the only one with this local no in this context
-      const matches = machinesInModel.filter(m => m.machineLocalNo === val);
-      if (matches.length === 1) {
-          setMachineId(matches[0].id);
-          setFilterChaseNo(matches[0].chaseNo);
-      } else {
-          setMachineId('');
+      setMachineId(''); // Reset specific ID until resolved
+
+      if (!val) return;
+
+      // Search in broader scope (machines in Location/Sector) to allow auto-filling parents
+      const matches = machinesForTechnicalFilters.filter(m => m.machineLocalNo === val);
+      
+      if (matches.length > 0) {
+          const first = matches[0];
+          
+          // Auto-fill parents if they are empty or need update to match selection
+          // We use the first match's details. In 99% of cases Local No is unique in a location.
+          setFilterCategory(first.category || '');
+          setFilterBrand(first.brand || '');
+          setFilterModelNo(first.modelNo || '');
+          
+          // If unique, we can also identify the Chase No and Asset ID
+          if (matches.length === 1) {
+              setMachineId(first.id);
+              setFilterChaseNo(first.chaseNo);
+          }
       }
   };
+
+  // NEW: Flexible Handler for Chase No
   const handleChaseChange = (val: string) => {
       setFilterChaseNo(val);
-      const matches = machinesInLocal.filter(m => m.chaseNo === val);
-      if (matches.length === 1) setMachineId(matches[0].id);
-      else setMachineId('');
+      setMachineId('');
+      
+      if (!val) return;
+
+      const matches = machinesForTechnicalFilters.filter(m => m.chaseNo === val);
+      if (matches.length > 0) {
+          const first = matches[0];
+          setFilterCategory(first.category || '');
+          setFilterBrand(first.brand || '');
+          setFilterModelNo(first.modelNo || '');
+          setFilterLocalNo(first.machineLocalNo || '');
+          if (matches.length === 1) setMachineId(first.id);
+      }
   };
+
+  // NEW: Flexible Handler for Asset ID
   const handleMachineIdChange = (val: string) => {
       setMachineId(val);
-      // Optional: Back-fill filters if selected directly
+      // Always back-fill everything from the specific Asset ID
       const m = machines.find(mac => mac.id === val);
       if (m) {
-          if (!filterCategory) setFilterCategory(m.category || '');
-          if (!filterBrand) setFilterBrand(m.brand || '');
-          if (!filterModelNo) setFilterModelNo(m.modelNo || '');
-          if (!filterLocalNo) setFilterLocalNo(m.machineLocalNo || '');
-          if (!filterChaseNo) setFilterChaseNo(m.chaseNo || '');
+          setFilterCategory(m.category || '');
+          setFilterBrand(m.brand || '');
+          setFilterModelNo(m.modelNo || '');
+          setFilterLocalNo(m.machineLocalNo || '');
+          setFilterChaseNo(m.chaseNo || '');
       }
   };
 
@@ -605,6 +635,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         value={filterCategory} 
                         onChange={handleCategoryChange} 
                         placeholder="e.g. Tractor, Conveyor..." 
+                        disabled={false}
                      />
                      {/* 2. Brand */}
                      <SearchableSelect 
@@ -613,7 +644,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         value={filterBrand} 
                         onChange={handleBrandChange} 
                         placeholder="Select Brand..." 
-                        disabled={!filterCategory}
+                        disabled={false}
                      />
                  </div>
 
@@ -625,7 +656,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         value={filterModelNo} 
                         onChange={handleModelChange} 
                         placeholder="Select Model..." 
-                        disabled={!filterBrand}
+                        disabled={false}
                      />
                      {/* 4. Local No */}
                      <SearchableSelect 
@@ -634,7 +665,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         value={filterLocalNo} 
                         onChange={handleLocalNoChange} 
                         placeholder="Select Local No..." 
-                        disabled={!filterModelNo}
+                        disabled={false}
                      />
                  </div>
 
@@ -646,7 +677,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         value={filterChaseNo} 
                         onChange={handleChaseChange} 
                         placeholder="Select Chase..." 
-                        disabled={!filterLocalNo}
+                        disabled={false}
                      />
                      {/* 6. Asset ID */}
                      <SearchableSelect 
@@ -656,7 +687,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         value={machineId} 
                         onChange={handleMachineIdChange} 
                         placeholder={machineOptions.length === 0 ? "..." : "Select Asset ID"} 
-                        disabled={!filterLocalNo && machineOptions.length > 100} // Disable if too many options, wait for filters
+                        disabled={false}
                      />
                  </div>
              </div>
