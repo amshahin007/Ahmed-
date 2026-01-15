@@ -63,6 +63,7 @@ export interface IssueRecord {
   itemId: string;
   itemName: string;
   quantity: number;
+  unit?: string; // Added Unit
   machineId: string;
   machineName: string;
   sectorName?: string;

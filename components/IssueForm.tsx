@@ -249,6 +249,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 itemId: line.itemId,
                 itemName: line.itemName,
                 quantity: line.quantity,
+                unit: line.unit, // Pass unit to Record
                 machineId,
                 machineName: machineDisplayName,
                 sectorName: sector ? sector.name : '',
@@ -290,10 +291,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
   const getExcelWorkbook = () => {
     if (!lastSubmittedBatch || lastSubmittedBatch.length === 0) return null;
-    const headers = ["Request ID", "Date", "Location", "Sector", "Division", "Machine", "Maint. Plan", "Item Number", "Item Name", "Quantity", "Warehouse Email", "Site Email"];
+    const headers = ["Request ID", "Date", "Location", "Sector", "Division", "Machine", "Maint. Plan", "Item Number", "Item Name", "Unit", "Quantity", "Warehouse Email", "Site Email"];
     const rows = lastSubmittedBatch.map(item => [
         item.id, new Date(item.timestamp).toLocaleString(), item.locationId, item.sectorName || '', item.divisionName || '', 
-        item.machineName, item.maintenancePlan || '', item.itemId, item.itemName, item.quantity, item.warehouseEmail || '', item.requesterEmail || ''
+        item.machineName, item.maintenancePlan || '', item.itemId, item.itemName, item.unit || 'pcs', item.quantity, item.warehouseEmail || '', item.requesterEmail || ''
     ]);
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -559,8 +560,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 </div>
             </div>
             <table className="w-full text-left border-collapse border border-black mb-8">
-                <thead><tr className="bg-gray-100"><th className="border border-black p-2">Item</th><th className="border border-black p-2">Name</th><th className="border border-black p-2 text-right">Qty</th></tr></thead>
-                <tbody>{lastSubmittedBatch.map(item => (<tr key={item.id}><td className="border border-black p-2">{item.itemId}</td><td className="border border-black p-2">{item.itemName}</td><td className="border border-black p-2 text-right">{item.quantity}</td></tr>))}</tbody>
+                <thead><tr className="bg-gray-100"><th className="border border-black p-2">Item</th><th className="border border-black p-2">Name</th><th className="border border-black p-2">Unit</th><th className="border border-black p-2 text-right">Qty</th></tr></thead>
+                <tbody>{lastSubmittedBatch.map(item => (<tr key={item.id}><td className="border border-black p-2">{item.itemId}</td><td className="border border-black p-2">{item.itemName}</td><td className="border border-black p-2 text-center">{item.unit || 'pcs'}</td><td className="border border-black p-2 text-right">{item.quantity}</td></tr>))}</tbody>
             </table>
           </div>
         </div>
@@ -672,6 +673,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
                </div>
                <div className="flex-[2] w-full">
                  <SearchableSelect label="Item Name" options={itemNameOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Search by name..." />
+               </div>
+               {/* Unit Display Field - New */}
+               <div className="w-full md:w-20">
+                 <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                 <input type="text" disabled value={selectedItemObj?.unit || ''} className="w-full px-3 py-2 border border-gray-200 bg-gray-100 rounded-lg text-center text-gray-500 font-bold" />
                </div>
                <div className="w-full md:w-24">
                  <label className="block text-sm font-medium text-gray-700 mb-1">Qty</label>
