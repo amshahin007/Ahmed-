@@ -96,11 +96,15 @@ const IssueForm: React.FC<IssueFormProps> = ({
              }
              
              if (data.divisionId) {
+                 // Important: set this immediately after sector so validation logic sees it
                  ignoreNextDivisionChange.current = true;
                  setDivisionId(data.divisionId);
              }
 
              if (data.machineId) setMachineId(data.machineId);
+             
+             // Auto-Select Maintenance Plan if provided (e.g. Sudden Breakdown)
+             if (data.maintenancePlanId) setSelectedPlanId(data.maintenancePlanId);
              
          } catch(e) { console.error("Prefill error", e); }
          

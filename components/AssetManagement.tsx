@@ -309,12 +309,21 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
         alert("Please select Location and Machine first.");
         return;
     }
+    
+    // Ensure sector is populated if division exists
+    let derivedSectorId = formData.sectorId;
+    if (!derivedSectorId && formData.divisionId) {
+        const div = divisions.find(d => d.id === formData.divisionId);
+        if (div) derivedSectorId = div.sectorId;
+    }
+
     // Save context to local storage to be picked up by IssueForm
     localStorage.setItem('wf_issue_prefill', JSON.stringify({
         locationId: formData.locationId,
-        sectorId: formData.sectorId,
+        sectorId: derivedSectorId,
         divisionId: formData.divisionId,
-        machineId: formData.machineId
+        machineId: formData.machineId,
+        maintenancePlanId: 'MP-003' // Auto-select "Sudden Breakdown"
     }));
     // Close modal and switch view
     setShowForm(false);
