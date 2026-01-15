@@ -351,28 +351,48 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       (filterStatus === 'All' || b.status === filterStatus)
   ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
-  // BREAKDOWN FORM LOGIC
+  // --- BREAKDOWN FORM CASCADING FILTER LOGIC ---
   
-  // 1. Get machines strictly in the selected location
-  const selectedLocation = locations.find(l => l.id === formData.locationId);
-  
-  const machinesInLocation = formData.locationId 
-      ? machines.filter(m => 
+  // 1. Filter by Location
+  const selectedFormLocation = locations.find(l => l.id === formData.locationId);
+  let relevantMachines = machines;
+
+  if (formData.locationId) {
+      relevantMachines = relevantMachines.filter(m => 
           m.locationId === formData.locationId || 
-          (selectedLocation && m.locationId === selectedLocation.name)
-        ) 
-      : [];
+          (selectedFormLocation && m.locationId === selectedFormLocation.name)
+      );
+  }
 
-  // 2. Get unique machine names (categories) in that location
-  const machineNamesInLocation = Array.from(new Set(machinesInLocation.map(m => m.category).filter(Boolean))) as string[];
+  // 2. Filter by Sector
+  if (formData.sectorId) {
+      relevantMachines = relevantMachines.filter(m => {
+          // If machine has explicit sector, check match
+          if (m.sectorId && m.sectorId !== formData.sectorId) return false;
+          // If machine has division, check if division belongs to this sector
+          if (m.divisionId) {
+              const div = divisions.find(d => d.id === m.divisionId);
+              if (div && div.sectorId !== formData.sectorId) return false;
+          }
+          return true;
+      });
+  }
 
-  // 3. Filter specific assets based on the selected Name/Category (if any)
-  const machinesForAssetDropdown = machinesInLocation.filter(m => 
+  // 3. Filter by Division
+  if (formData.divisionId) {
+      relevantMachines = relevantMachines.filter(m => !m.divisionId || m.divisionId === formData.divisionId);
+  }
+
+  // 4. Derive unique machine names from the filtered list
+  const machineNamesInContext = Array.from(new Set(relevantMachines.map(m => m.category).filter(Boolean))).sort();
+
+  // 5. Filter Assets based on selected Machine Name (Category)
+  const assetsInContext = relevantMachines.filter(m => 
       !formData.machineName || m.category === formData.machineName
   );
 
-  // Prepare options for SearchableSelect
-  const machineAssetOptions: Option[] = machinesForAssetDropdown.map(m => ({
+  // Prepare options for Asset ID dropdown
+  const machineAssetOptions: Option[] = assetsInContext.map(m => ({
       id: m.id,
       label: `${m.id} ${m.category ? `- ${m.category}` : ''}`, 
       subLabel: `${m.brand || ''} ${m.modelNo || ''} (Chase: ${m.chaseNo})`
@@ -778,7 +798,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                             disabled={!formData.locationId}
                                         >
                                             <option value="">{formData.locationId ? '-- الاسم --' : '-'}</option>
-                                            {machineNamesInLocation.map(name => (
+                                            {machineNamesInContext.map(name => (
                                                 <option key={name} value={name}>{name}</option>
                                             ))}
                                         </select>
@@ -791,19 +811,36 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                             value={formData.machineId || ''}
                                             onChange={(val) => {
                                                 const m = machines.find(mac => mac.id === val);
+                                                
+                                                // Resolve Sector/Division if not already set in form
+                                                let newSectorId = formData.sectorId;
+                                                let newDivisionId = formData.divisionId;
+                                                
+                                                if (m) {
+                                                    if (!newDivisionId && m.divisionId) newDivisionId = m.divisionId;
+                                                    
+                                                    if (!newSectorId) {
+                                                        if (m.sectorId) newSectorId = m.sectorId;
+                                                        else if (newDivisionId) {
+                                                            const div = divisions.find(d => d.id === newDivisionId);
+                                                            if (div) newSectorId = div.sectorId;
+                                                        }
+                                                    }
+                                                }
+
                                                 setFormData({
                                                     ...formData, 
                                                     machineId: val, 
                                                     machineName: m?.category || formData.machineName,
-                                                    sectorId: m?.sectorId || formData.sectorId,
-                                                    divisionId: m?.divisionId || formData.divisionId
+                                                    sectorId: newSectorId,
+                                                    divisionId: newDivisionId
                                                 });
                                             }}
                                             disabled={!formData.locationId}
                                             required
                                             compact={true}
                                         />
-                                        {formData.locationId && machinesForAssetDropdown.length === 0 && (
+                                        {formData.locationId && assetsInContext.length === 0 && (
                                             <p className="text-[10px] text-red-500 mt-0.5 font-bold leading-tight">⚠️ لا توجد أصول</p>
                                         )}
                                     </div>
