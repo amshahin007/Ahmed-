@@ -116,6 +116,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
              else if (h.includes('location')) obj.locationId = row[i];
              else if ((h.includes('main') && h.includes('group'))) obj.mainGroup = row[i];
              else if ((h.includes('sub') && h.includes('group'))) obj.subGroup = row[i];
+             else if (h.includes('local') && h.includes('no')) obj.machineLocalNo = row[i];
           });
           
           if(obj.id) {
@@ -621,6 +622,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                     />
                                 </th>
                                 <th className="p-4">ID</th>
+                                <th className="p-4">Local No</th>
                                 <th className="p-4">Machine Name</th>
                                 <th className="p-4">Main Group</th>
                                 <th className="p-4">Sub Group</th>
@@ -649,6 +651,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                                         />
                                     </td>
                                     <td className="p-4 font-mono">{m.id}</td>
+                                    <td className="p-4 font-mono text-blue-600">{m.machineLocalNo || '-'}</td>
                                     <td className="p-4 font-bold text-gray-800">{m.category}</td>
                                     <td className="p-4 text-gray-600">{m.mainGroup || '-'}</td>
                                     <td className="p-4 text-gray-600">{m.subGroup || '-'}</td>
@@ -771,9 +774,15 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                       {activeTab === 'assets' ? (
                           <div className="space-y-4">
                             {/* ASSET FIELDS (Original simple layout for Assets) */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Asset ID</label>
-                                <input type="text" className="w-full border rounded p-2" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} required />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Asset ID</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} required />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Local No</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.machineLocalNo || ''} onChange={e => setFormData({...formData, machineLocalNo: e.target.value})} />
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Machine Name (Category)</label>
