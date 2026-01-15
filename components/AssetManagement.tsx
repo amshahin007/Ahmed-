@@ -437,7 +437,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       });
   }, [machinesInSec, divisions, formData.sectorId, sectors]);
 
-  // 5. Machines in Selected Division
+  // 5. Machines in Selected Division (Used for narrowing down Asset IDs when no name is selected)
   const machinesInDiv = useMemo(() => {
       if (!formData.divisionId) return machinesInSec;
       
@@ -457,22 +457,35 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   }
 
   // 6. Available Machine Names
+  // CHANGED: Use machinesInSec instead of machinesInDiv to show all names in Sector, ignoring Division filter
   const availableMachineNames = useMemo(() => {
-      return Array.from(new Set(machinesInDiv.map(m => m.category).filter(Boolean))).sort();
-  }, [machinesInDiv]);
+      return Array.from(new Set(machinesInSec.map(m => m.category).filter(Boolean))).sort();
+  }, [machinesInSec]);
 
   // 7. Final Assets (Filtered by Name if selected)
   const finalAssetOptions = useMemo(() => {
-      let filtered = machinesInDiv;
+      // Start with machines in the Sector
+      let filtered = machinesInSec;
+
       if (formData.machineName) {
+          // If Name is selected, filter ONLY by Name (Ignore Division filter to handle data mismatches)
           filtered = filtered.filter(m => m.category === formData.machineName);
+      } else if (formData.divisionId) {
+          // If No Name selected, but Division IS selected, filter by Division (Drill-down behavior)
+          const selectedDiv = divisions.find(d => d.id === formData.divisionId);
+          const divName = selectedDiv?.name;
+          filtered = filtered.filter(m => 
+              m.divisionId === formData.divisionId || 
+              (divName && m.divisionId === divName)
+          );
       }
+
       return filtered.map(m => ({
           id: m.id,
           label: `${m.id} ${m.category ? `- ${m.category}` : ''}`, 
           subLabel: `${m.brand || ''} ${m.modelNo || ''} (Chase: ${m.chaseNo})`
       }));
-  }, [machinesInDiv, formData.machineName]);
+  }, [machinesInSec, formData.machineName, formData.divisionId, divisions]);
 
   const handleSelectAllAssets = () => {
       const allSelected = filteredMachines.length > 0 && filteredMachines.every(m => selectedAssetIds.has(m.id));
