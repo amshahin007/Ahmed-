@@ -346,7 +346,7 @@ const App: React.FC = () => {
           />
         );
       case 'history':
-        return <HistoryTable history={history} locations={locations} items={items} />;
+        return <HistoryTable history={history} locations={locations} items={items} machines={machines} />;
       case 'master-data':
         if (user.role !== 'admin') return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
         return (

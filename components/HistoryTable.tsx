@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { IssueRecord, Location, Item } from '../types';
+import { IssueRecord, Location, Item, Machine } from '../types';
 import * as XLSX from 'xlsx';
 import { uploadFileToDrive, DEFAULT_SCRIPT_URL, locateRemoteData } from '../services/googleSheetsService';
 
@@ -8,11 +8,12 @@ interface HistoryTableProps {
   history: IssueRecord[];
   locations: Location[];
   items: Item[];
+  machines: Machine[];
 }
 
 type TabType = 'stock' | 'history';
 
-const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items }) => {
+const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, machines }) => {
   const [activeTab, setActiveTab] = useState<TabType>('stock');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
@@ -91,14 +92,30 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items }
 
     // Sheet 2: Detailed History
     const histHeaders = [
-      "ID", "Date", "Location", "Site Email", "Sector", "Division", "Machine", 
-      "Maint. Plan", "Item Number", "Item Name", "Quantity", "Status", "Notes"
+      "ID", "Date", "Location ID", "Location Name", "Sector", "Division", "Local No", 
+      "Machine", "Maint. Plan", "Item Number", "Item Name", "Quantity", "Unit", "Status", "Notes"
     ];
-    const histRows = filteredHistory.map(h => [
-        h.id, h.timestamp, h.locationId, h.requesterEmail || '', h.sectorName || '', 
-        h.divisionName || '', h.machineName, h.maintenancePlan || '', h.itemId, 
-        h.itemName, h.quantity, h.status, h.notes || ''
-    ]);
+    const histRows = filteredHistory.map(h => {
+        const loc = locations.find(l => l.id === h.locationId);
+        const mac = machines.find(m => m.id === h.machineId);
+        return [
+            h.id, 
+            h.timestamp, 
+            h.locationId, 
+            loc?.name || '',
+            h.sectorName || '', 
+            h.divisionName || '', 
+            mac?.machineLocalNo || '',
+            h.machineName, 
+            h.maintenancePlan || '', 
+            h.itemId, 
+            h.itemName, 
+            h.quantity, 
+            h.unit || 'pcs',
+            h.status, 
+            h.notes || ''
+        ];
+    });
     const wsHist = XLSX.utils.aoa_to_sheet([histHeaders, ...histRows]);
     XLSX.utils.book_append_sheet(wb, wsHist, "History");
 
@@ -264,7 +281,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items }
              </div>
          )}
 
-         {/* HISTORY VIEW (Original Table) */}
+         {/* HISTORY VIEW (Detailed Table) */}
          {activeTab === 'history' && (
             <div className="overflow-auto max-h-[70vh]">
                 <table className="w-full text-left text-sm text-gray-600 border-separate border-spacing-0">
@@ -273,6 +290,9 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items }
                             <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Issue ID</th>
                             <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Date</th>
                             <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Location</th>
+                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Sector</th>
+                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Division</th>
+                            <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Local No</th>
                             <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Machine</th>
                             <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap">Item Details</th>
                             <th className="px-6 py-4 border-b border-gray-200 whitespace-nowrap text-right">Qty</th>
@@ -288,7 +308,15 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items }
                                       <div>{new Date(record.timestamp).toLocaleDateString()}</div>
                                       <div className="text-xs text-gray-400">{new Date(record.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                     </td>
-                                    <td className="px-6 py-4">{record.locationId}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="font-bold text-gray-900">{locations.find(l => l.id === record.locationId)?.name || record.locationId}</div>
+                                        <div className="text-xs text-gray-500">{record.locationId}</div>
+                                    </td>
+                                    <td className="px-6 py-4 text-gray-600">{record.sectorName || '-'}</td>
+                                    <td className="px-6 py-4 text-gray-600">{record.divisionName || '-'}</td>
+                                    <td className="px-6 py-4 font-mono text-blue-600 font-bold">
+                                        {machines.find(m => m.id === record.machineId)?.machineLocalNo || '-'}
+                                    </td>
                                     <td className="px-6 py-4">
                                         <div className="text-gray-900 font-medium">{record.machineName}</div>
                                         {record.maintenancePlan && <span className="text-[10px] bg-gray-100 px-1 rounded">{record.maintenancePlan}</span>}
@@ -309,7 +337,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items }
                                 </tr>
                             ))
                         ) : (
-                            <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No history records found.</td></tr>
+                            <tr><td colSpan={10} className="px-6 py-12 text-center text-gray-400">No history records found.</td></tr>
                         )}
                     </tbody>
                 </table>
