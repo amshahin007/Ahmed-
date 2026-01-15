@@ -1,16 +1,23 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { IssueRecord, User } from '../types';
+import { IssueRecord, User, Machine, Location } from '../types';
 import { generateDashboardInsights } from '../services/geminiService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface DashboardProps {
   history: IssueRecord[];
+  machines: Machine[];
+  locations: Location[];
   setCurrentView: (view: string) => void;
   currentUser: User;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+const STATUS_COLORS = {
+  'Working': '#10B981', // Green
+  'Not Working': '#EF4444', // Red
+  'Outside Maintenance': '#F59E0B' // Amber
+};
 
 // Navigation configuration matching Sidebar roles
 const QUICK_NAV_ITEMS = [
@@ -72,9 +79,10 @@ const QUICK_NAV_ITEMS = [
     },
 ];
 
-const Dashboard: React.FC<DashboardProps> = ({ history, setCurrentView, currentUser }) => {
+const Dashboard: React.FC<DashboardProps> = ({ history, machines, locations, setCurrentView, currentUser }) => {
   const [insights, setInsights] = useState<string>('Generating AI insights...');
   const [loadingInsights, setLoadingInsights] = useState(false);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
 
   useEffect(() => {
     // Only fetch insights if there's history and we haven't loaded yet
@@ -115,6 +123,31 @@ const Dashboard: React.FC<DashboardProps> = ({ history, setCurrentView, currentU
       machineData: sortedMachines.slice(0, 5).map(([name, val]) => ({ name, value: val }))
     };
   }, [history]);
+
+  // Machine Status Calculation
+  const machineStats = useMemo(() => {
+    // Determine which machines to include based on location filter
+    const filteredMachines = selectedLocationId 
+        ? machines.filter(m => {
+            // Check both locationId (code) and handle if locationId stores name by mistake from import
+            const locName = locations.find(l => l.id === selectedLocationId)?.name;
+            return m.locationId === selectedLocationId || m.locationId === locName;
+        })
+        : machines;
+
+    const working = filteredMachines.filter(m => m.status === 'Working').length;
+    const notWorking = filteredMachines.filter(m => m.status === 'Not Working').length;
+    const maintenance = filteredMachines.filter(m => m.status === 'Outside Maintenance').length;
+    const total = filteredMachines.length;
+
+    const chartData = [
+        { name: 'Working', value: working, color: STATUS_COLORS['Working'] },
+        { name: 'Not Working', value: notWorking, color: STATUS_COLORS['Not Working'] },
+        { name: 'Maintenance', value: maintenance, color: STATUS_COLORS['Outside Maintenance'] }
+    ].filter(d => d.value > 0);
+
+    return { total, working, notWorking, maintenance, chartData };
+  }, [machines, selectedLocationId, locations]);
 
   // Filter nav items based on user role
   const visibleNavItems = QUICK_NAV_ITEMS.filter(item => item.roles.includes(currentUser.role));
@@ -180,8 +213,85 @@ const Dashboard: React.FC<DashboardProps> = ({ history, setCurrentView, currentU
             </div>
         </div>
       </section>
+      
+      {/* 3. Machine Status Analysis Section */}
+      <section>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+               <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                   <span className="mr-2">🏗️</span> Machine Fleet Analysis
+               </h2>
+               <div className="w-full md:w-64">
+                   <select 
+                        className="w-full h-10 pl-3 pr-8 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"
+                        value={selectedLocationId}
+                        onChange={(e) => setSelectedLocationId(e.target.value)}
+                   >
+                       <option value="">All Locations</option>
+                       {locations.map(loc => (
+                           <option key={loc.id} value={loc.id}>{loc.name}</option>
+                       ))}
+                   </select>
+               </div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+               <div className="grid grid-cols-1 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-gray-100">
+                    
+                    {/* Summary Cards */}
+                    <div className="p-6 flex flex-col gap-6 justify-center">
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                            <span className="text-gray-600 font-medium text-sm">Total Assets</span>
+                            <span className="text-xl font-bold text-gray-900">{machineStats.total}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-100">
+                            <span className="text-green-800 font-medium text-sm">Working</span>
+                            <span className="text-xl font-bold text-green-700">{machineStats.working}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-100">
+                            <span className="text-red-800 font-medium text-sm">Not Working</span>
+                            <span className="text-xl font-bold text-red-700">{machineStats.notWorking}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-100">
+                            <span className="text-amber-800 font-medium text-sm">Maintenance</span>
+                            <span className="text-xl font-bold text-amber-700">{machineStats.maintenance}</span>
+                        </div>
+                    </div>
 
-      {/* 3. Charts & AI Section */}
+                    {/* Chart Area */}
+                    <div className="col-span-1 lg:col-span-3 p-6 min-h-[300px] flex flex-col">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Status Distribution</h3>
+                        {machineStats.total > 0 ? (
+                            <ResponsiveContainer width="100%" height={300}>
+                                <PieChart>
+                                    <Pie
+                                        data={machineStats.chartData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={80}
+                                        outerRadius={110}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                    >
+                                        {machineStats.chartData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'}} />
+                                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                                No machines found in this location.
+                            </div>
+                        )}
+                    </div>
+               </div>
+          </div>
+      </section>
+
+      {/* 4. Charts & AI Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Charts */}
