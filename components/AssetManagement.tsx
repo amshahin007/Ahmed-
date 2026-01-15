@@ -414,21 +414,28 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       });
   }, [machinesInLoc, formData.sectorId, divisions, sectors]);
 
-  // 4. Divisions available in Sector (via machines)
+  // 4. Divisions available in Sector
+  // UPDATED LOGIC: If a Sector is selected, show divisions defined in Master Data for this Sector
+  // This allows selection even if no machines are currently assigned to a division in the context.
   const availableDivisions = useMemo(() => {
+      if (formData.sectorId) {
+          const selectedSector = sectors.find(s => s.id === formData.sectorId);
+          return divisions.filter(d => 
+              d.sectorId === formData.sectorId || 
+              (selectedSector && d.sectorId === selectedSector.name)
+          );
+      }
+      
+      // Fallback if no sector selected (UI usually prevents this): Filter by machines
       const candidates = new Set<string>();
       machinesInSec.forEach(m => {
           if (m.divisionId) candidates.add(m.divisionId);
       });
       
       return divisions.filter(d => {
-          // Must belong to selected Sector
-          if (formData.sectorId && d.sectorId !== formData.sectorId) return false;
-          
-          // Must be present in filtered machines (ID or Name)
           return candidateContains(candidates, d.id) || candidateContains(candidates, d.name);
       });
-  }, [machinesInSec, divisions, formData.sectorId]);
+  }, [machinesInSec, divisions, formData.sectorId, sectors]);
 
   // 5. Machines in Selected Division
   const machinesInDiv = useMemo(() => {
