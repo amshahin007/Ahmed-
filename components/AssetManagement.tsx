@@ -416,6 +416,14 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   // --- OPTIONS GENERATORS ---
   const machineNameOptions = useMemo(() => Array.from(new Set(machines.map(m => m.category).filter(Boolean))).sort().map(n => ({ id: String(n), label: String(n) })), [machines]);
   
+  // Options for Models specifically for BOM creation form (dependent on selected Machine Name)
+  const bomFormModelOptions = useMemo(() => {
+      if (!formData.machineCategory) return [];
+      const relevantMachines = machines.filter(m => m.category === formData.machineCategory);
+      const models = new Set(relevantMachines.map(m => m.modelNo).filter(Boolean));
+      return Array.from(models).sort().map(m => ({ id: String(m), label: String(m) }));
+  }, [machines, formData.machineCategory]);
+
   const bomModelOptions = useMemo(() => {
       if (!bomFilterMachine) return [];
       const relevantMachines = machines.filter(m => m.category === bomFilterMachine);
@@ -636,8 +644,19 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                           </div>
                       ) : activeTab === 'bom' ? (
                           <div className="space-y-4">
-                              <div><label className="block text-sm font-medium text-gray-700 mb-1">Machine Name</label><SearchableSelect label="" options={machineNameOptions} value={formData.machineCategory || ''} onChange={v => setFormData({...formData, machineCategory: v})} required /></div>
-                              <div><label className="block text-sm font-medium text-gray-700 mb-1">Model No</label><input type="text" className="w-full border rounded p-2" value={formData.modelNo || ''} onChange={e => setFormData({...formData, modelNo: e.target.value})} required /></div>
+                              <div><label className="block text-sm font-medium text-gray-700 mb-1">Machine Name</label><SearchableSelect label="" options={machineNameOptions} value={formData.machineCategory || ''} onChange={v => setFormData({...formData, machineCategory: v, modelNo: ''})} required /></div>
+                              <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Model No</label>
+                                  <SearchableSelect 
+                                      label="" 
+                                      options={bomFormModelOptions} 
+                                      value={formData.modelNo || ''} 
+                                      onChange={v => setFormData({...formData, modelNo: v})} 
+                                      disabled={!formData.machineCategory}
+                                      placeholder={!formData.machineCategory ? 'Select Machine Name first' : 'Select Model...'}
+                                      required 
+                                  />
+                              </div>
                               <div><label className="block text-sm font-medium text-gray-700 mb-1">Item Code (Part)</label><SearchableSelect label="" options={itemOptions} value={formData.itemId || ''} onChange={v => setFormData({...formData, itemId: v})} required /></div>
                               <div><label className="block text-sm font-medium text-gray-700 mb-1">Standard Quantity</label><input type="number" className="w-full border rounded p-2" value={formData.quantity || 1} onChange={e => setFormData({...formData, quantity: e.target.value})} required /></div>
                           </div>

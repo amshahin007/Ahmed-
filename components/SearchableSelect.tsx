@@ -32,7 +32,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     if (value) {
       const selectedOption = options.find(o => o.id === value);
       if (selectedOption) {
-        setSearchTerm(selectedOption.label);
+        setSearchTerm(selectedOption.label || '');
       }
     } else {
         if (!isOpen) setSearchTerm('');
@@ -46,7 +46,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         setIsOpen(false);
         const selectedOption = options.find(o => o.id === value);
          if (selectedOption) {
-           setSearchTerm(selectedOption.label);
+           setSearchTerm(selectedOption.label || '');
          } else {
            setSearchTerm('');
          }
@@ -59,15 +59,19 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const filteredOptions = useMemo(() => {
      if (!isOpen && !searchTerm) return [];
 
-     const lowerSearch = searchTerm.toLowerCase();
+     const lowerSearch = (searchTerm || '').toLowerCase();
      let count = 0;
      const limit = 50;
      const result = [];
 
      for (const option of options) {
+         if (!option) continue;
+         const labelSafe = (option.label || '').toLowerCase();
+         const subLabelSafe = (option.subLabel || '').toLowerCase();
+
          if (
-             option.label.toLowerCase().includes(lowerSearch) || 
-             (option.subLabel && option.subLabel.toLowerCase().includes(lowerSearch))
+             labelSafe.includes(lowerSearch) || 
+             (subLabelSafe && subLabelSafe.includes(lowerSearch))
          ) {
              result.push(option);
              count++;
@@ -79,13 +83,13 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   const handleSelect = (option: Option) => {
     onChange(option.id);
-    setSearchTerm(option.label);
+    setSearchTerm(option.label || '');
     setIsOpen(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && isOpen) {
-       const exactMatch = filteredOptions.find(o => o.label.toLowerCase() === searchTerm.toLowerCase());
+       const exactMatch = filteredOptions.find(o => (o.label || '').toLowerCase() === (searchTerm || '').toLowerCase());
        if (exactMatch) {
           handleSelect(exactMatch);
        } else if (filteredOptions.length === 1) {
@@ -143,7 +147,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   onClick={() => handleSelect(option)}
                   className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-gray-700 flex flex-col border-b border-gray-50 last:border-0"
                 >
-                  <span className="font-medium">{option.label}</span>
+                  <span className="font-medium">{option.label || '-'}</span>
                   {option.subLabel && <span className="text-xs text-gray-400">{option.subLabel}</span>}
                 </li>
               ))}
