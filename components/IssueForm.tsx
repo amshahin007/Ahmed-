@@ -69,6 +69,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const itemInputRef = useRef<HTMLInputElement>(null);
   const qtyInputRef = useRef<HTMLInputElement>(null);
   const sectorInputRef = useRef<HTMLInputElement>(null); // Added Ref for Sector
+  const importFileRef = useRef<HTMLInputElement>(null); // Ref for Excel Import
   
   // Flags to ignore resetting fields when prefilling
   const ignoreNextSectorChange = useRef(false);
@@ -219,6 +220,93 @@ const IssueForm: React.FC<IssueFormProps> = ({
     const newItems = [...lineItems];
     newItems.splice(index, 1);
     setLineItems(newItems);
+  };
+
+  // --- EXCEL IMPORT HANDLERS ---
+  const handleDownloadTemplate = () => {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([["Item Code", "Quantity"], ["ITM-001", "5"], ["ITM-002", "10"]]);
+      XLSX.utils.book_append_sheet(wb, ws, "Template");
+      XLSX.writeFile(wb, "Item_Upload_Template.xlsx");
+  };
+
+  const handleImportClick = () => {
+      importFileRef.current?.click();
+  };
+
+  const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if(!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+          const bstr = evt.target?.result;
+          try {
+              const wb = XLSX.read(bstr, {type: 'binary'});
+              const wsName = wb.SheetNames[0];
+              const ws = wb.Sheets[wsName];
+              const data = XLSX.utils.sheet_to_json(ws, {header: 1}) as any[][];
+              
+              if(data.length < 2) {
+                  alert("File appears empty or missing headers.");
+                  return;
+              }
+
+              // Find header indexes
+              const headers = data[0].map(h => String(h).toLowerCase().trim());
+              const codeIdx = headers.findIndex(h => h.includes('code') || h.includes('item') || h.includes('part'));
+              const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('quantity') || h.includes('count'));
+
+              if(codeIdx === -1 || qtyIdx === -1) {
+                  alert("Could not find 'Item Code' or 'Quantity' columns in the first row.");
+                  return;
+              }
+
+              const newLines: LineItem[] = [];
+              let notFoundCount = 0;
+
+              for(let i = 1; i < data.length; i++) {
+                  const row = data[i];
+                  if(!row || row.length === 0) continue;
+
+                  const rawCode = row[codeIdx];
+                  const rawQty = row[qtyIdx];
+
+                  if(rawCode && rawQty) {
+                      const cleanCode = String(rawCode).trim();
+                      const qty = Number(rawQty);
+
+                      // Lookup Item
+                      const masterItem = items.find(it => it.id === cleanCode);
+                      if(masterItem) {
+                          newLines.push({
+                              itemId: masterItem.id,
+                              itemName: masterItem.fullName || masterItem.name,
+                              unit: masterItem.unit || 'pcs',
+                              quantity: qty
+                          });
+                      } else {
+                          notFoundCount++;
+                      }
+                  }
+              }
+
+              if(newLines.length > 0) {
+                  setLineItems(prev => [...prev, ...newLines]);
+                  let msg = `Successfully added ${newLines.length} items from Excel.`;
+                  if(notFoundCount > 0) msg += `\n\n⚠️ ${notFoundCount} items were skipped because the Item Code was not found in Master Data.`;
+                  alert(msg);
+              } else {
+                  alert("No valid items found in the file. Please check Item Codes against Master Data.");
+              }
+
+          } catch(err) {
+              console.error(err);
+              alert("Failed to parse Excel file.");
+          }
+      };
+      reader.readAsBinaryString(file);
+      e.target.value = ''; // Reset input
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -714,9 +802,30 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
           {/* Section 3: LINES */}
           <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200 shadow-sm relative">
-            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4 border-b pb-2 flex justify-between items-center">
-                <span>3. Scan / Enter Items</span>
-            </h3>
+            <div className="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center">
+                    <span>3. Scan / Enter Items</span>
+                </h3>
+                <div className="flex items-center gap-2">
+                    <button 
+                        type="button" 
+                        onClick={handleDownloadTemplate} 
+                        className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                        title="Download sample Excel file"
+                    >
+                        <span>📥</span> Template
+                    </button>
+                    <button 
+                        type="button" 
+                        onClick={handleImportClick} 
+                        className="text-xs font-bold bg-green-100 text-green-700 px-3 py-1.5 rounded hover:bg-green-200 transition flex items-center gap-1 border border-green-200"
+                    >
+                        <span>📂</span> Upload Excel
+                    </button>
+                    <input type="file" ref={importFileRef} hidden accept=".xlsx,.xls,.csv" onChange={handleImportFileChange} />
+                </div>
+            </div>
+
             <div className="flex flex-col md:flex-row gap-4 items-end mb-4">
                <div className="flex-[2] w-full">
                  <SearchableSelect label="Item Number (Scan Here)" options={itemOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Scan Item No..." inputRef={itemInputRef} onKeyDown={handleItemKeyDown}/>
