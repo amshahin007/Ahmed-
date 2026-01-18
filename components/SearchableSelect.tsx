@@ -32,7 +32,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     if (value) {
       const selectedOption = options.find(o => o.id === value);
       if (selectedOption) {
-        setSearchTerm(String(selectedOption.label));
+        setSearchTerm(selectedOption.label);
       }
     } else {
         if (!isOpen) setSearchTerm('');
@@ -46,7 +46,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         setIsOpen(false);
         const selectedOption = options.find(o => o.id === value);
          if (selectedOption) {
-           setSearchTerm(String(selectedOption.label));
+           setSearchTerm(selectedOption.label);
          } else {
            setSearchTerm('');
          }
@@ -65,10 +65,9 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
      const result = [];
 
      for (const option of options) {
-         // Safe check: cast label/subLabel to String to prevent crash if data is number
          if (
-             String(option.label).toLowerCase().includes(lowerSearch) || 
-             (option.subLabel && String(option.subLabel).toLowerCase().includes(lowerSearch))
+             option.label.toLowerCase().includes(lowerSearch) || 
+             (option.subLabel && option.subLabel.toLowerCase().includes(lowerSearch))
          ) {
              result.push(option);
              count++;
@@ -80,13 +79,13 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   const handleSelect = (option: Option) => {
     onChange(option.id);
-    setSearchTerm(String(option.label));
+    setSearchTerm(option.label);
     setIsOpen(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && isOpen) {
-       const exactMatch = filteredOptions.find(o => String(o.label).toLowerCase() === searchTerm.toLowerCase());
+       const exactMatch = filteredOptions.find(o => o.label.toLowerCase() === searchTerm.toLowerCase());
        if (exactMatch) {
           handleSelect(exactMatch);
        } else if (filteredOptions.length === 1) {

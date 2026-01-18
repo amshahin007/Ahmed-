@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
 import { fetchRawCSV, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet, DEFAULT_SCRIPT_URL, locateRemoteData, backupTabToSheet } from '../services/googleSheetsService';
@@ -100,6 +100,7 @@ const MasterData: React.FC<MasterDataProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<Exclude<TabType, 'history'>>('items');
   const [showForm, setShowForm] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({});
   
@@ -163,8 +164,22 @@ const MasterData: React.FC<MasterDataProps> = ({
     return defaults;
   });
 
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
+
+  // Determine Current Data based on Tab
+  const currentData = useMemo(() => {
+    switch (activeTab) {
+      case 'items': return items;
+      case 'locations': return locations;
+      case 'sectors': return sectors;
+      case 'divisions': return divisions;
+      case 'plans': return plans;
+      case 'users': return users;
+      default: return [];
+    }
+  }, [activeTab, items, locations, sectors, divisions, plans, users]);
 
   // Save config when changed
   useEffect(() => { 
@@ -184,25 +199,59 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   // -- Config Handlers --
   
+  const updateSyncConfig = (tabKey: string, field: 'sheetId' | 'gid', value: string) => {
+      setSyncConfig(prev => ({
+          ...prev,
+          [tabKey]: {
+              ...(prev[tabKey] || { sheetId: '', gid: '' }),
+              [field]: value
+          }
+      }));
+  };
+
   const handleSheetUrlPaste = (val: string) => {
     const extractedId = extractSheetIdFromUrl(val);
     const extractedGid = extractGidFromUrl(val);
 
     setSyncConfig(prev => {
         const currentForTab = prev[activeTab] || { sheetId: '', gid: '' };
-        // Logic to allow clearing the field: if val is empty, set to empty. Else use extracted or current.
-        const newSheetId = val === '' ? '' : (extractedId || currentForTab.sheetId);
-        
         return {
             ...prev,
             [activeTab]: {
-                sheetId: newSheetId,
+                sheetId: extractedId || currentForTab.sheetId,
                 gid: extractedGid || currentForTab.gid 
             }
         };
     });
   };
 
+  const handleResetDefaults = () => {
+    setSyncConfig(prev => ({
+        ...prev,
+        [activeTab]: { sheetId: DEFAULT_SHEET_ID, gid: activeTab === 'items' ? DEFAULT_ITEMS_GID : '0' }
+    }));
+    setSyncMsg('Defaults restored for this tab.');
+  };
+
+  const handleLocateData = async () => {
+      if (!scriptUrl) {
+          setSyncMsg('Please ensure Web App URL is set.');
+          return;
+      }
+      setSyncLoading(true);
+      setSyncMsg('Locating storage folder and database...');
+      const result = await locateRemoteData(scriptUrl);
+      setSyncLoading(false);
+      
+      if (result) {
+          setRemoteLinks(result);
+          setSyncMsg('Data located successfully! Use the links below.');
+      } else {
+          setSyncMsg('Failed to locate data. Check URL or permissions.');
+      }
+  };
+
+  // --- AUTO CONFIG FROM SHEET LOGIC ---
   const handleAutoConfigFromSheet = async () => {
       const currentId = syncConfig[activeTab]?.sheetId || '';
       if (!currentId) {
@@ -391,6 +440,12 @@ const MasterData: React.FC<MasterDataProps> = ({
       setSelectedIds(newSet);
   };
 
+  const handleSelectAllGlobal = () => {
+      const idKey = activeTab === 'users' ? 'username' : 'id';
+      const allIds = currentData.map((item: any) => String(item[idKey]));
+      setSelectedIds(new Set(allIds));
+  };
+
   // Generalized Cloud Sync (Single Tab)
   const handleSyncData = async (targetTab: string = activeTab) => {
     setSyncLoading(true);
@@ -421,6 +476,68 @@ const MasterData: React.FC<MasterDataProps> = ({
     } finally {
       if (targetTab === activeTab) setSyncLoading(false); // Only unset if single sync
     }
+  };
+
+  const handleFullSync = async () => {
+      const tabs: string[] = ['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users', 'history'];
+      setSyncLoading(true);
+      let successCount = 0;
+      let errors = [];
+
+      for (const tab of tabs) {
+          if (syncConfig[tab]?.sheetId && syncConfig[tab]?.gid) {
+              setSyncMsg(`Restoring ${tab}...`);
+              try {
+                  const cleanId = extractSheetIdFromUrl(syncConfig[tab].sheetId);
+                  const rawRows = await fetchRawCSV(cleanId, syncConfig[tab].gid);
+                  if (rawRows && rawRows.length > 1) {
+                      processImportData(rawRows, tab);
+                      successCount++;
+                  }
+              } catch (e) {
+                  errors.push(`${tab}: ${(e as Error).message}`);
+              }
+              // Small delay to prevent rate limits
+              await new Promise(r => setTimeout(r, 200));
+          }
+      }
+      
+      setSyncLoading(false);
+      if (errors.length > 0) {
+          setSyncMsg(`Restored ${successCount} tabs. Errors: ${errors.join(', ')}`);
+      } else {
+          setSyncMsg(`Full Restore Complete! ${successCount} tabs updated.`);
+      }
+  };
+
+  const handleExportHistory = async () => {
+    if (!scriptUrl) {
+      setSyncMsg("Error: Please enter and save the Web App URL first.");
+      return;
+    }
+    if (history.length === 0) {
+      setSyncMsg("No history to export.");
+      return;
+    }
+    if (!confirm(`Are you sure you want to export ${history.length} historical records to the Google Sheet?`)) return;
+
+    setSyncLoading(true);
+    setSyncMsg(`Starting export of ${history.length} records...`);
+    
+    let successCount = 0;
+    for (let i = 0; i < history.length; i++) {
+        const record = history[i];
+        setSyncMsg(`Exporting ${i + 1}/${history.length}...`);
+        try {
+            await sendIssueToSheet(scriptUrl, record);
+            successCount++;
+            await new Promise(r => setTimeout(r, 600)); 
+        } catch (e) {
+            console.error(e);
+        }
+    }
+    setSyncLoading(false);
+    setSyncMsg(`Export Complete! Sent ${successCount} records.`);
   };
 
   const handleExportDataToExcel = (onlySelected: boolean = false) => {
@@ -694,15 +811,20 @@ const MasterData: React.FC<MasterDataProps> = ({
   const handleDrop = (e: React.DragEvent<HTMLTableHeaderCellElement>) => {
     if (dragItem.current === null || dragOverItem.current === null) return;
     
+    // We are reordering the 'visibleColumns' list visually
+    // We need to apply this reordering to 'columnSettings'
     const currentColumns = [...columnSettings[activeTab]];
     const visibleCols = currentColumns.filter(c => c.visible);
     
+    // Get the item being dragged and the target item from visible list
     const itemToMove = visibleCols[dragItem.current];
     const itemTarget = visibleCols[dragOverItem.current];
     
+    // Find their actual indices in the main list
     const realFromIndex = currentColumns.findIndex(c => c.key === itemToMove.key);
     const realToIndex = currentColumns.findIndex(c => c.key === itemTarget.key);
     
+    // Perform move in main list
     currentColumns.splice(realFromIndex, 1);
     currentColumns.splice(realToIndex, 0, itemToMove);
 
@@ -822,19 +944,10 @@ const MasterData: React.FC<MasterDataProps> = ({
   };
 
   const renderTable = () => {
-    let data: any[] = [];
-    switch (activeTab) {
-      case 'items': data = items; break;
-      case 'locations': data = locations; break;
-      case 'sectors': data = sectors; break;
-      case 'divisions': data = divisions; break;
-      case 'plans': data = plans; break;
-      case 'users': data = users; break;
-    }
-
-    const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE);
+    // Data is now memoized in 'currentData' at component level
+    const totalPages = Math.ceil(currentData.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const currentItems = data.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    const currentItems = currentData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
     const visibleColumns = columnSettings[activeTab].filter(c => c.visible);
 
     return (
@@ -844,7 +957,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                     <thead className="bg-gray-50 text-gray-700 font-semibold border-b border-gray-200">
                         <tr>
                             <th className="px-4 py-3 w-10 text-center">
-                                <input type="checkbox" checked={currentItems.length > 0 && currentItems.every(i => selectedIds.has(i.id || i.username))} onChange={() => handleSelectAllPage(currentItems)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                <input type="checkbox" checked={currentItems.length > 0 && currentItems.every(i => selectedIds.has((i as any).id || (i as any).username))} onChange={() => handleSelectAllPage(currentItems)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                             </th>
                             {visibleColumns.map((col, index) => (
                                 <th key={col.key} className="px-4 py-3 cursor-move hover:bg-gray-100 select-none" draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDrop} onDragOver={(e) => e.preventDefault()}>
@@ -856,7 +969,8 @@ const MasterData: React.FC<MasterDataProps> = ({
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {currentItems.map((item, idx) => {
-                            const itemId = item.id || item.username;
+                            const anyItem = item as any;
+                            const itemId = anyItem.id || anyItem.username;
                             return (
                                 <tr key={itemId} className="hover:bg-blue-50 transition-colors">
                                     <td className="px-4 py-2 text-center">
@@ -864,7 +978,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                                     </td>
                                     {visibleColumns.map(col => (
                                         <td key={col.key} className="px-4 py-2 text-gray-600">
-                                            {Array.isArray(item[col.key]) ? item[col.key].join(', ') : (item[col.key] || '-')}
+                                            {Array.isArray(anyItem[col.key]) ? anyItem[col.key].join(', ') : (anyItem[col.key] || '-')}
                                         </td>
                                     ))}
                                     <td className="px-4 py-2 text-right sticky right-0 bg-white group-hover:bg-blue-50 border-l border-gray-100 flex items-center justify-end gap-2">
@@ -883,7 +997,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             {totalPages > 1 && (
                 <div className="p-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
                     <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 border rounded bg-white disabled:opacity-50 hover:bg-gray-100">Previous</button>
-                    <span className="text-sm text-gray-600">Page {currentPage} of {totalPages} ({data.length} items)</span>
+                    <span className="text-sm text-gray-600">Page {currentPage} of {totalPages} ({currentData.length} items)</span>
                     <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded bg-white disabled:opacity-50 hover:bg-gray-100">Next</button>
                 </div>
             )}
@@ -947,9 +1061,16 @@ const MasterData: React.FC<MasterDataProps> = ({
                      <span>+</span> Add New
                  </button>
                  {selectedIds.size > 0 && (
-                     <button onClick={handleBulkDelete} className="flex-1 md:flex-none px-4 py-2 bg-red-50 text-red-600 rounded-lg font-bold text-sm hover:bg-red-100 border border-red-100 flex items-center justify-center gap-2">
-                         <span>🗑️</span> Delete ({selectedIds.size})
-                     </button>
+                     <>
+                        <button onClick={handleBulkDelete} className="flex-1 md:flex-none px-4 py-2 bg-red-50 text-red-600 rounded-lg font-bold text-sm hover:bg-red-100 border border-red-100 flex items-center justify-center gap-2">
+                            <span>🗑️</span> Delete ({selectedIds.size})
+                        </button>
+                        {selectedIds.size < currentData.length && (
+                            <button onClick={handleSelectAllGlobal} className="flex-1 md:flex-none px-4 py-2 bg-blue-50 text-blue-600 rounded-lg font-bold text-sm hover:bg-blue-100 border border-blue-100 flex items-center justify-center gap-2">
+                                <span>☑️</span> Select All {currentData.length}
+                            </button>
+                        )}
+                     </>
                  )}
              </div>
 

@@ -402,7 +402,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const categoryOptions = useMemo(() => {
       const set = new Set<string>();
       machinesForTechnicalFilters.forEach(m => { if(m.category) set.add(m.category); });
-      return Array.from(set).sort().map(c => ({ id: String(c), label: String(c) }));
+      return Array.from(set).sort().map(c => ({ id: c, label: c }));
   }, [machinesForTechnicalFilters]);
 
   // 2. Brand Options (Filtered by Category)
@@ -413,7 +413,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const brandOptions = useMemo(() => {
       const set = new Set<string>();
       machinesInCat.forEach(m => { if(m.brand) set.add(m.brand); });
-      return Array.from(set).sort().map(b => ({ id: String(b), label: String(b) }));
+      return Array.from(set).sort().map(b => ({ id: b, label: b }));
   }, [machinesInCat]);
 
   // 3. Model Name Options (Filtered by Category + Brand)
@@ -424,7 +424,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const modelOptions = useMemo(() => {
       const set = new Set<string>();
       machinesInBrand.forEach(m => { if(m.modelNo) set.add(m.modelNo); });
-      return Array.from(set).sort().map(m => ({ id: String(m), label: String(m) }));
+      return Array.from(set).sort().map(m => ({ id: m, label: m }));
   }, [machinesInBrand]);
 
   // 4. Local Number Options (Filtered by Category + Brand + Model)
@@ -435,7 +435,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const localNoOptions = useMemo(() => {
       const set = new Set<string>();
       machinesInModel.forEach(m => { if(m.machineLocalNo) set.add(m.machineLocalNo); });
-      return Array.from(set).sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric: true})).map(l => ({ id: String(l), label: String(l) }));
+      return Array.from(set).sort((a,b) => a.localeCompare(b, undefined, {numeric: true})).map(l => ({ id: l, label: l }));
   }, [machinesInModel]);
 
   // 5. Chase No Options (Filtered by Category + Brand + Model + Local)
@@ -446,7 +446,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const chaseNoOptions = useMemo(() => {
       const set = new Set<string>();
       machinesInLocal.forEach(m => { if(m.chaseNo) set.add(m.chaseNo); });
-      return Array.from(set).sort().map(c => ({ id: String(c), label: String(c) }));
+      return Array.from(set).sort().map(c => ({ id: c, label: c }));
   }, [machinesInLocal]);
 
   // 6. Asset ID Options (Final)

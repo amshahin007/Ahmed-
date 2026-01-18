@@ -24,14 +24,13 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
   // Filter history based on search terms
   const filteredHistory = useMemo(() => {
     return history.filter(record => {
-      const term = searchTerm.toLowerCase();
       const matchesSearch = 
-        (record.itemName || '').toLowerCase().includes(term) ||
-        (record.id || '').toLowerCase().includes(term) ||
-        (record.machineName || '').toLowerCase().includes(term) ||
-        (record.maintenancePlan || '').toLowerCase().includes(term) ||
-        (record.locationId || '').toLowerCase().includes(term) ||
-        (record.itemId || '').toLowerCase().includes(term);
+        record.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.machineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (record.maintenancePlan || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.locationId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.itemId.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesLocation = selectedLocation ? record.locationId === selectedLocation : true;
 
