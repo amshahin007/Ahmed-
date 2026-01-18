@@ -29,6 +29,8 @@ interface AssetManagementProps {
   setCurrentView: (view: string) => void;
 }
 
+const ITEMS_PER_PAGE = 50;
+
 const AssetManagement: React.FC<AssetManagementProps> = ({
   machines, items, bomRecords, locations, sectors, divisions, breakdowns,
   onAddMachine, onUpdateMachine, onDeleteMachines,
@@ -39,6 +41,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   const [activeTab, setActiveTab] = useState<'assets' | 'breakdowns' | 'bom'>('assets');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
   
   // Filters
   const [filterLocationId, setFilterLocationId] = useState('');
@@ -72,6 +75,19 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       localStorage.setItem('wf_asset_sync_config', JSON.stringify(syncConfig));
       setSelectedIds(new Set());
   }, [syncConfig, activeTab]);
+
+  // Reset pagination on tab or filter change
+  useEffect(() => {
+      setCurrentPage(1);
+      setSelectedIds(new Set());
+  }, [activeTab, searchTerm, filterLocationId, filterStatus, assetFilterStatus, filterLocalNo, filterMachineName, bomFilterMachine, bomFilterModel]);
+
+  // --- OPTIMIZATION: Memoize Item Map for O(1) Lookups ---
+  const itemsMap = useMemo(() => {
+      const map = new Map<string, Item>();
+      items.forEach(i => map.set(i.id, i));
+      return map;
+  }, [items]);
 
   const handleSheetUrlPaste = (val: string) => {
       let tabKey = 'machines';
@@ -337,11 +353,11 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
     setCurrentView('issue-form');
   };
 
-  // --- FILTER HELPERS ---
-  const selectedFilterLocation = locations.find(l => l.id === filterLocationId);
+  // --- FILTER HELPERS (Memoized for Performance) ---
+  const selectedFilterLocation = useMemo(() => locations.find(l => l.id === filterLocationId), [locations, filterLocationId]);
 
   // Filter machines for ASSETS View
-  const filteredMachines = machines.filter(m => 
+  const filteredMachines = useMemo(() => machines.filter(m => 
       ((m.category || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
       (m.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (m.brand || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -350,11 +366,11 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       (assetFilterStatus === 'All' || m.status === assetFilterStatus) &&
       (!filterLocalNo || m.machineLocalNo === filterLocalNo) &&
       (!filterMachineName || m.category === filterMachineName)
-  );
+  ), [machines, searchTerm, filterLocationId, selectedFilterLocation, assetFilterStatus, filterLocalNo, filterMachineName]);
 
   // Filter BOMs
-  const filteredBOMs = bomRecords.filter(b => {
-      const item = items.find(i => i.id === b.itemId);
+  const filteredBOMs = useMemo(() => bomRecords.filter(b => {
+      const item = itemsMap.get(b.itemId); // O(1) Lookup
       const term = searchTerm.toLowerCase();
       const matchesSearch = 
         (b.machineCategory || '').toLowerCase().includes(term) ||
@@ -367,15 +383,35 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       const matchesModel = bomFilterModel ? b.modelNo === bomFilterModel : true;
 
       return matchesSearch && matchesMachine && matchesModel;
-  });
+  }), [bomRecords, itemsMap, searchTerm, bomFilterMachine, bomFilterModel]);
 
-  const filteredBreakdowns = breakdowns.filter(b => 
+  // Filter Breakdowns
+  const filteredBreakdowns = useMemo(() => breakdowns.filter(b => 
       ((b.machineName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (b.id || '').toLowerCase().includes(searchTerm.toLowerCase())) &&
       (!filterLocationId || b.locationId === filterLocationId || (selectedFilterLocation && b.locationId === selectedFilterLocation.name)) &&
       (filterStatus === 'All' || b.status === filterStatus)
-  ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  ).sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()), 
+  [breakdowns, searchTerm, filterLocationId, selectedFilterLocation, filterStatus]);
 
+
+  // --- PAGINATION HELPERS ---
+  const getPaginatedData = (data: any[]) => {
+      const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+      return data.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  };
+
+  const renderPagination = (totalItems: number) => {
+      const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+      if (totalPages <= 1) return null;
+      return (
+          <div className="flex justify-between items-center p-3 border-t bg-gray-50 text-xs">
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 border rounded bg-white disabled:opacity-50">Previous</button>
+              <span>Page {currentPage} of {totalPages} ({totalItems} records)</span>
+              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 border rounded bg-white disabled:opacity-50">Next</button>
+          </div>
+      );
+  };
 
   // --- OPTIONS GENERATORS ---
   const machineNameOptions = useMemo(() => Array.from(new Set(machines.map(m => m.category).filter(Boolean))).sort().map(n => ({ id: String(n), label: String(n) })), [machines]);
@@ -389,9 +425,18 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
 
   const itemOptions = useMemo(() => items.map(i => ({ id: i.id, label: i.id, subLabel: i.name })), [items]);
 
+  // Helper for BOM table display
+  const getItemDisplay = (itemId: string) => itemsMap.get(itemId);
 
-  // Helper to get item details for BOM table
-  const getItemDetails = (itemId: string) => items.find(i => i.id === itemId);
+  // Define Current View Data for Selection Logic
+  const currentViewData = activeTab === 'assets' ? filteredMachines : (activeTab === 'bom' ? filteredBOMs : []);
+
+  const handleSelectAllPage = (pageItems: any[]) => {
+      const allSelected = pageItems.every((i: any) => selectedIds.has(i.id));
+      const newSet = new Set(selectedIds);
+      pageItems.forEach((i: any) => allSelected ? newSet.delete(i.id) : newSet.add(i.id));
+      setSelectedIds(newSet);
+  };
 
   return (
     <div className="flex flex-col h-full space-y-4 animate-fade-in-up">
@@ -452,10 +497,15 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                 <div className="flex-1 overflow-auto">
                     <table className="w-full text-left text-xs whitespace-nowrap">
                         <thead className="bg-gray-100 text-gray-700 sticky top-0 border-b border-gray-200">
-                            <tr><th className="p-2 w-10"><input type="checkbox" checked={filteredMachines.length > 0 && filteredMachines.every(m => selectedIds.has(m.id))} onChange={() => {const all = filteredMachines.length > 0 && filteredMachines.every(m => selectedIds.has(m.id)); const newSet = new Set(selectedIds); filteredMachines.forEach(m => all ? newSet.delete(m.id) : newSet.add(m.id)); setSelectedIds(newSet);}} /></th><th className="p-2">ID</th><th className="p-2">Local No</th><th className="p-2">Machine Name</th><th className="p-2">Status</th><th className="p-2">Brand</th><th className="p-2">Model</th><th className="p-2">Loc</th><th className="p-2 text-right">Action</th></tr>
+                            <tr>
+                                <th className="p-2 w-10">
+                                    <input type="checkbox" checked={getPaginatedData(filteredMachines).length > 0 && getPaginatedData(filteredMachines).every(m => selectedIds.has(m.id))} onChange={() => handleSelectAllPage(getPaginatedData(filteredMachines))} />
+                                </th>
+                                <th className="p-2">ID</th><th className="p-2">Local No</th><th className="p-2">Machine Name</th><th className="p-2">Status</th><th className="p-2">Brand</th><th className="p-2">Model</th><th className="p-2">Loc</th><th className="p-2 text-right">Action</th>
+                            </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {filteredMachines.map(m => (
+                            {getPaginatedData(filteredMachines).map(m => (
                                 <tr key={m.id} className="hover:bg-orange-50">
                                     <td className="p-2"><input type="checkbox" checked={selectedIds.has(m.id)} onChange={() => {const newSet = new Set(selectedIds); newSet.has(m.id) ? newSet.delete(m.id) : newSet.add(m.id); setSelectedIds(newSet);}} /></td>
                                     <td className="p-2 font-mono">{m.id}</td><td className="p-2 font-mono text-blue-600">{m.machineLocalNo}</td><td className="p-2 font-bold">{m.category}</td>
@@ -467,6 +517,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                         </tbody>
                     </table>
                 </div>
+                {renderPagination(filteredMachines.length)}
               </>
           )}
 
@@ -494,7 +545,9 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                     <table className="w-full text-left text-xs whitespace-nowrap">
                         <thead className="bg-gray-100 text-gray-700 sticky top-0 border-b border-gray-200">
                             <tr>
-                                <th className="p-2 w-10"><input type="checkbox" checked={filteredBOMs.length > 0 && filteredBOMs.every(b => selectedIds.has(b.id))} onChange={() => {const all = filteredBOMs.length > 0 && filteredBOMs.every(b => selectedIds.has(b.id)); const newSet = new Set(selectedIds); filteredBOMs.forEach(b => all ? newSet.delete(b.id) : newSet.add(b.id)); setSelectedIds(newSet);}} /></th>
+                                <th className="p-2 w-10">
+                                    <input type="checkbox" checked={getPaginatedData(filteredBOMs).length > 0 && getPaginatedData(filteredBOMs).every(b => selectedIds.has(b.id))} onChange={() => handleSelectAllPage(getPaginatedData(filteredBOMs))} />
+                                </th>
                                 <th className="p-2">Machine Name</th>
                                 <th className="p-2">Model No</th>
                                 <th className="p-2">Item Code</th>
@@ -506,8 +559,8 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {filteredBOMs.map(b => {
-                                const item = getItemDetails(b.itemId);
+                            {getPaginatedData(filteredBOMs).map(b => {
+                                const item = getItemDisplay(b.itemId);
                                 return (
                                     <tr key={b.id} className="hover:bg-blue-50">
                                         <td className="p-2"><input type="checkbox" checked={selectedIds.has(b.id)} onChange={() => {const newSet = new Set(selectedIds); newSet.has(b.id) ? newSet.delete(b.id) : newSet.add(b.id); setSelectedIds(newSet);}} /></td>
@@ -526,6 +579,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                         </tbody>
                     </table>
                 </div>
+                {renderPagination(filteredBOMs.length)}
               </>
           )}
 
@@ -546,7 +600,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                            <tr><th className="p-2">ID</th><th className="p-2">Date</th><th className="p-2">Loc Name</th><th className="p-2">Machine</th><th className="p-2">Type</th><th className="p-2">Status</th><th className="p-2 text-right">Action</th></tr>
                        </thead>
                        <tbody className="divide-y divide-gray-100">
-                           {filteredBreakdowns.map(b => (
+                           {getPaginatedData(filteredBreakdowns).map(b => (
                                <tr key={b.id} className="hover:bg-red-50">
                                    <td className="p-2 font-mono text-gray-500">{b.id}</td><td className="p-2">{new Date(b.startTime).toLocaleDateString()}</td>
                                    <td className="p-2 font-bold">{locations.find(l => l.id === b.locationId)?.name || '-'}</td><td className="p-2 font-bold">{b.machineName}</td>
@@ -558,6 +612,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                        </tbody>
                    </table>
                </div>
+               {renderPagination(filteredBreakdowns.length)}
              </>
           )}
       </div>
