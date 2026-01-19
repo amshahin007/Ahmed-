@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { IssueRecord, Item, Location, Machine, Sector, Division, User, MaintenancePlan, BOMRecord } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
@@ -15,7 +14,7 @@ interface IssueFormProps {
   divisions: Division[];
   maintenancePlans: MaintenancePlan[];
   currentUser: User;
-  bomRecords?: BOMRecord[]; // Added optional prop for BOMs
+  bomRecords?: BOMRecord[]; 
 }
 
 interface LineItem {
@@ -38,11 +37,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const [selectedPlanId, setSelectedPlanId] = useState('');
 
   // --- Machine Filters (Strict Hierarchy) ---
-  const [filterCategory, setFilterCategory] = useState(''); // 1. Equipment Name
-  const [filterBrand, setFilterBrand] = useState('');       // 2. Brand
-  const [filterModelNo, setFilterModelNo] = useState('');   // 3. Model Name
-  const [filterLocalNo, setFilterLocalNo] = useState('');   // 4. Local No
-  const [filterChaseNo, setFilterChaseNo] = useState('');   // 5. Chase No
+  const [filterCategory, setFilterCategory] = useState(''); 
+  const [filterBrand, setFilterBrand] = useState('');       
+  const [filterModelNo, setFilterModelNo] = useState('');   
+  const [filterLocalNo, setFilterLocalNo] = useState('');   
+  const [filterChaseNo, setFilterChaseNo] = useState('');   
 
   // --- Email/Notification State ---
   const [warehouseEmail, setWarehouseEmail] = useState('warehouse@company.com');
@@ -68,10 +67,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
   // --- Refs for Scanner Navigation ---
   const itemInputRef = useRef<HTMLInputElement>(null);
   const qtyInputRef = useRef<HTMLInputElement>(null);
-  const sectorInputRef = useRef<HTMLInputElement>(null); // Added Ref for Sector
-  const importFileRef = useRef<HTMLInputElement>(null); // Ref for Excel Import
+  const sectorInputRef = useRef<HTMLInputElement>(null); 
+  const importFileRef = useRef<HTMLInputElement>(null); 
   
-  // Flags to ignore resetting fields when prefilling
   const ignoreNextSectorChange = useRef(false);
   const ignoreNextDivisionChange = useRef(false);
 
@@ -81,25 +79,19 @@ const IssueForm: React.FC<IssueFormProps> = ({
      if (prefillStr) {
          try {
              const data = JSON.parse(prefillStr);
-             
              let prefillSectorId = data.sectorId;
-             
-             // Infer Sector from Division if missing (common if machine doesn't have sectorId explicitly)
              if (!prefillSectorId && data.divisionId) {
                  const div = divisions.find(d => d.id === data.divisionId);
                  if (div) prefillSectorId = div.sectorId;
              }
-
              if (data.locationId) setLocationId(data.locationId);
              
-             // Set flag to prevent useEffect from clearing division immediately
              if (prefillSectorId) {
                  ignoreNextSectorChange.current = true;
                  setSectorId(prefillSectorId);
              }
              
              if (data.divisionId) {
-                 // Important: set this immediately after sector so validation logic sees it
                  ignoreNextDivisionChange.current = true;
                  setDivisionId(data.divisionId);
              }
@@ -115,39 +107,28 @@ const IssueForm: React.FC<IssueFormProps> = ({
                      setMachineId(data.machineId);
                  }
              }
-             
-             // Auto-Select Maintenance Plan if provided (e.g. Sudden Breakdown)
              if (data.maintenancePlanId) setSelectedPlanId(data.maintenancePlanId);
-             
          } catch(e) { console.error("Prefill error", e); }
-         
-         // Clear it so it doesn't persist on reload
          localStorage.removeItem('wf_issue_prefill');
      }
   }, [divisions, machines]); 
 
-  // Auto-lookup Item Name for current input (Maintains the string for Line Item creation)
   const selectedItemObj = useMemo(() => items.find(i => i.id === currentItemId), [items, currentItemId]);
   
   useEffect(() => {
     if (selectedItemObj) {
-      // Prioritize Full Name from Master Data
       setCurrentItemName(selectedItemObj.fullName || selectedItemObj.name);
     } else {
       setCurrentItemName('');
     }
   }, [currentItemId, selectedItemObj]);
 
-  // Reset downstream fields when upstream changes (Org Structure)
   useEffect(() => {
     if (ignoreNextSectorChange.current) {
         ignoreNextSectorChange.current = false;
         return;
     }
     setDivisionId('');
-    // NOTE: We do NOT reset Technical Filters here anymore to allow disconnection if desired, 
-    // BUT typically if Sector changes, machines change. 
-    // Given the request "disconnect division from equipment name", Sector is still a parent.
     resetTechnicalFilters(); 
   }, [sectorId]);
 
@@ -156,9 +137,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
         ignoreNextDivisionChange.current = false;
         return;
     }
-    // REQUEST: "disconnect division from equipment name"
-    // So we do NOT reset Technical Filters when Division changes.
-    // resetTechnicalFilters(); 
   }, [divisionId]);
 
   const resetTechnicalFilters = () => {
@@ -170,7 +148,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
       setMachineId('');
   };
 
-  // Auto-fill Requester (Site) Email based on Location
   useEffect(() => {
     const location = locations.find(l => l.id === locationId);
     if (location && location.email) {
@@ -178,12 +155,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
     } else {
       setRequesterEmail('');
     }
-    // When location changes, focus Sector input to guide user flow
     if (locationId) {
         setTimeout(() => sectorInputRef.current?.focus(), 100);
     }
   }, [locationId, locations]);
-
 
   const handleAddLineItem = () => {
     if (!currentItemId || !currentQuantity || Number(currentQuantity) <= 0) return;
@@ -212,7 +187,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const handleUseSuggestedPart = (bom: BOMRecord) => {
       setCurrentItemId(bom.itemId);
       setCurrentQuantity(bom.quantity);
-      // Item name will auto-populate via useEffect, then user just clicks Add or adjusts Qty
       setTimeout(() => qtyInputRef.current?.focus(), 100);
   };
 
@@ -252,7 +226,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
                   return;
               }
 
-              // Find header indexes
               const headers = data[0].map(h => String(h).toLowerCase().trim());
               const codeIdx = headers.findIndex(h => h.includes('code') || h.includes('item') || h.includes('part'));
               const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('quantity') || h.includes('count'));
@@ -276,7 +249,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
                       const cleanCode = String(rawCode).trim();
                       const qty = Number(rawQty);
 
-                      // Lookup Item
                       const masterItem = items.find(it => it.id === cleanCode);
                       if(masterItem) {
                           newLines.push({
@@ -306,7 +278,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
           }
       };
       reader.readAsBinaryString(file);
-      e.target.value = ''; // Reset input
+      e.target.value = ''; 
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -345,7 +317,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 itemId: line.itemId,
                 itemName: line.itemName,
                 quantity: line.quantity,
-                unit: line.unit, // Pass unit to Record
+                unit: line.unit, 
                 machineId,
                 machineName: machineDisplayName,
                 sectorName: sector ? sector.name : '',
@@ -370,7 +342,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
         setLastSubmittedBatch(newRecords);
         setEmailStatus(`Sent to: ${warehouseEmail}`);
         
-        // Reset Logic
         resetTechnicalFilters();
         setLineItems([]);
         setSelectedPlanId('');
@@ -419,21 +390,17 @@ const IssueForm: React.FC<IssueFormProps> = ({
   };
 
   // --- HIERARCHY LOGIC & OPTIONS ---
-
-  // 1. FILTER SECTORS BY LOCATION (New Request)
   const availableSectors = useMemo(() => {
       if (!locationId) return sectors; 
       const loc = locations.find(l => l.id === locationId);
       const locName = loc?.name;
 
-      // Find all machines in this location
       const machinesInLoc = machines.filter(m => {
           const mLoc = String(m.locationId || '');
           const formLoc = String(locationId);
           return mLoc === formLoc || mLoc === locName;
       });
 
-      // Collect Sector IDs from these machines
       const allowedSectorIds = new Set<string>();
       machinesInLoc.forEach(m => {
           if (m.sectorId) allowedSectorIds.add(m.sectorId);
@@ -442,32 +409,20 @@ const IssueForm: React.FC<IssueFormProps> = ({
               if (div) allowedSectorIds.add(div.sectorId);
           }
       });
-
-      // Filter Sector List
       return sectors.filter(s => allowedSectorIds.has(s.id) || allowedSectorIds.has(s.name));
   }, [locationId, machines, sectors, divisions, locations]);
 
-  // 2. MACHINES SCOPE FOR TECHNICAL FILTERS (Decoupled from Division)
-  // This list is used to populate Equipment Name, Brand, etc.
-  // It ONLY looks at Location and Sector, IGNORING Division.
   const machinesForTechnicalFilters = useMemo(() => {
       return machines.filter(m => {
-          // 1. Location Check
           if (locationId) {
               const loc = locations.find(l => l.id === locationId);
               const mLoc = String(m.locationId || '');
               if (mLoc !== locationId && mLoc !== loc?.name) return false;
           }
-
-          // 2. Sector Check
           if (sectorId) {
               const sec = sectors.find(s => s.id === sectorId);
               const secName = sec?.name;
-              
-              // Direct Match
               const directMatch = m.sectorId === sectorId || (secName && m.sectorId === secName);
-              
-              // Match via Division (if direct doesn't match)
               let divisionMatch = false;
               if (m.divisionId) {
                   const div = divisions.find(d => d.id === m.divisionId || d.name === m.divisionId);
@@ -475,25 +430,18 @@ const IssueForm: React.FC<IssueFormProps> = ({
                       divisionMatch = div.sectorId === sectorId || (secName && div.sectorId === secName);
                   }
               }
-
               if (!directMatch && !divisionMatch) return false;
           }
-
-          // 3. Division Check - SKIPPED deliberately to decouple Equipment Name from Division
           return true;
       });
   }, [machines, locationId, sectorId, locations, sectors, divisions]);
 
-  // --- CASCADING TECHNICAL OPTIONS (Based on machinesForTechnicalFilters) ---
-
-  // 1. Equipment Name (Category) Options
   const categoryOptions = useMemo(() => {
       const set = new Set<string>();
       machinesForTechnicalFilters.forEach(m => { if(m.category) set.add(m.category); });
       return Array.from(set).sort().map(c => ({ id: c, label: c }));
   }, [machinesForTechnicalFilters]);
 
-  // 2. Brand Options (Filtered by Category)
   const machinesInCat = useMemo(() => {
       return filterCategory ? machinesForTechnicalFilters.filter(m => m.category === filterCategory) : machinesForTechnicalFilters;
   }, [machinesForTechnicalFilters, filterCategory]);
@@ -504,7 +452,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
       return Array.from(set).sort().map(b => ({ id: b, label: b }));
   }, [machinesInCat]);
 
-  // 3. Model Name Options (Filtered by Category + Brand)
   const machinesInBrand = useMemo(() => {
       return filterBrand ? machinesInCat.filter(m => m.brand === filterBrand) : machinesInCat;
   }, [machinesInCat, filterBrand]);
@@ -515,7 +462,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
       return Array.from(set).sort().map(m => ({ id: m, label: m }));
   }, [machinesInBrand]);
 
-  // 4. Local Number Options (Filtered by Category + Brand + Model)
   const machinesInModel = useMemo(() => {
       return filterModelNo ? machinesInBrand.filter(m => m.modelNo === filterModelNo) : machinesInBrand;
   }, [machinesInBrand, filterModelNo]);
@@ -526,7 +472,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
       return Array.from(set).sort((a,b) => a.localeCompare(b, undefined, {numeric: true})).map(l => ({ id: l, label: l }));
   }, [machinesInModel]);
 
-  // 5. Chase No Options (Filtered by Category + Brand + Model + Local)
   const machinesInLocal = useMemo(() => {
       return filterLocalNo ? machinesInModel.filter(m => m.machineLocalNo === filterLocalNo) : machinesInModel;
   }, [machinesInModel, filterLocalNo]);
@@ -537,7 +482,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
       return Array.from(set).sort().map(c => ({ id: c, label: c }));
   }, [machinesInLocal]);
 
-  // 6. Asset ID Options (Final)
   const machinesFinal = useMemo(() => {
       return filterChaseNo ? machinesInLocal.filter(m => m.chaseNo === filterChaseNo) : machinesInLocal;
   }, [machinesInLocal, filterChaseNo]);
@@ -550,51 +494,29 @@ const IssueForm: React.FC<IssueFormProps> = ({
       }));
   }, [machinesFinal]);
 
-  // --- SUGGESTED PARTS (BOM) ---
   const suggestedParts = useMemo(() => {
       if (!filterCategory || !filterModelNo) return [];
-      
-      // Filter BOM records matching Category and Model
-      return bomRecords.filter(b => 
-          b.machineCategory === filterCategory && b.modelNo === filterModelNo
-      );
+      return bomRecords.filter(b => b.machineCategory === filterCategory && b.modelNo === filterModelNo);
   }, [bomRecords, filterCategory, filterModelNo]);
 
-
-  // --- Handlers for Hierarchy ---
   const handleCategoryChange = (val: string) => {
-      setFilterCategory(val);
-      setFilterBrand(''); setFilterModelNo(''); setFilterLocalNo(''); setFilterChaseNo(''); setMachineId('');
+      setFilterCategory(val); setFilterBrand(''); setFilterModelNo(''); setFilterLocalNo(''); setFilterChaseNo(''); setMachineId('');
   };
   const handleBrandChange = (val: string) => {
-      setFilterBrand(val);
-      setFilterModelNo(''); setFilterLocalNo(''); setFilterChaseNo(''); setMachineId('');
+      setFilterBrand(val); setFilterModelNo(''); setFilterLocalNo(''); setFilterChaseNo(''); setMachineId('');
   };
   const handleModelChange = (val: string) => {
-      setFilterModelNo(val);
-      setFilterLocalNo(''); setFilterChaseNo(''); setMachineId('');
+      setFilterModelNo(val); setFilterLocalNo(''); setFilterChaseNo(''); setMachineId('');
   };
   
-  // NEW: Flexible Handler for Local No
   const handleLocalNoChange = (val: string) => {
-      setFilterLocalNo(val);
-      setFilterChaseNo(''); 
-      setMachineId(''); // Reset specific ID until resolved
-
+      setFilterLocalNo(val); setFilterChaseNo(''); setMachineId(''); 
       if (!val) return;
-
-      // Use machinesInCat to ensure we only look within the selected Equipment Name
-      // This respects the user's wish to not change Category when selecting Local No
       const matches = machinesInCat.filter(m => m.machineLocalNo === val);
-      
       if (matches.length > 0) {
           const first = matches[0];
-          
-          // Auto-fill other fields ONLY (Brand, Model), DO NOT update Category
           setFilterBrand(first.brand || '');
           setFilterModelNo(first.modelNo || '');
-          
-          // If unique, we can also identify the Chase No and Asset ID
           if (matches.length === 1) {
               setMachineId(first.id);
               setFilterChaseNo(first.chaseNo);
@@ -602,18 +524,12 @@ const IssueForm: React.FC<IssueFormProps> = ({
       }
   };
 
-  // NEW: Flexible Handler for Chase No
   const handleChaseChange = (val: string) => {
-      setFilterChaseNo(val);
-      setMachineId('');
-      
+      setFilterChaseNo(val); setMachineId('');
       if (!val) return;
-
-      // Scoped to Category for consistency
       const matches = machinesInCat.filter(m => m.chaseNo === val);
       if (matches.length > 0) {
           const first = matches[0];
-          // Do not update category
           setFilterBrand(first.brand || '');
           setFilterModelNo(first.modelNo || '');
           setFilterLocalNo(first.machineLocalNo || '');
@@ -621,23 +537,15 @@ const IssueForm: React.FC<IssueFormProps> = ({
       }
   };
 
-  // NEW: Flexible Handler for Asset ID (Global override still allowed)
   const handleMachineIdChange = (val: string) => {
       setMachineId(val);
-      // Always back-fill everything from the specific Asset ID
       const m = machines.find(mac => mac.id === val);
       if (m) {
-          setFilterCategory(m.category || '');
-          setFilterBrand(m.brand || '');
-          setFilterModelNo(m.modelNo || '');
-          setFilterLocalNo(m.machineLocalNo || '');
-          setFilterChaseNo(m.chaseNo || '');
+          setFilterCategory(m.category || ''); setFilterBrand(m.brand || ''); setFilterModelNo(m.modelNo || ''); setFilterLocalNo(m.machineLocalNo || ''); setFilterChaseNo(m.chaseNo || '');
       }
   };
 
-  // Standard Options
   const locationOptions = useMemo(() => locations.map(l => ({ id: l.id, label: l.name })), [locations]);
-  // Use Available Sectors (Filtered by Location)
   const sectorOptions = useMemo(() => availableSectors.map(s => ({ id: s.id, label: s.name })), [availableSectors]);
   const divisionOptions = useMemo(() => divisions.filter(d => !sectorId || d.sectorId === sectorId).map(d => ({ id: d.id, label: d.name })), [divisions, sectorId]);
   
@@ -647,7 +555,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
   }), [items]);
   const itemNameOptions = useMemo(() => items.map(i => ({ id: i.id, label: i.fullName || i.name, subLabel: i.id })), [items]);
 
-  // Scanner Handlers
   const handleItemKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') { e.preventDefault(); setTimeout(() => { if (currentItemId) qtyInputRef.current?.focus(); }, 100); }
   };
@@ -655,7 +562,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
     if (e.key === 'Enter') { e.preventDefault(); handleAddLineItem(); }
   };
 
-  // Render Helpers
   const allowedLocations = currentUser.role === 'admin' ? locations : locations.filter(l => currentUser.allowedLocationIds?.includes(l.id));
 
   return (
@@ -716,224 +622,163 @@ const IssueForm: React.FC<IssueFormProps> = ({
           {/* Section 1: HEADER */}
           <div className="bg-blue-50 p-4 md:p-5 rounded-lg border border-blue-100">
              <div className="mb-2">
-                 <SearchableSelect label="1. Select Warehouse Location" required options={locationOptions} value={locationId} onChange={setLocationId} placeholder="Start typing to search zone..." disabled={allowedLocations.length === 0}/>
+                 <SearchableSelect label="1. Select Warehouse Location (First Step)" required options={locationOptions} value={locationId} onChange={setLocationId} placeholder="Start typing to search zone..." disabled={allowedLocations.length === 0}/>
              </div>
              {allowedLocations.length === 0 && <p className="text-xs text-red-500">Permission denied.</p>}
           </div>
 
-          {/* Section 2: Machine Allocation (NEW STRUCTURE) */}
-          <div className="bg-white p-4 md:p-5 rounded-lg border border-gray-200">
-             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">2. Allocation Details (Machine)</h3>
+          {locationId && (
+            <>
+                {/* Section 2: Machine Allocation */}
+                <div className="bg-white p-4 md:p-5 rounded-lg border border-gray-200 animate-fade-in-up">
+                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">2. Allocation Details (Machine)</h3>
 
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Org Filters */}
-                <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder={!locationId ? "Select Location First" : "Select Sector..."} disabled={!locationId} inputRef={sectorInputRef} />
-                <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
-             </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." inputRef={sectorInputRef} />
+                        <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
+                    </div>
 
-             <div className="mt-4 p-3 bg-gray-50 rounded border border-gray-100">
-                 <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Technical Filter (Hierarchy)</h4>
-                 
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                     {/* 1. Equip Name */}
-                     <SearchableSelect 
-                        label="Equipment Name (Category)" 
-                        options={categoryOptions} 
-                        value={filterCategory} 
-                        onChange={handleCategoryChange} 
-                        placeholder="e.g. Tractor, Conveyor..." 
-                        disabled={false}
-                     />
-                     {/* 2. Brand */}
-                     <SearchableSelect 
-                        label="Brand Name" 
-                        options={brandOptions} 
-                        value={filterBrand} 
-                        onChange={handleBrandChange} 
-                        placeholder="Select Brand..." 
-                        disabled={!filterCategory}
-                     />
-                 </div>
-
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                     {/* 3. Model */}
-                     <SearchableSelect 
-                        label="Model Name" 
-                        options={modelOptions} 
-                        value={filterModelNo} 
-                        onChange={handleModelChange} 
-                        placeholder="Select Model..." 
-                        disabled={!filterCategory}
-                     />
-                     {/* 4. Local No */}
-                     <SearchableSelect 
-                        label="Local Number" 
-                        options={localNoOptions} 
-                        value={filterLocalNo} 
-                        onChange={handleLocalNoChange} 
-                        placeholder="Select Local No..." 
-                        disabled={!filterCategory}
-                     />
-                 </div>
-
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     {/* 5. Chase No */}
-                     <SearchableSelect 
-                        label="Chase No" 
-                        options={chaseNoOptions} 
-                        value={filterChaseNo} 
-                        onChange={handleChaseChange} 
-                        placeholder="Select Chase..." 
-                        disabled={!filterCategory}
-                     />
-                     {/* 6. Asset ID */}
-                     <SearchableSelect 
-                        label="Asset ID / Code (Final)" 
-                        required
-                        options={machineOptions} 
-                        value={machineId} 
-                        onChange={handleMachineIdChange} 
-                        placeholder={machineOptions.length === 0 ? "..." : "Select Asset ID"} 
-                        disabled={false}
-                     />
-                 </div>
-             </div>
-          </div>
-
-          {/* Section 3: LINES */}
-          <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200 shadow-sm relative">
-            <div className="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center">
-                    <span>3. Scan / Enter Items</span>
-                </h3>
-                <div className="flex items-center gap-2">
-                    <button 
-                        type="button" 
-                        onClick={handleDownloadTemplate} 
-                        className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                        title="Download sample Excel file"
-                    >
-                        <span>📥</span> Template
-                    </button>
-                    <button 
-                        type="button" 
-                        onClick={handleImportClick} 
-                        className="text-xs font-bold bg-green-100 text-green-700 px-3 py-1.5 rounded hover:bg-green-200 transition flex items-center gap-1 border border-green-200"
-                    >
-                        <span>📂</span> Upload Excel
-                    </button>
-                    <input type="file" ref={importFileRef} hidden accept=".xlsx,.xls,.csv" onChange={handleImportFileChange} />
-                </div>
-            </div>
-
-            <div className="flex flex-col md:flex-row gap-4 items-end mb-4">
-               <div className="flex-[2] w-full">
-                 <SearchableSelect label="Item Number (Scan Here)" options={itemOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Scan Item No..." inputRef={itemInputRef} onKeyDown={handleItemKeyDown}/>
-               </div>
-               <div className="flex-[2] w-full">
-                 <SearchableSelect label="Item Name" options={itemNameOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Search by name..." />
-               </div>
-               {/* Unit Display Field - New */}
-               <div className="w-full md:w-20">
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                 <input type="text" disabled value={selectedItemObj?.unit || ''} className="w-full px-3 py-2 border border-gray-200 bg-gray-100 rounded-lg text-center text-gray-500 font-bold" />
-               </div>
-               <div className="w-full md:w-24">
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Qty</label>
-                 <input ref={qtyInputRef} type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(Number(e.target.value))} onKeyDown={handleQtyKeyDown} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold text-center" />
-               </div>
-               <button type="button" onClick={handleAddLineItem} disabled={!currentItemId || !currentQuantity} className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 transition shadow-sm h-[42px]">+ Add</button>
-               {selectedItemObj && (
-                  <div className="w-full md:w-auto bg-white px-3 py-2 rounded-lg border border-blue-200 shadow-sm whitespace-nowrap h-[42px] flex items-center justify-center">
-                      <span className="text-gray-500 font-medium text-xs uppercase mr-2">Stock:</span>
-                      <span className={`font-bold text-lg ${(selectedItemObj.stockQuantity || 0) <= 0 ? 'text-red-600' : 'text-green-600'}`}>{selectedItemObj.stockQuantity || 0}</span>
-                      <span className="text-xs text-gray-400 ml-1">{selectedItemObj.unit}</span>
-                  </div>
-               )}
-            </div>
-            {lineItems.length > 0 ? (
-                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                    <table className="w-full text-sm text-left min-w-[500px]">
-                        <thead className="bg-gray-100 text-gray-700 font-semibold"><tr><th className="px-4 py-2">Item Number</th><th className="px-4 py-2">Item Name</th><th className="px-4 py-2">Unit</th><th className="px-4 py-2 text-center">Qty</th><th className="px-4 py-2 text-center">Action</th></tr></thead>
-                        <tbody className="divide-y divide-gray-100">{lineItems.map((line, idx) => (<tr key={idx} className="hover:bg-gray-50"><td className="px-4 py-2 font-mono text-gray-600 font-bold">{line.itemId}</td><td className="px-4 py-2">{line.itemName}</td><td className="px-4 py-2 text-sm text-gray-500">{line.unit}</td><td className="px-4 py-2 text-center font-bold text-lg">{line.quantity}</td><td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveLineItem(idx)} className="text-red-500 hover:text-red-700 font-medium">Remove</button></td></tr>))}</tbody>
-                    </table>
-                </div>
-            ) : <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">List is empty.</div>}
-
-            {/* SUGGESTED PARTS (BOM) */}
-            {suggestedParts.length > 0 && (
-                <div className="mt-6 border-t pt-4">
-                    <h4 className="text-sm font-bold text-blue-700 mb-2 flex items-center">
-                        <span className="mr-1">💡</span> Recommended Spare Parts (BOM) for {filterModelNo}
-                    </h4>
-                    <div className="overflow-x-auto rounded-lg border border-blue-100 bg-blue-50/50">
-                        <table className="w-full text-xs text-left">
-                            <thead className="bg-blue-100 text-blue-800">
-                                <tr>
-                                    <th className="px-3 py-2">Part No</th>
-                                    <th className="px-3 py-2">Item Code</th>
-                                    <th className="px-3 py-2">Full Name</th>
-                                    <th className="px-3 py-2">Std Qty</th>
-                                    <th className="px-3 py-2">Stock</th>
-                                    <th className="px-3 py-2 w-20">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-blue-100">
-                                {suggestedParts.map(bom => {
-                                    const item = items.find(i => i.id === bom.itemId);
-                                    if (!item) return null;
-                                    return (
-                                        <tr key={bom.id} className="hover:bg-blue-100/50">
-                                            <td className="px-3 py-2">{item.partNumber || '-'}</td>
-                                            <td className="px-3 py-2 font-mono font-semibold">{bom.itemId}</td>
-                                            <td className="px-3 py-2">{item.fullName || item.name}</td>
-                                            <td className="px-3 py-2 font-bold">{bom.quantity} {item.unit}</td>
-                                            <td className={`px-3 py-2 font-bold ${(item.stockQuantity || 0) > 0 ? 'text-green-600' : 'text-red-500'}`}>{item.stockQuantity || 0}</td>
-                                            <td className="px-3 py-2">
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => handleUseSuggestedPart(bom)}
-                                                    className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-[10px] font-bold shadow-sm"
-                                                >
-                                                    + Use
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                    <div className="mt-4 p-3 bg-gray-50 rounded border border-gray-100">
+                        <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Technical Filter (Hierarchy)</h4>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                            <SearchableSelect label="Equipment Name (Category)" options={categoryOptions} value={filterCategory} onChange={handleCategoryChange} placeholder="e.g. Tractor, Conveyor..." />
+                            <SearchableSelect label="Brand Name" options={brandOptions} value={filterBrand} onChange={handleBrandChange} placeholder="Select Brand..." disabled={!filterCategory} />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                            <SearchableSelect label="Model Name" options={modelOptions} value={filterModelNo} onChange={handleModelChange} placeholder="Select Model..." disabled={!filterCategory} />
+                            <SearchableSelect label="Local Number" options={localNoOptions} value={filterLocalNo} onChange={handleLocalNoChange} placeholder="Select Local No..." disabled={!filterCategory} />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <SearchableSelect label="Chase No" options={chaseNoOptions} value={filterChaseNo} onChange={handleChaseChange} placeholder="Select Chase..." disabled={!filterCategory} />
+                            <SearchableSelect label="Asset ID / Code (Final)" required options={machineOptions} value={machineId} onChange={handleMachineIdChange} placeholder={machineOptions.length === 0 ? "..." : "Select Asset ID"} />
+                        </div>
                     </div>
                 </div>
-            )}
-          </div>
-          
-          {/* Section 4: Maintenance Plan */}
-          <div className="bg-orange-50 p-4 md:p-5 rounded-lg border border-orange-200">
-             <h3 className="text-sm font-bold text-orange-800 uppercase tracking-wider mb-4 border-b border-orange-200 pb-2">4. Maintenance Plan (Mandatory)</h3>
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {maintenancePlans && maintenancePlans.map((plan) => (
-                    <label key={plan.id} className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedPlanId === plan.id ? 'bg-orange-100 border-orange-500 ring-1 ring-orange-500' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                        <input type="radio" name="maintenance_plan" value={plan.id} checked={selectedPlanId === plan.id} onChange={(e) => setSelectedPlanId(e.target.value)} className="form-radio h-5 w-5 text-orange-600 focus:ring-orange-500" />
-                        <span className={`text-sm font-medium ${selectedPlanId === plan.id ? 'text-orange-900' : 'text-gray-700'}`}>{plan.name}</span>
-                    </label>
-                ))}
-             </div>
-          </div>
 
-          {/* Section 5: Notification */}
-          <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Warehouse Email (To)</label><input type="email" required value={warehouseEmail} onChange={(e) => setWarehouseEmail(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div>
-                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Site Email (CC)</label><div className="flex items-center px-4 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 overflow-hidden text-ellipsis">{requesterEmail || "Select Location first"}</div></div>
-             </div>
-          </div>
+                {/* Section 3: LINES - SPLIT VIEW */}
+                <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200 shadow-sm relative animate-fade-in-up">
+                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4 border-b pb-2">3. Scan / Enter Items</h3>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Option A: Manual Entry */}
+                        <div className="space-y-4">
+                            <h4 className="text-xs font-bold text-blue-600 uppercase bg-blue-50 inline-block px-2 py-1 rounded">Option A: Manual / Scanner</h4>
+                            <div className="space-y-3">
+                                <SearchableSelect label="Item Number (Scan Here)" options={itemOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Scan Item No..." inputRef={itemInputRef} onKeyDown={handleItemKeyDown}/>
+                                <SearchableSelect label="Item Name" options={itemNameOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Search by name..." />
+                                
+                                <div className="flex gap-3 items-end">
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Qty</label>
+                                        <input ref={qtyInputRef} type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(Number(e.target.value))} onKeyDown={handleQtyKeyDown} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none font-bold text-center h-[42px]" />
+                                    </div>
+                                    <div className="w-24">
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Unit</label>
+                                        <input type="text" disabled value={selectedItemObj?.unit || ''} className="w-full px-2 py-2 border border-gray-200 bg-gray-100 rounded-lg text-center text-gray-500 text-sm h-[42px]" />
+                                    </div>
+                                    <button type="button" onClick={handleAddLineItem} disabled={!currentItemId || !currentQuantity} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 transition shadow-sm h-[42px] font-bold">Add</button>
+                                </div>
+                                {selectedItemObj && (
+                                    <div className="text-xs flex items-center gap-1 bg-white border px-2 py-1 rounded w-fit">
+                                        <span className="text-gray-500 font-bold">STOCK:</span>
+                                        <span className={(selectedItemObj.stockQuantity || 0) <= 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}>{selectedItemObj.stockQuantity || 0}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
-          <div className="pt-2 flex justify-end">
-            <button type="submit" disabled={isSubmitting || allowedLocations.length === 0} className={`w-full md:w-auto px-8 py-4 rounded-xl text-white font-bold text-lg shadow-md transition-all flex items-center justify-center gap-2 ${isSubmitting || allowedLocations.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 hover:shadow-lg transform hover:-translate-y-1'}`}>
-              {isSubmitting ? 'Sending...' : <><span>🚀</span> Submit Request</>}
-            </button>
-          </div>
+                        {/* Option B: Bulk Upload */}
+                        <div className="space-y-4 border-l lg:pl-8 border-gray-200">
+                             <h4 className="text-xs font-bold text-green-600 uppercase bg-green-50 inline-block px-2 py-1 rounded">Option B: Bulk Upload (Excel)</h4>
+                             <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg bg-white text-center hover:bg-gray-50 transition-colors">
+                                 <p className="text-sm text-gray-600 mb-3">Upload a list of items</p>
+                                 <div className="flex flex-col gap-3">
+                                     <button type="button" onClick={handleDownloadTemplate} className="text-xs text-blue-600 hover:underline">Download Template</button>
+                                     <button type="button" onClick={handleImportClick} className="px-4 py-2 bg-green-100 text-green-700 font-bold rounded hover:bg-green-200 border border-green-200 flex items-center justify-center gap-2">
+                                         <span>📂</span> Select File
+                                     </button>
+                                     <input type="file" ref={importFileRef} hidden accept=".xlsx,.xls,.csv" onChange={handleImportFileChange} />
+                                 </div>
+                                 <p className="text-[10px] text-gray-400 mt-2">Columns: Item Code, Quantity</p>
+                             </div>
+                        </div>
+                    </div>
+
+                    {/* ITEM LIST TABLE */}
+                    <div className="mt-6 border-t pt-4">
+                        <h4 className="text-sm font-bold text-gray-700 mb-2">Request Items List ({lineItems.length})</h4>
+                        {lineItems.length > 0 ? (
+                            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-100 text-gray-700 font-semibold"><tr><th className="px-4 py-2">Item Number</th><th className="px-4 py-2">Item Name</th><th className="px-4 py-2">Unit</th><th className="px-4 py-2 text-center">Qty</th><th className="px-4 py-2 text-center">Action</th></tr></thead>
+                                    <tbody className="divide-y divide-gray-100">{lineItems.map((line, idx) => (<tr key={idx} className="hover:bg-gray-50"><td className="px-4 py-2 font-mono text-gray-600 font-bold">{line.itemId}</td><td className="px-4 py-2">{line.itemName}</td><td className="px-4 py-2 text-sm text-gray-500">{line.unit}</td><td className="px-4 py-2 text-center font-bold text-lg">{line.quantity}</td><td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveLineItem(idx)} className="text-red-500 hover:text-red-700 font-medium">Remove</button></td></tr>))}</tbody>
+                                </table>
+                            </div>
+                        ) : <div className="text-center py-4 text-gray-400 bg-gray-50 rounded border border-dashed text-xs">No items added yet.</div>}
+                    </div>
+
+                    {/* SUGGESTED PARTS (BOM) */}
+                    {suggestedParts.length > 0 && (
+                        <div className="mt-6 border-t pt-4">
+                            <h4 className="text-sm font-bold text-blue-700 mb-2 flex items-center">
+                                <span className="mr-1">💡</span> Recommended Spare Parts (BOM) for {filterModelNo}
+                            </h4>
+                            <div className="overflow-x-auto rounded-lg border border-blue-100 bg-blue-50/50">
+                                <table className="w-full text-xs text-left">
+                                    <thead className="bg-blue-100 text-blue-800">
+                                        <tr><th className="px-3 py-2">Part No</th><th className="px-3 py-2">Item Code</th><th className="px-3 py-2">Full Name</th><th className="px-3 py-2">Std Qty</th><th className="px-3 py-2">Stock</th><th className="px-3 py-2 w-20">Action</th></tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-blue-100">
+                                        {suggestedParts.map(bom => {
+                                            const item = items.find(i => i.id === bom.itemId);
+                                            if (!item) return null;
+                                            return (
+                                                <tr key={bom.id} className="hover:bg-blue-100/50">
+                                                    <td className="px-3 py-2">{item.partNumber || '-'}</td>
+                                                    <td className="px-3 py-2 font-mono font-semibold">{bom.itemId}</td>
+                                                    <td className="px-3 py-2">{item.fullName || item.name}</td>
+                                                    <td className="px-3 py-2 font-bold">{bom.quantity} {item.unit}</td>
+                                                    <td className={`px-3 py-2 font-bold ${(item.stockQuantity || 0) > 0 ? 'text-green-600' : 'text-red-500'}`}>{item.stockQuantity || 0}</td>
+                                                    <td className="px-3 py-2"><button type="button" onClick={() => handleUseSuggestedPart(bom)} className="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-[10px] font-bold shadow-sm">+ Use</button></td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                
+                {/* Section 4: Maintenance Plan */}
+                <div className="bg-orange-50 p-4 md:p-5 rounded-lg border border-orange-200 animate-fade-in-up">
+                    <h3 className="text-sm font-bold text-orange-800 uppercase tracking-wider mb-4 border-b border-orange-200 pb-2">4. Maintenance Plan (Mandatory)</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {maintenancePlans && maintenancePlans.map((plan) => (
+                            <label key={plan.id} className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedPlanId === plan.id ? 'bg-orange-100 border-orange-500 ring-1 ring-orange-500' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                                <input type="radio" name="maintenance_plan" value={plan.id} checked={selectedPlanId === plan.id} onChange={(e) => setSelectedPlanId(e.target.value)} className="form-radio h-5 w-5 text-orange-600 focus:ring-orange-500" />
+                                <span className={`text-sm font-medium ${selectedPlanId === plan.id ? 'text-orange-900' : 'text-gray-700'}`}>{plan.name}</span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Section 5: Notification */}
+                <div className="bg-gray-50 p-4 md:p-5 rounded-lg border border-gray-200 animate-fade-in-up">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Warehouse Email (To)</label><input type="email" required value={warehouseEmail} onChange={(e) => setWarehouseEmail(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Site Email (CC)</label><div className="flex items-center px-4 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 overflow-hidden text-ellipsis">{requesterEmail || "Select Location first"}</div></div>
+                    </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                    <button type="submit" disabled={isSubmitting || allowedLocations.length === 0} className={`w-full md:w-auto px-8 py-4 rounded-xl text-white font-bold text-lg shadow-md transition-all flex items-center justify-center gap-2 ${isSubmitting || allowedLocations.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 hover:shadow-lg transform hover:-translate-y-1'}`}>
+                        {isSubmitting ? 'Sending...' : <><span>🚀</span> Submit Request</>}
+                    </button>
+                </div>
+            </>
+          )}
         </form>
       </div>
     </div>
