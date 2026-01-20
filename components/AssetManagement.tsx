@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Machine, Location, Sector, Division, BreakdownRecord, Item, BOMRecord } from '../types';
 import * as XLSX from 'xlsx';
-import { fetchRawCSV, extractSheetIdFromUrl, DEFAULT_SHEET_ID } from '../services/googleSheetsService';
+import { fetchRawCSV, extractSheetIdFromUrl, DEFAULT_SHEET_ID, DEFAULT_SCRIPT_URL, backupTabToSheet } from '../services/googleSheetsService';
 import SearchableSelect, { Option } from './SearchableSelect';
 
 interface AssetManagementProps {
@@ -60,6 +60,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
          return saved ? JSON.parse(saved) : { machines: { sheetId: DEFAULT_SHEET_ID }, breakdowns: { sheetId: DEFAULT_SHEET_ID }, bom: { sheetId: DEFAULT_SHEET_ID } };
      } catch { return { machines: { sheetId: DEFAULT_SHEET_ID }, breakdowns: { sheetId: DEFAULT_SHEET_ID }, bom: { sheetId: DEFAULT_SHEET_ID } }; }
   });
+  const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   
@@ -74,6 +75,10 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       localStorage.setItem('wf_asset_sync_config', JSON.stringify(syncConfig));
       setSelectedIds(new Set());
   }, [syncConfig, activeTab]);
+
+  useEffect(() => {
+      setScriptUrl(localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL);
+  }, []);
 
   // Reset pagination on tab or filter change
   useEffect(() => {
@@ -192,8 +197,80 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       onBulkImport(tab, toAdd, toUpdate);
   };
   
+  const prepareTabForBackup = (tabName: string): any[][] => {
+      let data: any[] = [];
+      let headers: string[] = [];
+      let keys: string[] = [];
+
+      switch(tabName) {
+          case 'machines': 
+              data = machines; 
+              headers = ['ID', 'Machine Name', 'Local No', 'Status', 'Brand', 'Model No', 'Chase No', 'Location', 'Sector', 'Division', 'Main Group', 'Sub Group'];
+              keys = ['id', 'category', 'machineLocalNo', 'status', 'brand', 'modelNo', 'chaseNo', 'locationId', 'sectorId', 'divisionId', 'mainGroup', 'subGroup'];
+              break;
+          case 'breakdowns': 
+              data = breakdowns; 
+              headers = ['ID', 'Machine Name', 'Location', 'Start Time', 'End Time', 'Status', 'Failure Type', 'Operator', 'Root Cause', 'Action Taken'];
+              keys = ['id', 'machineName', 'locationId', 'startTime', 'endTime', 'status', 'failureType', 'operatorName', 'rootCause', 'actionTaken'];
+              break;
+          case 'bom': 
+              data = bomRecords; 
+              headers = ['ID', 'Machine Name', 'Model No', 'Item ID', 'Quantity'];
+              keys = ['id', 'machineCategory', 'modelNo', 'itemId', 'quantity'];
+              break;
+      }
+      
+      if (data.length === 0) return [];
+
+      const rows = data.map((item: any) => keys.map(k => {
+          const val = item[k];
+          return (val === undefined || val === null) ? "" : String(val);
+      }));
+
+      return [headers, ...rows];
+  };
+
   const handleBackup = async () => {
-      alert("Backup feature requires configuring specific script endpoint for this module.");
+    if (!scriptUrl) {
+      setSyncMsg("Error: Configure Web App URL in Settings first.");
+      return;
+    }
+    
+    if(!confirm("⚠️ Backup Assets to Cloud?\n\nThis will overwrite the 'machines', 'breakdowns', and 'bom' tabs in your Google Sheet with the data currently in this app.")) {
+        return;
+    }
+
+    setSyncLoading(true);
+    setSyncMsg("Starting Asset Backup...");
+    
+    const tabsToBackup = ['machines', 'breakdowns', 'bom'];
+    let successCount = 0;
+    let errors: string[] = [];
+
+    for (const tab of tabsToBackup) {
+        try {
+            setSyncMsg(`Backing up ${tab}...`);
+            const rows = prepareTabForBackup(tab);
+            
+            if (rows.length > 0) {
+                await backupTabToSheet(scriptUrl, tab, rows);
+                successCount++;
+            } else {
+                console.warn(`Skipping empty tab: ${tab}`);
+            }
+            await new Promise(r => setTimeout(r, 500));
+        } catch (e: any) {
+            console.error(`Backup failed for ${tab}`, e);
+            errors.push(`${tab}: ${e.message}`);
+        }
+    }
+
+    setSyncLoading(false);
+    if (errors.length > 0) {
+        setSyncMsg(`Backup Finished with errors: ${errors.join(', ')}`);
+    } else {
+        setSyncMsg(`✅ Asset Backup Complete! ${successCount} tabs updated.`);
+    }
   };
 
   const handleExport = () => {
@@ -476,6 +553,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                        {syncLoading ? <span className="animate-spin">↻</span> : <span>⬇️</span>}
                     </button>
                 </div>
+                <button onClick={handleBackup} disabled={syncLoading} className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 border border-indigo-200 flex items-center gap-1 whitespace-nowrap"><span>☁️</span> Backup All</button>
                 <button onClick={handleExport} className="px-3 py-2 bg-green-50 text-green-700 rounded-lg text-xs font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1 whitespace-nowrap"><span>📊</span> Export</button>
                 <button onClick={handleImportClick} className="px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 border border-orange-200 flex items-center justify-center gap-1 whitespace-nowrap"><span>📂</span> Import</button>
                 <div className="relative flex-1 xl:w-48 min-w-[150px]">
