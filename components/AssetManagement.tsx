@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Machine, Location, Sector, Division, BreakdownRecord, Item, BOMRecord } from '../types';
 import * as XLSX from 'xlsx';
@@ -247,7 +246,9 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
   };
 
   const openAssetForm = (asset?: Machine) => {
-      setFormData(asset || {});
+      // Auto-generate ID if new. Using a simple timestamp suffix.
+      const generatedId = asset?.id || `M-${Date.now().toString().slice(-6)}`;
+      setFormData(asset || { id: generatedId, status: 'Working' });
       setIsEditing(!!asset);
       setShowForm(true);
   };
@@ -636,11 +637,70 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                   <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto bg-gray-50/30 p-4">
                       {activeTab === 'assets' ? (
                           <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Asset ID</label><input type="text" className="w-full border rounded p-2" value={formData.id || ''} onChange={e => setFormData({...formData, id: e.target.value})} disabled={isEditing} required /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Local No</label><input type="text" className="w-full border rounded p-2" value={formData.machineLocalNo || ''} onChange={e => setFormData({...formData, machineLocalNo: e.target.value})} /></div></div>
-                            <div><label className="block text-sm font-medium text-gray-700 mb-1">Machine Name (Category)</label><input type="text" className="w-full border rounded p-2" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} required /></div>
-                            <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Main Group</label><input type="text" className="w-full border rounded p-2" value={formData.mainGroup || ''} onChange={e => setFormData({...formData, mainGroup: e.target.value})} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Sub Group</label><input type="text" className="w-full border rounded p-2" value={formData.subGroup || ''} onChange={e => setFormData({...formData, subGroup: e.target.value})} /></div></div>
-                            <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Brand</label><input type="text" className="w-full border rounded p-2" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Model No</label><input type="text" className="w-full border rounded p-2" value={formData.modelNo || ''} onChange={e => setFormData({...formData, modelNo: e.target.value})} /></div></div>
-                            <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Location</label><select className="w-full border rounded p-2" value={formData.locationId || ''} onChange={e => setFormData({...formData, locationId: e.target.value})}><option value="">Select Location...</option>{locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Status</label><select className="w-full border rounded p-2" value={formData.status || 'Working'} onChange={e => setFormData({...formData, status: e.target.value})}><option value="Working">Working</option><option value="Not Working">Not Working</option><option value="Outside Maintenance">Outside Maintenance</option></select></div></div>
+                            {/* Updated Layout per user request: Name & Local No first, ID last */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Machine Name (Category)</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} required placeholder="e.g. Forklift, Generator..." />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Local No</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.machineLocalNo || ''} onChange={e => setFormData({...formData, machineLocalNo: e.target.value})} placeholder="e.g. L-101" />
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Main Group</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.mainGroup || ''} onChange={e => setFormData({...formData, mainGroup: e.target.value})} placeholder="e.g. Heavy Machinery" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Sub Group</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.subGroup || ''} onChange={e => setFormData({...formData, subGroup: e.target.value})} placeholder="e.g. Diesel Engines" />
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.brand || ''} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="e.g. CAT, Toyota" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Model No</label>
+                                    <input type="text" className="w-full border rounded p-2" value={formData.modelNo || ''} onChange={e => setFormData({...formData, modelNo: e.target.value})} placeholder="e.g. X500-Pro" />
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                                    <select className="w-full border rounded p-2" value={formData.locationId || ''} onChange={e => setFormData({...formData, locationId: e.target.value})}>
+                                        <option value="">Select Location...</option>
+                                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                    <select className="w-full border rounded p-2" value={formData.status || 'Working'} onChange={e => setFormData({...formData, status: e.target.value})}>
+                                        <option value="Working">Working</option>
+                                        <option value="Not Working">Not Working</option>
+                                        <option value="Outside Maintenance">Outside Maintenance</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Asset ID moved to bottom and made readonly */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Asset ID (Auto-Generated)</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full border border-gray-200 bg-gray-100 rounded p-2 text-gray-500 font-mono" 
+                                    value={formData.id || ''} 
+                                    readOnly 
+                                    disabled
+                                    title="System generated ID"
+                                />
+                            </div>
                           </div>
                       ) : activeTab === 'bom' ? (
                           <div className="space-y-4">
