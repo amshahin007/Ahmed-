@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -14,7 +15,7 @@ import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import * as storageService from './services/storageService';
 import * as phpService from './services/phpApiService'; // Import PHP Service
-import { backupTabToSheet, DEFAULT_SCRIPT_URL } from './services/googleSheetsService';
+import { backupTabToSheet, DEFAULT_SCRIPT_URL, fetchAllDataFromCloud } from './services/googleSheetsService';
 import { 
   INITIAL_HISTORY, 
   ITEMS as INIT_ITEMS, 
@@ -155,13 +156,21 @@ const App: React.FC = () => {
   // --- Persistence Effects (Only if using Local Source or Specific Tables) ---
   useEffect(() => { 
       // Always save to local DB as backup/cache
-      if (isDataLoaded) storageService.setItem('wf_history', history); 
-  }, [history, isDataLoaded]);
-
-  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_items', items); }, [items, isDataLoaded]);
-  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_machines', machines); }, [machines, isDataLoaded]);
-  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_agri_orders', agriOrders); }, [agriOrders, isDataLoaded]);
-  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_irrigation_logs', irrigationLogs); }, [irrigationLogs, isDataLoaded]);
+      if (isDataLoaded) {
+          storageService.setItem('wf_history', history);
+          storageService.setItem('wf_items', items);
+          storageService.setItem('wf_machines', machines);
+          storageService.setItem('wf_locations', locations);
+          storageService.setItem('wf_sectors', sectors);
+          storageService.setItem('wf_divisions', divisions);
+          storageService.setItem('wf_plans', plans);
+          storageService.setItem('wf_users', usersList);
+          storageService.setItem('wf_agri_orders', agriOrders);
+          storageService.setItem('wf_breakdowns', breakdowns);
+          storageService.setItem('wf_irrigation_logs', irrigationLogs);
+          storageService.setItem('wf_boms', bomRecords);
+      }
+  }, [history, items, machines, locations, sectors, divisions, plans, usersList, agriOrders, breakdowns, irrigationLogs, bomRecords, isDataLoaded]);
 
   // Update Refs for Auto Backup whenever data changes
   useEffect(() => {
@@ -172,7 +181,140 @@ const App: React.FC = () => {
     };
   }, [items, machines, locations, sectors, divisions, plans, usersList, breakdowns, bomRecords, history, agriOrders, irrigationLogs]);
 
-  // --- AUTOMATIC BACKUP LOGIC ---
+  // --- REUSABLE BACKUP FUNCTION ---
+  const performBackup = async () => {
+        const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
+        if (!scriptUrl) throw new Error("No Script URL configured");
+
+        const s = stateRef.current;
+        const prepareData = (key: string) => {
+            let data: any[] = [];
+            let headers: string[] = [];
+            let keys: string[] = [];
+
+            if (key === 'items') {
+                data = s.items; 
+                headers = ['Item Number', 'Stock Qty', 'Description', 'Category', 'Unit', 'Brand', 'Model No', 'Part No'];
+                keys = ['id', 'stockQuantity', 'name', 'category', 'unit', 'brand', 'modelNo', 'partNumber'];
+            } else if (key === 'machines') {
+                data = s.machines;
+                headers = ['ID', 'Machine Name', 'Local No', 'Status', 'Brand', 'Model No', 'Location'];
+                keys = ['id', 'category', 'machineLocalNo', 'status', 'brand', 'modelNo', 'locationId'];
+            } else if (key === 'breakdowns') {
+                data = s.breakdowns;
+                headers = ['ID', 'Machine', 'Location', 'Start Time', 'Status', 'Failure Type'];
+                keys = ['id', 'machineName', 'locationId', 'startTime', 'status', 'failureType'];
+            } else if (key === 'bom') {
+                data = s.boms;
+                headers = ['ID', 'Machine', 'Model No', 'Item ID', 'Qty'];
+                keys = ['id', 'machineCategory', 'modelNo', 'itemId', 'quantity'];
+            } else if (key === 'history') {
+                data = s.history;
+                headers = ["ID", "Date", "Location ID", "Location Name", "Sector", "Division", "Machine", "Maint. Plan", "Item Number", "Item Name", "Quantity", "Status", "Notes"];
+                keys = ["id", "timestamp", "locationId", "sectorName", "divisionName", "machineName", "maintenancePlan", "itemId", "itemName", "quantity", "status", "notes"];
+            } else if (key === 'agri_orders') {
+                data = s.agriOrders;
+                headers = ["ID", "Date", "Branch", "Tractor", "Local No", "Attached", "Attached Local", "Pivot", "Driver", "Start", "End", "Row", "Unit", "Achievement", "Actual/Return", "Calculated", "Time", "Notes"];
+                keys = ["id", "date", "branch", "tractor", "machineLocalNo", "attached", "attachedLocalNo", "pivot", "driver", "startCounter", "endCounter", "rowNumber", "unitType", "achievement", "actualOrReturn", "calculated", "timeSpent", "notes"];
+            } else if (key === 'irrigation_logs') {
+                data = s.irrigationLogs;
+                headers = ["ID", "Date", "Location", "Generator", "Start", "End", "Total Hours", "Notes"];
+                keys = ["id", "date", "locationName", "generatorModel", "engineStart", "engineEnd", "totalHours", "notes"];
+            } else if (key === 'locations') {
+                data = s.locations;
+                headers = ['ID', 'Name', 'Email'];
+                keys = ['id', 'name', 'email'];
+            } else if (key === 'sectors') {
+                data = s.sectors;
+                headers = ['ID', 'Name'];
+                keys = ['id', 'name'];
+            } else if (key === 'divisions') {
+                data = s.divisions;
+                headers = ['ID', 'Name', 'Sector ID'];
+                keys = ['id', 'name', 'sectorId'];
+            } else if (key === 'plans') {
+                data = s.plans;
+                headers = ['ID', 'Name'];
+                keys = ['id', 'name'];
+            } else if (key === 'users') {
+                data = s.users;
+                headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations', 'Allowed Sectors', 'Allowed Divisions'];
+                keys = ['username', 'name', 'role', 'email', 'allowedLocationIds', 'allowedSectorIds', 'allowedDivisionIds'];
+            }
+            
+            if (data.length === 0) return null;
+            const rows = data.map(item => keys.map(k => {
+                const val = (item as any)[k];
+                if (Array.isArray(val)) return val.join(';');
+                return (val === undefined || val === null) ? "" : String(val);
+            }));
+            return [headers, ...rows];
+        };
+
+        const tabsToSync = ['items', 'machines', 'breakdowns', 'bom', 'history', 'locations', 'sectors', 'divisions', 'plans', 'users', 'agri_orders', 'irrigation_logs'];
+        
+        for (const tab of tabsToSync) {
+            const rows = prepareData(tab);
+            if (rows) {
+                await backupTabToSheet(scriptUrl, tab, rows);
+                console.log(`[Backup] ${tab} synced.`);
+                await new Promise(r => setTimeout(r, 600)); // Rate limit buffer
+            }
+        }
+  };
+
+  const handleManualBackup = async () => {
+      await performBackup();
+  };
+
+  const handleManualRestore = async () => {
+      const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
+      if (!scriptUrl) throw new Error("No Script URL configured");
+
+      const rawData = await fetchAllDataFromCloud(scriptUrl);
+      
+      // Mapping Helper: Maps header names (from Sheet) to keys (Application State)
+      const mapData = (rows: any[], map: Record<string, string>): any[] => {
+          if (!rows || rows.length === 0) return [];
+          return rows.map(row => {
+              const newObj: any = {};
+              Object.keys(row).forEach(header => {
+                  const key = map[header] || header; // Use mapped key or fallback to header name
+                  // Basic Type Coercion
+                  let val = row[header];
+                  if (key === 'quantity' || key === 'stockQuantity' || key === 'startCounter' || key === 'endCounter') val = Number(val) || 0;
+                  newObj[key] = val;
+              });
+              return newObj;
+          });
+      };
+
+      // Define mappings for critical fields
+      // Format: { 'Header Name In Sheet': 'stateKey' }
+      const itemMap = { 'Item Number': 'id', 'Stock Qty': 'stockQuantity', 'Description': 'name', 'Category': 'category', 'Unit': 'unit' };
+      const machineMap = { 'ID': 'id', 'Machine Name': 'category', 'Local No': 'machineLocalNo', 'Status': 'status', 'Location': 'locationId' };
+      const breakdownMap = { 'ID': 'id', 'Machine': 'machineName', 'Location': 'locationId', 'Start Time': 'startTime' };
+      const bomMap = { 'ID': 'id', 'Machine': 'machineCategory', 'Item ID': 'itemId', 'Qty': 'quantity' };
+      const historyMap = { 'ID': 'id', 'Date': 'timestamp', 'Location ID': 'locationId', 'Item Number': 'itemId', 'Item Name': 'itemName' };
+      const userMap = { 'Username': 'username', 'Name': 'name', 'Role': 'role' };
+      
+      if (rawData['items']) setItems(mapData(rawData['items'], itemMap));
+      if (rawData['machines']) setMachines(mapData(rawData['machines'], machineMap));
+      if (rawData['breakdowns']) setBreakdowns(mapData(rawData['breakdowns'], breakdownMap));
+      if (rawData['bom']) setBomRecords(mapData(rawData['bom'], bomMap));
+      if (rawData['history']) setHistory(mapData(rawData['history'], historyMap));
+      if (rawData['locations']) setLocations(mapData(rawData['locations'], { 'ID': 'id', 'Name': 'name' }));
+      if (rawData['sectors']) setSectors(mapData(rawData['sectors'], { 'ID': 'id', 'Name': 'name' }));
+      if (rawData['divisions']) setDivisions(mapData(rawData['divisions'], { 'ID': 'id', 'Name': 'name' }));
+      if (rawData['plans']) setPlans(mapData(rawData['plans'], { 'ID': 'id', 'Name': 'name' }));
+      if (rawData['users']) setUsersList(mapData(rawData['users'], userMap));
+      
+      // Agri & Irrigation map almost 1:1 based on backup logic, but lets ensure ID/Date
+      if (rawData['agri_orders']) setAgriOrders(mapData(rawData['agri_orders'], { 'ID': 'id', 'Date': 'date' }));
+      if (rawData['irrigation_logs']) setIrrigationLogs(mapData(rawData['irrigation_logs'], { 'ID': 'id', 'Date': 'date' }));
+  };
+
+  // --- AUTOMATIC BACKUP INTERVAL ---
   useEffect(() => {
     const backupInterval = setInterval(async () => {
         const freq = localStorage.getItem('wf_backup_frequency') || 'hourly';
@@ -190,97 +332,13 @@ const App: React.FC = () => {
 
         if (now - lastRun > intervalMs) {
             console.log(`[AutoBackup] Triggering ${freq} backup...`);
-            const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
-            
-            if (!scriptUrl) {
-                console.warn("[AutoBackup] Skipped: No Script URL configured.");
-                return;
+            try {
+                await performBackup();
+                localStorage.setItem('wf_last_backup_timestamp', now.toString());
+                console.log("[AutoBackup] Complete.");
+            } catch (e) {
+                console.error("[AutoBackup] Failed", e);
             }
-
-            // Simple data preparation helper to avoid code duplication from MasterData/AssetManagement
-            const prepareData = (key: string) => {
-                const s = stateRef.current;
-                let data: any[] = [];
-                let headers: string[] = [];
-                let keys: string[] = [];
-
-                if (key === 'items') {
-                    data = s.items; 
-                    headers = ['Item Number', 'Stock Qty', 'Description', 'Category', 'Unit', 'Brand', 'Model No', 'Part No'];
-                    keys = ['id', 'stockQuantity', 'name', 'category', 'unit', 'brand', 'modelNo', 'partNumber'];
-                } else if (key === 'machines') {
-                    data = s.machines;
-                    headers = ['ID', 'Machine Name', 'Local No', 'Status', 'Brand', 'Model No', 'Location'];
-                    keys = ['id', 'category', 'machineLocalNo', 'status', 'brand', 'modelNo', 'locationId'];
-                } else if (key === 'breakdowns') {
-                    data = s.breakdowns;
-                    headers = ['ID', 'Machine', 'Location', 'Start Time', 'Status', 'Failure Type'];
-                    keys = ['id', 'machineName', 'locationId', 'startTime', 'status', 'failureType'];
-                } else if (key === 'bom') {
-                    data = s.boms;
-                    headers = ['ID', 'Machine', 'Model No', 'Item ID', 'Qty'];
-                    keys = ['id', 'machineCategory', 'modelNo', 'itemId', 'quantity'];
-                } else if (key === 'history') {
-                    data = s.history;
-                    headers = ["ID", "Date", "Location ID", "Location Name", "Sector", "Division", "Machine", "Maint. Plan", "Item Number", "Item Name", "Quantity", "Status", "Notes"];
-                    keys = ["id", "timestamp", "locationId", "sectorName", "divisionName", "machineName", "maintenancePlan", "itemId", "itemName", "quantity", "status", "notes"];
-                } else if (key === 'agri_orders') {
-                    data = s.agriOrders;
-                    headers = ["ID", "Date", "Branch", "Tractor", "Local No", "Attached", "Attached Local", "Pivot", "Driver", "Start", "End", "Row", "Unit", "Achievement", "Actual/Return", "Calculated", "Time", "Notes"];
-                    keys = ["id", "date", "branch", "tractor", "machineLocalNo", "attached", "attachedLocalNo", "pivot", "driver", "startCounter", "endCounter", "rowNumber", "unitType", "achievement", "actualOrReturn", "calculated", "timeSpent", "notes"];
-                } else if (key === 'irrigation_logs') {
-                    data = s.irrigationLogs;
-                    headers = ["ID", "Date", "Location", "Generator", "Start", "End", "Total Hours", "Notes"];
-                    keys = ["id", "date", "locationName", "generatorModel", "engineStart", "engineEnd", "totalHours", "notes"];
-                } else if (key === 'locations') {
-                    data = s.locations;
-                    headers = ['ID', 'Name', 'Email'];
-                    keys = ['id', 'name', 'email'];
-                } else if (key === 'sectors') {
-                    data = s.sectors;
-                    headers = ['ID', 'Name'];
-                    keys = ['id', 'name'];
-                } else if (key === 'divisions') {
-                    data = s.divisions;
-                    headers = ['ID', 'Name', 'Sector ID'];
-                    keys = ['id', 'name', 'sectorId'];
-                } else if (key === 'plans') {
-                    data = s.plans;
-                    headers = ['ID', 'Name'];
-                    keys = ['id', 'name'];
-                } else if (key === 'users') {
-                    data = s.users;
-                    headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations', 'Allowed Sectors', 'Allowed Divisions'];
-                    keys = ['username', 'name', 'role', 'email', 'allowedLocationIds', 'allowedSectorIds', 'allowedDivisionIds'];
-                }
-                
-                if (data.length === 0) return null;
-                const rows = data.map(item => keys.map(k => {
-                    const val = (item as any)[k];
-                    if (Array.isArray(val)) return val.join(';');
-                    return (val === undefined || val === null) ? "" : String(val);
-                }));
-                return [headers, ...rows];
-            };
-
-            const tabsToSync = ['items', 'machines', 'breakdowns', 'bom', 'history', 'locations', 'sectors', 'divisions', 'plans', 'users', 'agri_orders', 'irrigation_logs'];
-            
-            for (const tab of tabsToSync) {
-                try {
-                    const rows = prepareData(tab);
-                    if (rows) {
-                        await backupTabToSheet(scriptUrl, tab, rows);
-                        console.log(`[AutoBackup] ${tab} synced.`);
-                    }
-                    // Slight delay to prevent rate limits
-                    await new Promise(r => setTimeout(r, 600));
-                } catch (e) {
-                    console.error(`[AutoBackup] Failed for ${tab}`, e);
-                }
-            }
-            
-            localStorage.setItem('wf_last_backup_timestamp', now.toString());
-            console.log("[AutoBackup] Complete.");
         }
     }, 60 * 1000); // Check every minute
 
@@ -437,7 +495,7 @@ const App: React.FC = () => {
       case 'ai-assistant':
         return <AiAssistant />;
       case 'settings':
-        return <Settings />;
+        return <Settings onBackup={handleManualBackup} onRestore={handleManualRestore} />;
       default:
         return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
     }

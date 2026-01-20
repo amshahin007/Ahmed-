@@ -1,11 +1,19 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { DEFAULT_SCRIPT_URL, locateRemoteData, APP_SCRIPT_TEMPLATE } from '../services/googleSheetsService';
 
-const Settings: React.FC = () => {
+interface SettingsProps {
+    onBackup?: () => Promise<void>;
+    onRestore?: () => Promise<void>;
+}
+
+const Settings: React.FC<SettingsProps> = ({ onBackup, onRestore }) => {
   const [scriptUrl, setScriptUrl] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [backupFreq, setBackupFreq] = useState('hourly');
   const [loading, setLoading] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [statusType, setStatusType] = useState<'neutral' | 'success' | 'error'>('neutral');
   const [copyFeedback, setCopyFeedback] = useState('');
@@ -122,6 +130,35 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleManualBackup = async () => {
+      if (!onBackup) return;
+      if (!confirm("Are you sure you want to overwrite the cloud backup with the current system data?")) return;
+      setBackupLoading(true);
+      try {
+          await onBackup();
+          alert("Backup Complete!");
+      } catch (e) {
+          alert("Backup Failed. See console.");
+      } finally {
+          setBackupLoading(false);
+      }
+  };
+
+  const handleManualRestore = async () => {
+      if (!onRestore) return;
+      if (!confirm("⚠️ DANGER: This will OVERWRITE all local data (Items, History, Machines, etc.) with data from the cloud.\n\nAre you sure?")) return;
+      setRestoreLoading(true);
+      try {
+          await onRestore();
+          alert("Restore Complete! Page will reload.");
+          window.location.reload();
+      } catch (e) {
+          alert("Restore Failed. Ensure script is updated. See console.");
+      } finally {
+          setRestoreLoading(false);
+      }
+  };
+
   const copyScriptCode = () => {
     navigator.clipboard.writeText(APP_SCRIPT_TEMPLATE);
     setCopyFeedback('Code copied to clipboard!');
@@ -211,25 +248,55 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Automatic Backup Settings */}
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">
-                        Automatic Backup Frequency
-                    </label>
-                    <select
-                        value={backupFreq}
-                        onChange={(e) => setBackupFreq(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm"
-                    >
-                        <option value="disabled">Disabled</option>
-                        <option value="30min">Every 30 Minutes</option>
-                        <option value="hourly">Hourly (Default)</option>
-                        <option value="daily">Daily (Every 24 Hours)</option>
-                        <option value="weekly">Weekly (Every 7 Days)</option>
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                        Backups occur only while the application is open. Data is saved to the configured Google Sheet.
-                    </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Automatic Backup Settings */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">
+                            Automatic Backup Frequency
+                        </label>
+                        <select
+                            value={backupFreq}
+                            onChange={(e) => setBackupFreq(e.target.value)}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm"
+                        >
+                            <option value="disabled">Disabled</option>
+                            <option value="30min">Every 30 Minutes</option>
+                            <option value="hourly">Hourly (Default)</option>
+                            <option value="daily">Daily (Every 24 Hours)</option>
+                            <option value="weekly">Weekly (Every 7 Days)</option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">
+                            Data is saved to the configured Google Sheet.
+                        </p>
+                    </div>
+
+                    {/* Manual Actions */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">
+                            Manual Actions
+                        </label>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={handleManualBackup}
+                                disabled={backupLoading}
+                                className="flex-1 py-3 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 font-bold text-sm flex items-center justify-center gap-2"
+                            >
+                                {backupLoading ? <span className="animate-spin">↻</span> : <span>☁️</span>}
+                                Backup All
+                            </button>
+                            <button 
+                                onClick={handleManualRestore}
+                                disabled={restoreLoading}
+                                className="flex-1 py-3 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 font-bold text-sm flex items-center justify-center gap-2"
+                            >
+                                {restoreLoading ? <span className="animate-spin">↻</span> : <span>📥</span>}
+                                Restore All
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                            Manual Backup overwrites cloud. Restore overwrites local.
+                        </p>
+                    </div>
                 </div>
 
                 <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">
@@ -271,7 +338,7 @@ const Settings: React.FC = () => {
             <div className="pt-6 border-t border-gray-100">
                 <h3 className="text-lg font-bold text-gray-800 mb-2">Backend Script Code</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                    If you are seeing "Script is outdated" or "Connection Blocked", update your script below.
+                    If you are seeing "Script is outdated" or "Restore Failed", you must update your script below.
                 </p>
 
                 <div className="relative">

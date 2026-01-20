@@ -1,4 +1,3 @@
-
 import { Item, IssueRecord } from '../types';
 
 // Updated Default ID and GID based on user request
@@ -175,13 +174,32 @@ export const backupTabToSheet = async (scriptUrl: string, tabName: string, rows:
             method: 'POST',
             body: JSON.stringify({ 
                 action: 'backup_tab', 
-                tabName: tabName,
+                tabName: tabName, 
                 rows: rows 
             })
         });
         return await response.json();
     } catch (error) {
         console.error("Backup Error:", error);
+        throw error;
+    }
+};
+
+export const fetchAllDataFromCloud = async (scriptUrl: string): Promise<Record<string, any[]>> => {
+    try {
+        const response = await fetch(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'read_full_db' })
+        });
+        
+        const result = await response.json();
+        if (result.status === 'success') {
+            return result.data;
+        } else {
+            throw new Error(result.message || "Unknown error fetching data");
+        }
+    } catch (error) {
+        console.error("Fetch Data Error:", error);
         throw error;
     }
 };
@@ -291,6 +309,39 @@ function doPost(e) {
             .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // --- ACTION: READ FULL DB (Restores all data) ---
+    if (data.action === "read_full_db") {
+        var ss = getOrCreateSpreadsheet();
+        var result = {};
+        // List of tabs to attempt to read
+        var tabs = ['items', 'machines', 'breakdowns', 'bom', 'history', 'locations', 'sectors', 'divisions', 'plans', 'users', 'agri_orders', 'irrigation_logs'];
+        
+        tabs.forEach(function(tabName) {
+            var sheet = ss.getSheetByName(tabName);
+            if (sheet) {
+                var values = sheet.getDataRange().getValues();
+                if (values.length > 1) {
+                    var headers = values[0];
+                    var sheetData = values.slice(1).map(function(row) {
+                        var obj = {};
+                        headers.forEach(function(h, i) {
+                            obj[h] = row[i];
+                        });
+                        return obj;
+                    });
+                    result[tabName] = sheetData;
+                } else {
+                    result[tabName] = [];
+                }
+            } else {
+                result[tabName] = [];
+            }
+        });
+        
+        return ContentService.createTextOutput(JSON.stringify({status: "success", data: result}))
+            .setMimeType(ContentService.MimeType.JSON);
+    }
+
     if (data.action === "locate_data") {
         var folder = getOrCreateFolder(FOLDER_NAME);
         var ss = getOrCreateSpreadsheet(folder);
@@ -358,4 +409,3 @@ function getOrCreateSpreadsheet(parentFolder) {
   }
   return newSS;
 }
-`;
