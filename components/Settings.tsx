@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { DEFAULT_SCRIPT_URL, locateRemoteData, APP_SCRIPT_TEMPLATE } from '../services/googleSheetsService';
 
 const Settings: React.FC = () => {
   const [scriptUrl, setScriptUrl] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [backupFreq, setBackupFreq] = useState('hourly');
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
   const [statusType, setStatusType] = useState<'neutral' | 'success' | 'error'>('neutral');
@@ -16,8 +16,11 @@ const Settings: React.FC = () => {
     // Load existing URL or default
     const storedScript = localStorage.getItem('wf_script_url_v3');
     const storedLogo = localStorage.getItem('wf_logo_url');
+    const storedFreq = localStorage.getItem('wf_backup_frequency');
+    
     setScriptUrl(storedScript || DEFAULT_SCRIPT_URL);
     setLogoUrl(storedLogo || '');
+    setBackupFreq(storedFreq || 'hourly');
   }, []);
 
   const handleSave = () => {
@@ -30,6 +33,7 @@ const Settings: React.FC = () => {
 
     // Save Logic
     localStorage.setItem('wf_script_url_v3', scriptUrl);
+    localStorage.setItem('wf_backup_frequency', backupFreq);
     
     // Logic for logo is handled by state updating directly, but we ensure it's saved here just in case
     if (logoUrl) {
@@ -205,6 +209,27 @@ const Settings: React.FC = () => {
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
                         />
                     </div>
+                </div>
+
+                {/* Automatic Backup Settings */}
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">
+                        Automatic Backup Frequency
+                    </label>
+                    <select
+                        value={backupFreq}
+                        onChange={(e) => setBackupFreq(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-sm"
+                    >
+                        <option value="disabled">Disabled</option>
+                        <option value="30min">Every 30 Minutes</option>
+                        <option value="hourly">Hourly (Default)</option>
+                        <option value="daily">Daily (Every 24 Hours)</option>
+                        <option value="weekly">Weekly (Every 7 Days)</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                        Backups occur only while the application is open. Data is saved to the configured Google Sheet.
+                    </p>
                 </div>
 
                 <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">

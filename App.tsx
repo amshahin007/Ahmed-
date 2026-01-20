@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -14,6 +14,7 @@ import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import * as storageService from './services/storageService';
 import * as phpService from './services/phpApiService'; // Import PHP Service
+import { backupTabToSheet, DEFAULT_SCRIPT_URL } from './services/googleSheetsService';
 import { 
   INITIAL_HISTORY, 
   ITEMS as INIT_ITEMS, 
@@ -56,6 +57,19 @@ const App: React.FC = () => {
   const [breakdowns, setBreakdowns] = useState<BreakdownRecord[]>(INITIAL_BREAKDOWNS); 
   const [irrigationLogs, setIrrigationLogs] = useState<IrrigationLogRecord[]>([]);
   const [bomRecords, setBomRecords] = useState<BOMRecord[]>([]);
+
+  // Ref to hold state for auto-backup without re-rendering intervals
+  const stateRef = useRef({
+    items: [] as Item[], 
+    machines: [] as Machine[], 
+    locations: [] as Location[], 
+    sectors: [] as Sector[], 
+    divisions: [] as Division[], 
+    plans: [] as MaintenancePlan[], 
+    users: [] as User[], 
+    breakdowns: [] as BreakdownRecord[], 
+    boms: [] as BOMRecord[]
+  });
 
   // --- Load Data Strategy: Try PHP -> Fallback to IndexedDB ---
   useEffect(() => {
@@ -144,8 +158,96 @@ const App: React.FC = () => {
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_items', items); }, [items, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_machines', machines); }, [machines, isDataLoaded]);
   
-  // ... other effects preserved for offline capability ...
-  
+  // Update Refs for Auto Backup whenever data changes
+  useEffect(() => {
+    stateRef.current = {
+        items, machines, locations, sectors, divisions, plans, 
+        users: usersList, breakdowns, boms: bomRecords
+    };
+  }, [items, machines, locations, sectors, divisions, plans, usersList, breakdowns, bomRecords]);
+
+  // --- AUTOMATIC BACKUP LOGIC ---
+  useEffect(() => {
+    const backupInterval = setInterval(async () => {
+        const freq = localStorage.getItem('wf_backup_frequency') || 'hourly';
+        if (freq === 'disabled') return;
+
+        const lastRunStr = localStorage.getItem('wf_last_backup_timestamp');
+        const lastRun = lastRunStr ? parseInt(lastRunStr, 10) : 0;
+        const now = Date.now();
+        let intervalMs = 3600000; // Default hourly (1hr)
+
+        if (freq === '30min') intervalMs = 30 * 60 * 1000;
+        else if (freq === 'hourly') intervalMs = 60 * 60 * 1000;
+        else if (freq === 'daily') intervalMs = 24 * 60 * 60 * 1000;
+        else if (freq === 'weekly') intervalMs = 7 * 24 * 60 * 60 * 1000;
+
+        if (now - lastRun > intervalMs) {
+            console.log(`[AutoBackup] Triggering ${freq} backup...`);
+            const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
+            
+            if (!scriptUrl) {
+                console.warn("[AutoBackup] Skipped: No Script URL configured.");
+                return;
+            }
+
+            // Simple data preparation helper to avoid code duplication from MasterData/AssetManagement
+            const prepareData = (key: string) => {
+                const s = stateRef.current;
+                let data: any[] = [];
+                let headers: string[] = [];
+                let keys: string[] = [];
+
+                if (key === 'items') {
+                    data = s.items; 
+                    headers = ['Item Number', 'Stock Qty', 'Description', 'Category', 'Unit', 'Brand', 'Model No', 'Part No'];
+                    keys = ['id', 'stockQuantity', 'name', 'category', 'unit', 'brand', 'modelNo', 'partNumber'];
+                } else if (key === 'machines') {
+                    data = s.machines;
+                    headers = ['ID', 'Machine Name', 'Local No', 'Status', 'Brand', 'Model No', 'Location'];
+                    keys = ['id', 'category', 'machineLocalNo', 'status', 'brand', 'modelNo', 'locationId'];
+                } else if (key === 'breakdowns') {
+                    data = s.breakdowns;
+                    headers = ['ID', 'Machine', 'Location', 'Start Time', 'Status', 'Failure Type'];
+                    keys = ['id', 'machineName', 'locationId', 'startTime', 'status', 'failureType'];
+                } else if (key === 'bom') {
+                    data = s.boms;
+                    headers = ['ID', 'Machine', 'Model No', 'Item ID', 'Qty'];
+                    keys = ['id', 'machineCategory', 'modelNo', 'itemId', 'quantity'];
+                }
+                
+                if (data.length === 0) return null;
+                const rows = data.map(item => keys.map(k => {
+                    const val = (item as any)[k];
+                    return (val === undefined || val === null) ? "" : String(val);
+                }));
+                return [headers, ...rows];
+            };
+
+            const tabsToSync = ['items', 'machines', 'breakdowns', 'bom'];
+            
+            for (const tab of tabsToSync) {
+                try {
+                    const rows = prepareData(tab);
+                    if (rows) {
+                        await backupTabToSheet(scriptUrl, tab, rows);
+                        console.log(`[AutoBackup] ${tab} synced.`);
+                    }
+                    // Slight delay to prevent rate limits
+                    await new Promise(r => setTimeout(r, 500));
+                } catch (e) {
+                    console.error(`[AutoBackup] Failed for ${tab}`, e);
+                }
+            }
+            
+            localStorage.setItem('wf_last_backup_timestamp', now.toString());
+            console.log("[AutoBackup] Complete.");
+        }
+    }, 60 * 1000); // Check every minute
+
+    return () => clearInterval(backupInterval);
+  }, []);
+
   // Auth Handlers
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
