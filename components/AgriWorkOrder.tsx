@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { AgriOrderRecord, IrrigationLogRecord, Location, Machine } from '../types';
 import * as XLSX from 'xlsx';
+import { backupTabToSheet, DEFAULT_SCRIPT_URL } from '../services/googleSheetsService';
 
 interface AgriWorkOrderProps {
   orders: AgriOrderRecord[];
@@ -24,6 +24,7 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({
   locations, machines 
 }) => {
   const [activeTab, setActiveTab] = useState<'agri' | 'irrigation'>('agri');
+  const [syncLoading, setSyncLoading] = useState(false);
 
   // --- AGRI FORM STATE ---
   const [agriFormData, setAgriFormData] = useState<Partial<AgriOrderRecord>>({
@@ -245,6 +246,42 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({
     }
   };
 
+  const handleBackup = async () => {
+    const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
+    if (!scriptUrl) {
+        alert("Please configure Web App URL in Settings first.");
+        return;
+    }
+
+    if (!confirm("Back up Agri Orders & Irrigation Logs to Google Sheet? This will overwrite the tabs in the sheet.")) return;
+
+    setSyncLoading(true);
+    try {
+        // Prepare Agri Orders
+        if (orders.length > 0) {
+            const agriHeaders = ["ID", "Date", "Branch", "Tractor", "Local No", "Attached", "Attached Local", "Pivot", "Driver", "Start", "End", "Row", "Unit", "Achievement", "Actual/Return", "Calculated", "Time", "Notes"];
+            const agriKeys = ["id", "date", "branch", "tractor", "machineLocalNo", "attached", "attachedLocalNo", "pivot", "driver", "startCounter", "endCounter", "rowNumber", "unitType", "achievement", "actualOrReturn", "calculated", "timeSpent", "notes"];
+            const agriRows = orders.map(o => agriKeys.map(k => (o as any)[k] || ""));
+            await backupTabToSheet(scriptUrl, 'agri_orders', [agriHeaders, ...agriRows]);
+        }
+
+        // Prepare Irrigation Logs
+        if (irrigationLogs.length > 0) {
+            const irrHeaders = ["ID", "Date", "Location", "Generator", "Start", "End", "Total Hours", "Notes"];
+            const irrKeys = ["id", "date", "locationName", "generatorModel", "engineStart", "engineEnd", "totalHours", "notes"];
+            const irrRows = irrigationLogs.map(l => irrKeys.map(k => (l as any)[k] || ""));
+            await backupTabToSheet(scriptUrl, 'irrigation_logs', [irrHeaders, ...irrRows]);
+        }
+
+        alert("Backup Successful!");
+    } catch (e) {
+        console.error(e);
+        alert("Backup Failed. Check console.");
+    } finally {
+        setSyncLoading(false);
+    }
+  };
+
   // --- STYLES ---
   const labelStyle = "bg-[#00695c] text-white font-bold text-sm flex items-center justify-center px-1 h-8 whitespace-nowrap min-w-[110px] border border-[#004d40] rounded-sm shadow-sm";
   const inputStyle = "border border-gray-400 px-2 h-8 text-right font-bold w-full text-gray-800 focus:outline-none focus:ring-1 focus:ring-teal-500 rounded-sm";
@@ -436,6 +473,12 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({
                         </div>
                         <span className="text-sm font-bold">اكسل</span>
                     </button>
+                    <button onClick={handleBackup} disabled={syncLoading} className="flex flex-col items-center text-indigo-700 hover:text-indigo-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-indigo-600 flex items-center justify-center mb-1 group-hover:bg-indigo-50">
+                            {syncLoading ? <span className="animate-spin text-sm">↻</span> : <span className="text-lg">☁️</span>}
+                        </div>
+                        <span className="text-sm font-bold">نسخ احتياطي</span>
+                    </button>
                 </div>
 
                 <div className="bg-white border border-gray-300 rounded relative shadow-sm mt-4 overflow-hidden">
@@ -577,6 +620,12 @@ const AgriWorkOrder: React.FC<AgriWorkOrderProps> = ({
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                         </div>
                         <span className="text-sm font-bold">اكسل</span>
+                    </button>
+                    <button onClick={handleBackup} disabled={syncLoading} className="flex flex-col items-center text-indigo-700 hover:text-indigo-900 group">
+                        <div className="w-10 h-10 rounded-full border-2 border-indigo-600 flex items-center justify-center mb-1 group-hover:bg-indigo-50">
+                            {syncLoading ? <span className="animate-spin text-sm">↻</span> : <span className="text-lg">☁️</span>}
+                        </div>
+                        <span className="text-sm font-bold">نسخ احتياطي</span>
                     </button>
                 </div>
 

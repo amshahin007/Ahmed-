@@ -68,7 +68,10 @@ const App: React.FC = () => {
     plans: [] as MaintenancePlan[], 
     users: [] as User[], 
     breakdowns: [] as BreakdownRecord[], 
-    boms: [] as BOMRecord[]
+    boms: [] as BOMRecord[],
+    history: [] as IssueRecord[],
+    agriOrders: [] as AgriOrderRecord[],
+    irrigationLogs: [] as IrrigationLogRecord[]
   });
 
   // --- Load Data Strategy: Try PHP -> Fallback to IndexedDB ---
@@ -157,14 +160,17 @@ const App: React.FC = () => {
 
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_items', items); }, [items, isDataLoaded]);
   useEffect(() => { if (isDataLoaded) storageService.setItem('wf_machines', machines); }, [machines, isDataLoaded]);
-  
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_agri_orders', agriOrders); }, [agriOrders, isDataLoaded]);
+  useEffect(() => { if (isDataLoaded) storageService.setItem('wf_irrigation_logs', irrigationLogs); }, [irrigationLogs, isDataLoaded]);
+
   // Update Refs for Auto Backup whenever data changes
   useEffect(() => {
     stateRef.current = {
         items, machines, locations, sectors, divisions, plans, 
-        users: usersList, breakdowns, boms: bomRecords
+        users: usersList, breakdowns, boms: bomRecords,
+        history, agriOrders, irrigationLogs
     };
-  }, [items, machines, locations, sectors, divisions, plans, usersList, breakdowns, bomRecords]);
+  }, [items, machines, locations, sectors, divisions, plans, usersList, breakdowns, bomRecords, history, agriOrders, irrigationLogs]);
 
   // --- AUTOMATIC BACKUP LOGIC ---
   useEffect(() => {
@@ -214,17 +220,50 @@ const App: React.FC = () => {
                     data = s.boms;
                     headers = ['ID', 'Machine', 'Model No', 'Item ID', 'Qty'];
                     keys = ['id', 'machineCategory', 'modelNo', 'itemId', 'quantity'];
+                } else if (key === 'history') {
+                    data = s.history;
+                    headers = ["ID", "Date", "Location ID", "Location Name", "Sector", "Division", "Machine", "Maint. Plan", "Item Number", "Item Name", "Quantity", "Status", "Notes"];
+                    keys = ["id", "timestamp", "locationId", "sectorName", "divisionName", "machineName", "maintenancePlan", "itemId", "itemName", "quantity", "status", "notes"];
+                } else if (key === 'agri_orders') {
+                    data = s.agriOrders;
+                    headers = ["ID", "Date", "Branch", "Tractor", "Local No", "Attached", "Attached Local", "Pivot", "Driver", "Start", "End", "Row", "Unit", "Achievement", "Actual/Return", "Calculated", "Time", "Notes"];
+                    keys = ["id", "date", "branch", "tractor", "machineLocalNo", "attached", "attachedLocalNo", "pivot", "driver", "startCounter", "endCounter", "rowNumber", "unitType", "achievement", "actualOrReturn", "calculated", "timeSpent", "notes"];
+                } else if (key === 'irrigation_logs') {
+                    data = s.irrigationLogs;
+                    headers = ["ID", "Date", "Location", "Generator", "Start", "End", "Total Hours", "Notes"];
+                    keys = ["id", "date", "locationName", "generatorModel", "engineStart", "engineEnd", "totalHours", "notes"];
+                } else if (key === 'locations') {
+                    data = s.locations;
+                    headers = ['ID', 'Name', 'Email'];
+                    keys = ['id', 'name', 'email'];
+                } else if (key === 'sectors') {
+                    data = s.sectors;
+                    headers = ['ID', 'Name'];
+                    keys = ['id', 'name'];
+                } else if (key === 'divisions') {
+                    data = s.divisions;
+                    headers = ['ID', 'Name', 'Sector ID'];
+                    keys = ['id', 'name', 'sectorId'];
+                } else if (key === 'plans') {
+                    data = s.plans;
+                    headers = ['ID', 'Name'];
+                    keys = ['id', 'name'];
+                } else if (key === 'users') {
+                    data = s.users;
+                    headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations', 'Allowed Sectors', 'Allowed Divisions'];
+                    keys = ['username', 'name', 'role', 'email', 'allowedLocationIds', 'allowedSectorIds', 'allowedDivisionIds'];
                 }
                 
                 if (data.length === 0) return null;
                 const rows = data.map(item => keys.map(k => {
                     const val = (item as any)[k];
+                    if (Array.isArray(val)) return val.join(';');
                     return (val === undefined || val === null) ? "" : String(val);
                 }));
                 return [headers, ...rows];
             };
 
-            const tabsToSync = ['items', 'machines', 'breakdowns', 'bom'];
+            const tabsToSync = ['items', 'machines', 'breakdowns', 'bom', 'history', 'locations', 'sectors', 'divisions', 'plans', 'users', 'agri_orders', 'irrigation_logs'];
             
             for (const tab of tabsToSync) {
                 try {
@@ -234,7 +273,7 @@ const App: React.FC = () => {
                         console.log(`[AutoBackup] ${tab} synced.`);
                     }
                     // Slight delay to prevent rate limits
-                    await new Promise(r => setTimeout(r, 500));
+                    await new Promise(r => setTimeout(r, 600));
                 } catch (e) {
                     console.error(`[AutoBackup] Failed for ${tab}`, e);
                 }
