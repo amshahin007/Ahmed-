@@ -145,6 +145,28 @@ export interface IrrigationLogRecord {
   notes?: string;
 }
 
+// --- NEW FORECASTING TYPES ---
+
+export interface ForecastPeriod {
+  id: string; // e.g., "2025-P1"
+  name: string; // e.g., "P1 2025 (Oct-Jan)"
+  startDate: string; // ISO Date YYYY-MM-DD
+  endDate: string; // ISO Date YYYY-MM-DD
+  status: 'Open' | 'Closed';
+}
+
+export interface ForecastRecord {
+  id: string; // Unique ID (Location+Sector+Division+Item+Period)
+  periodId: string;
+  locationId: string;
+  sectorId: string;
+  divisionId: string;
+  itemId: string;
+  quantity: number;
+  lastUpdated: string;
+  updatedBy: string;
+}
+
 export interface DashboardMetrics {
   totalIssues: number;
   topItem: string;

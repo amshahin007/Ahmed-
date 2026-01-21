@@ -25,6 +25,12 @@ const DEFAULT_NAV_ITEMS = [
       roles: ['admin', 'maintenance_manager', 'maintenance_engineer'] 
     },
     { 
+      id: 'material-forecast', 
+      label: 'Forecast Planning', 
+      icon: '🔮', 
+      roles: ['admin', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer'] 
+    },
+    { 
       id: 'agri-work-order', 
       label: 'Work Orders', 
       icon: '🚜', 

@@ -1,3 +1,4 @@
+
 import { Item, IssueRecord } from '../types';
 
 // Updated Default ID and GID based on user request
@@ -319,7 +320,8 @@ function doPost(e) {
     if (data.action === "read_full_db") {
         var ss = getOrCreateSpreadsheet();
         var result = {};
-        var tabs = ['items', 'machines', 'breakdowns', 'bom', 'history', 'locations', 'sectors', 'divisions', 'plans', 'users', 'agri_orders', 'irrigation_logs'];
+        // ADD 'forecasts' to this list
+        var tabs = ['items', 'machines', 'breakdowns', 'bom', 'history', 'locations', 'sectors', 'divisions', 'plans', 'users', 'agri_orders', 'irrigation_logs', 'forecasts'];
         
         tabs.forEach(function(tabName) {
             var sheet = ss.getSheetByName(tabName);

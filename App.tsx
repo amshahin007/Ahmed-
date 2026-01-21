@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -10,6 +11,7 @@ import AiAssistant from './components/AiAssistant';
 import Settings from './components/Settings';
 import AgriWorkOrder from './components/AgriWorkOrder';
 import AssetManagement from './components/AssetManagement'; 
+import MaterialForecast from './components/MaterialForecast';
 import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import * as storageService from './services/storageService';
@@ -26,7 +28,7 @@ import {
   MAINTENANCE_PLANS as INIT_PLANS,
   INITIAL_BREAKDOWNS 
 } from './constants';
-import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan, AgriOrderRecord, BreakdownRecord, IrrigationLogRecord, BOMRecord } from './types';
+import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan, AgriOrderRecord, BreakdownRecord, IrrigationLogRecord, BOMRecord, ForecastPeriod, ForecastRecord } from './types';
 
 const loadConfig = <T,>(key: string, fallback: T): T => {
   try {
@@ -57,6 +59,10 @@ const App: React.FC = () => {
   const [breakdowns, setBreakdowns] = useState<BreakdownRecord[]>(INITIAL_BREAKDOWNS); 
   const [irrigationLogs, setIrrigationLogs] = useState<IrrigationLogRecord[]>([]);
   const [bomRecords, setBomRecords] = useState<BOMRecord[]>([]);
+  
+  // Forecast State
+  const [forecastPeriods, setForecastPeriods] = useState<ForecastPeriod[]>([]);
+  const [forecastRecords, setForecastRecords] = useState<ForecastRecord[]>([]);
 
   // Ref to hold state for auto-backup without re-rendering intervals
   const stateRef = useRef({
@@ -71,7 +77,9 @@ const App: React.FC = () => {
     boms: [] as BOMRecord[],
     history: [] as IssueRecord[],
     agriOrders: [] as AgriOrderRecord[],
-    irrigationLogs: [] as IrrigationLogRecord[]
+    irrigationLogs: [] as IrrigationLogRecord[],
+    forecastPeriods: [] as ForecastPeriod[],
+    forecastRecords: [] as ForecastRecord[]
   });
 
   // --- Load Data Strategy: Try PHP -> Fallback to IndexedDB ---
@@ -94,17 +102,21 @@ const App: React.FC = () => {
             if (phpData.plans) setPlans(phpData.plans);
             if (phpData.issues) setHistory(phpData.issues);
             
-            // Load local-only data (Agri/BOM not yet in PHP in this version)
-            const [loadedAgri, loadedBreakdowns, loadedIrrigation, loadedBoms] = await Promise.all([
+            // Load local-only data (Agri/BOM/Forecast not yet in PHP in this version)
+            const [loadedAgri, loadedBreakdowns, loadedIrrigation, loadedBoms, loadedPeriods, loadedForecasts] = await Promise.all([
                  storageService.getItem<AgriOrderRecord[]>('wf_agri_orders'),
                  storageService.getItem<BreakdownRecord[]>('wf_breakdowns'),
                  storageService.getItem<IrrigationLogRecord[]>('wf_irrigation_logs'),
                  storageService.getItem<BOMRecord[]>('wf_boms'),
+                 storageService.getItem<ForecastPeriod[]>('wf_forecast_periods'),
+                 storageService.getItem<ForecastRecord[]>('wf_forecast_records'),
             ]);
             if (loadedAgri) setAgriOrders(loadedAgri);
             if (loadedBreakdowns) setBreakdowns(loadedBreakdowns);
             if (loadedIrrigation) setIrrigationLogs(loadedIrrigation);
             if (loadedBoms) setBomRecords(loadedBoms);
+            if (loadedPeriods) setForecastPeriods(loadedPeriods);
+            if (loadedForecasts) setForecastRecords(loadedForecasts);
 
         } else {
             // If PHP is null (caught error), fallback immediately
@@ -118,7 +130,9 @@ const App: React.FC = () => {
         // FALLBACK: Load from IndexedDB
         const [
           loadedHistory, loadedItems, loadedMachines, loadedLocations, 
-          loadedSectors, loadedDivisions, loadedPlans, loadedUsers, loadedAgri, loadedBreakdowns, loadedIrrigation, loadedBoms
+          loadedSectors, loadedDivisions, loadedPlans, loadedUsers, 
+          loadedAgri, loadedBreakdowns, loadedIrrigation, loadedBoms,
+          loadedPeriods, loadedForecasts
         ] = await Promise.all([
           storageService.getItem<IssueRecord[]>('wf_history'),
           storageService.getItem<Item[]>('wf_items'),
@@ -132,6 +146,8 @@ const App: React.FC = () => {
           storageService.getItem<BreakdownRecord[]>('wf_breakdowns'),
           storageService.getItem<IrrigationLogRecord[]>('wf_irrigation_logs'),
           storageService.getItem<BOMRecord[]>('wf_boms'),
+          storageService.getItem<ForecastPeriod[]>('wf_forecast_periods'),
+          storageService.getItem<ForecastRecord[]>('wf_forecast_records'),
         ]);
 
         if (loadedHistory) setHistory(loadedHistory);
@@ -146,6 +162,8 @@ const App: React.FC = () => {
         if (loadedBreakdowns) setBreakdowns(loadedBreakdowns);
         if (loadedIrrigation) setIrrigationLogs(loadedIrrigation);
         if (loadedBoms) setBomRecords(loadedBoms);
+        if (loadedPeriods) setForecastPeriods(loadedPeriods);
+        if (loadedForecasts) setForecastRecords(loadedForecasts);
       } finally {
         setIsDataLoaded(true);
       }
@@ -169,17 +187,20 @@ const App: React.FC = () => {
           storageService.setItem('wf_breakdowns', breakdowns);
           storageService.setItem('wf_irrigation_logs', irrigationLogs);
           storageService.setItem('wf_boms', bomRecords);
+          storageService.setItem('wf_forecast_periods', forecastPeriods);
+          storageService.setItem('wf_forecast_records', forecastRecords);
       }
-  }, [history, items, machines, locations, sectors, divisions, plans, usersList, agriOrders, breakdowns, irrigationLogs, bomRecords, isDataLoaded]);
+  }, [history, items, machines, locations, sectors, divisions, plans, usersList, agriOrders, breakdowns, irrigationLogs, bomRecords, forecastPeriods, forecastRecords, isDataLoaded]);
 
   // Update Refs for Auto Backup whenever data changes
   useEffect(() => {
     stateRef.current = {
         items, machines, locations, sectors, divisions, plans, 
         users: usersList, breakdowns, boms: bomRecords,
-        history, agriOrders, irrigationLogs
+        history, agriOrders, irrigationLogs,
+        forecastPeriods, forecastRecords
     };
-  }, [items, machines, locations, sectors, divisions, plans, usersList, breakdowns, bomRecords, history, agriOrders, irrigationLogs]);
+  }, [items, machines, locations, sectors, divisions, plans, usersList, breakdowns, bomRecords, history, agriOrders, irrigationLogs, forecastPeriods, forecastRecords]);
 
   // --- REUSABLE BACKUP FUNCTION ---
   const performBackup = async () => {
@@ -243,6 +264,13 @@ const App: React.FC = () => {
                 data = s.users;
                 headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations', 'Allowed Sectors', 'Allowed Divisions'];
                 keys = ['username', 'name', 'role', 'email', 'allowedLocationIds', 'allowedSectorIds', 'allowedDivisionIds'];
+            } else if (key === 'forecasts') { // Consolidate Periods and Records for backup
+                data = s.forecastRecords.map(r => {
+                    const p = s.forecastPeriods.find(fp => fp.id === r.periodId);
+                    return { ...r, periodName: p?.name || r.periodId };
+                });
+                headers = ['ID', 'Period', 'Location', 'Sector', 'Division', 'Item', 'Qty', 'Updated'];
+                keys = ['id', 'periodName', 'locationId', 'sectorId', 'divisionId', 'itemId', 'quantity', 'lastUpdated'];
             }
             
             if (data.length === 0) return null;
@@ -254,7 +282,7 @@ const App: React.FC = () => {
             return [headers, ...rows];
         };
 
-        const tabsToSync = ['items', 'machines', 'breakdowns', 'bom', 'history', 'locations', 'sectors', 'divisions', 'plans', 'users', 'agri_orders', 'irrigation_logs'];
+        const tabsToSync = ['items', 'machines', 'breakdowns', 'bom', 'history', 'locations', 'sectors', 'divisions', 'plans', 'users', 'agri_orders', 'irrigation_logs', 'forecasts'];
         
         for (const tab of tabsToSync) {
             const rows = prepareData(tab);
@@ -324,6 +352,9 @@ const App: React.FC = () => {
       // Agri & Irrigation map almost 1:1 based on backup logic, but lets ensure ID/Date
       if (rawData['agri_orders']) setAgriOrders(mapData(rawData['agri_orders'], { 'ID': 'id', 'Date': 'date' }));
       if (rawData['irrigation_logs']) setIrrigationLogs(mapData(rawData['irrigation_logs'], { 'ID': 'id', 'Date': 'date' }));
+      
+      // Note: Forecasts are complex objects, simple restore might be tricky without dedicated sheet logic. 
+      // We skip restoring forecast detail from generic dump for now to prevent data corruption unless explicitly handled.
   };
 
   // --- AUTOMATIC BACKUP INTERVAL ---
@@ -443,6 +474,16 @@ const App: React.FC = () => {
   const handleDeletePlans = (ids: string[]) => setPlans(prev => prev.filter(p => !ids.includes(p.id)));
   const handleDeleteUsers = (usernames: string[]) => setUsersList(prev => prev.filter(u => !usernames.includes(u.username)));
 
+  // Forecast Handlers
+  const handleAddPeriod = (period: ForecastPeriod) => setForecastPeriods(prev => [...prev, period]);
+  const handleUpdatePeriod = (period: ForecastPeriod) => setForecastPeriods(prev => prev.map(p => p.id === period.id ? period : p));
+  const handleUpdateForecast = (records: ForecastRecord[]) => {
+      // Logic to merge new records with existing records (remove duplicates/overwrites)
+      const newIds = new Set(records.map(r => r.id));
+      const filteredExisting = forecastRecords.filter(r => !newIds.has(r.id));
+      setForecastRecords([...filteredExisting, ...records]);
+  };
+
   const handleBulkImport = (tab: string, added: any[], updated: any[]) => {
       // (Bulk Import logic remains same as previous implementation)
       const updateIdBasedState = (setter: React.Dispatch<React.SetStateAction<any[]>>) => {
@@ -496,6 +537,8 @@ const App: React.FC = () => {
         return <AssetManagement machines={machines} items={items} bomRecords={bomRecords} locations={locations} sectors={sectors} divisions={divisions} breakdowns={breakdowns} onAddMachine={handleAddMachine} onUpdateMachine={handleUpdateMachine} onDeleteMachines={handleDeleteMachines} onAddBreakdown={handleAddBreakdown} onUpdateBreakdown={handleUpdateBreakdown} onAddBOM={handleAddBOM} onUpdateBOM={handleUpdateBOM} onDeleteBOMs={handleDeleteBOMs} onBulkImport={handleBulkImport} setCurrentView={setCurrentView} />;
       case 'issue-form':
         return <IssueForm onAddIssue={handleAddIssue} items={items} machines={machines} locations={locations} sectors={sectors} divisions={divisions} maintenancePlans={plans} bomRecords={bomRecords} currentUser={user} />;
+      case 'material-forecast':
+        return <MaterialForecast items={items} locations={locations} sectors={sectors} divisions={divisions} history={history} forecastPeriods={forecastPeriods} onAddPeriod={handleAddPeriod} onUpdatePeriod={handleUpdatePeriod} forecastRecords={forecastRecords} onUpdateForecast={handleUpdateForecast} currentUser={user} />;
       case 'stock-approval':
         if (!['admin', 'warehouse_manager', 'warehouse_supervisor'].includes(user.role)) return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
         return <StockApproval history={history} locations={locations} onUpdateIssue={handleUpdateIssue} />;

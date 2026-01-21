@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { IssueRecord, Location, Item, Machine } from '../types';
 import * as XLSX from 'xlsx';
@@ -16,7 +15,7 @@ type TabType = 'stock' | 'history';
 const ITEMS_PER_PAGE = 50;
 
 const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, machines }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('stock');
+  const [activeTab, setActiveTab] = useState<TabType>('history'); // Default to History view now
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -87,7 +86,29 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
   const generateWorkbook = () => {
     const wb = XLSX.utils.book_new();
 
-    // Sheet 1: Stock Summary
+    // Sheet 1: Detailed History (Matches requested columns)
+    const histHeaders = [
+      "Item Number", "Sites", "G/L Date", "Full Name", "Sum of Transaction Qty", "Trans UM", "Status", "Machine", "Maint. Plan", "ID"
+    ];
+    const histRows = filteredHistory.map(h => {
+        const loc = locations.find(l => l.id === h.locationId);
+        return [
+            h.itemId, 
+            loc?.name || h.locationId,
+            new Date(h.timestamp).toLocaleDateString(),
+            h.itemName,
+            h.quantity, 
+            h.unit || 'pcs',
+            h.status, 
+            h.machineName,
+            h.maintenancePlan || '', 
+            h.id
+        ];
+    });
+    const wsHist = XLSX.utils.aoa_to_sheet([histHeaders, ...histRows]);
+    XLSX.utils.book_append_sheet(wb, wsHist, "Issue Tracking");
+
+    // Sheet 2: Stock Summary
     const stockHeaders = ["Item Number", "Full Name", "Trans UM", "Sites", "Sum of Qnty"];
     const stockRows = stockData.map(s => [
         s.itemNumber,
@@ -97,45 +118,14 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
         s.sumOfQnty
     ]);
     const wsStock = XLSX.utils.aoa_to_sheet([stockHeaders, ...stockRows]);
-    XLSX.utils.book_append_sheet(wb, wsStock, "Stock");
-
-    // Sheet 2: Detailed History
-    const histHeaders = [
-      "ID", "Date", "Location ID", "Location Name", "Sector", "Division", "Local No", 
-      "Machine", "Maint. Plan", "Item Number", "Item Name", "Model No", "Quantity", "Unit", "Status", "Notes"
-    ];
-    const histRows = filteredHistory.map(h => {
-        const loc = locations.find(l => l.id === h.locationId);
-        const mac = machines.find(m => m.id === h.machineId);
-        const item = items.find(i => i.id === h.itemId);
-        return [
-            h.id, 
-            h.timestamp, 
-            h.locationId, 
-            loc?.name || '',
-            h.sectorName || '', 
-            h.divisionName || '', 
-            mac?.machineLocalNo || '',
-            h.machineName, 
-            h.maintenancePlan || '', 
-            h.itemId, 
-            h.itemName,
-            item?.modelNo || '',
-            h.quantity, 
-            h.unit || 'pcs',
-            h.status, 
-            h.notes || ''
-        ];
-    });
-    const wsHist = XLSX.utils.aoa_to_sheet([histHeaders, ...histRows]);
-    XLSX.utils.book_append_sheet(wb, wsHist, "History");
+    XLSX.utils.book_append_sheet(wb, wsStock, "Stock Summary");
 
     return wb;
   };
 
   const downloadExcel = () => {
     const wb = generateWorkbook();
-    XLSX.writeFile(wb, `Inventory_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, `Issue_Tracking_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   const saveToDrive = async () => {
@@ -150,7 +140,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
       try {
           const wb = generateWorkbook();
           const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-          const fileName = `Inventory_Report_${new Date().toISOString().slice(0,10)}.xlsx`;
+          const fileName = `Issue_Tracking_Report_${new Date().toISOString().slice(0,10)}.xlsx`;
           
           const url = await uploadFileToDrive(scriptUrl, fileName, wbOut);
           
@@ -214,16 +204,16 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
         {/* Tabs */}
         <div className="flex bg-gray-100 p-1 rounded-lg">
             <button 
-                onClick={() => setActiveTab('stock')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'stock' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-            >
-                Stock
-            </button>
-            <button 
                 onClick={() => setActiveTab('history')}
                 className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'history' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
-                History
+                Tracking
+            </button>
+            <button 
+                onClick={() => setActiveTab('stock')}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'stock' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                Stock Summary
             </button>
         </div>
 
@@ -244,7 +234,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                 onChange={(e) => setSelectedLocation(e.target.value)}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700"
             >
-                <option value="">All Locations</option>
+                <option value="">All Sites</option>
                 {locations.map(loc => (
                     <option key={loc.id} value={loc.id}>{loc.name}</option>
                 ))}
@@ -272,6 +262,67 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
       {/* Content Area */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col min-h-0">
          
+         {/* HISTORY VIEW (Issue Tracking) - Updated Columns */}
+         {activeTab === 'history' && (
+            <>
+                <div className="overflow-auto flex-1">
+                    <table className="w-full text-left text-xs text-gray-600 border-separate border-spacing-0 whitespace-nowrap">
+                        <thead className="bg-gray-50 text-gray-700 font-semibold sticky top-0 z-10">
+                            <tr>
+                                <th className="px-3 py-2 border-b border-gray-200 bg-gray-50">Item Number</th>
+                                <th className="px-3 py-2 border-b border-gray-200 bg-gray-50">Sites</th>
+                                <th className="px-3 py-2 border-b border-gray-200 bg-gray-50">G/L Date</th>
+                                <th className="px-3 py-2 border-b border-gray-200 bg-gray-50">Full Name</th>
+                                <th className="px-3 py-2 border-b border-gray-200 bg-gray-50 text-right">Sum of Transaction Qty</th>
+                                {/* Extra Columns useful for context */}
+                                <th className="px-3 py-2 border-b border-gray-200 bg-gray-50">Machine</th>
+                                <th className="px-3 py-2 border-b border-gray-200 bg-gray-50">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {getPaginatedData(filteredHistory).length > 0 ? (
+                                getPaginatedData(filteredHistory).map((record) => {
+                                    const locationName = locations.find(l => l.id === record.locationId)?.name || record.locationId;
+                                    return (
+                                    <tr key={record.id} className="hover:bg-blue-50 transition">
+                                        <td className="px-3 py-2 font-mono font-bold text-gray-800 border-r border-gray-100">
+                                            {record.itemId}
+                                        </td>
+                                        <td className="px-3 py-2 text-gray-900 border-r border-gray-100">
+                                            {locationName}
+                                        </td>
+                                        <td className="px-3 py-2 border-r border-gray-100">
+                                          {new Date(record.timestamp).toLocaleDateString()}
+                                        </td>
+                                        <td className="px-3 py-2 text-gray-800 border-r border-gray-100">
+                                            {record.itemName}
+                                        </td>
+                                        <td className="px-3 py-2 font-mono font-bold text-right text-blue-700 border-r border-gray-100">
+                                            {record.quantity}
+                                        </td>
+                                        <td className="px-3 py-2 text-gray-600 border-r border-gray-100">
+                                            {record.machineName}
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                                                record.status === 'Completed' || record.status === 'Approved' ? 'bg-green-100 text-green-700' :
+                                                record.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                                            }`}>
+                                                {record.status}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                )})
+                            ) : (
+                                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No records found.</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+                {renderPagination(filteredHistory.length)}
+            </>
+         )}
+
          {/* STOCK VIEW */}
          {activeTab === 'stock' && (
              <>
@@ -280,10 +331,10 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                         <thead className="bg-blue-50 text-blue-900 font-bold sticky top-0 z-10">
                             <tr>
                                 <th className="px-3 py-2 border-b border-blue-100">Item Number</th>
-                                <th className="px-3 py-2 border-b border-blue-100">Full Name</th>
-                                <th className="px-3 py-2 border-b border-blue-100">Trans UM</th>
                                 <th className="px-3 py-2 border-b border-blue-100">Sites</th>
+                                <th className="px-3 py-2 border-b border-blue-100">Full Name</th>
                                 <th className="px-3 py-2 border-b border-blue-100 text-right">Sum of Qnty</th>
+                                <th className="px-3 py-2 border-b border-blue-100 text-right">Trans UM</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -291,10 +342,10 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                 getPaginatedData(stockData).map((row, idx) => (
                                     <tr key={idx} className="hover:bg-gray-50 transition">
                                         <td className="px-3 py-2 font-mono font-bold text-gray-700">{row.itemNumber}</td>
-                                        <td className="px-3 py-2 text-gray-800">{row.fullName}</td>
-                                        <td className="px-3 py-2 text-gray-500">{row.transUm}</td>
                                         <td className="px-3 py-2 text-gray-600">{row.sitesDisplay}</td>
+                                        <td className="px-3 py-2 text-gray-800">{row.fullName}</td>
                                         <td className="px-3 py-2 text-right font-bold text-gray-900">{row.sumOfQnty}</td>
+                                        <td className="px-3 py-2 text-right text-gray-500">{row.transUm}</td>
                                     </tr>
                                 ))
                             ) : (
@@ -310,84 +361,6 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                      </div>
                 )}
              </>
-         )}
-
-         {/* HISTORY VIEW (Detailed Table) */}
-         {activeTab === 'history' && (
-            <>
-                <div className="overflow-auto flex-1">
-                    <table className="w-full text-left text-xs text-gray-600 border-separate border-spacing-0 whitespace-nowrap">
-                        <thead className="bg-gray-50 text-gray-700 font-semibold sticky top-0 z-10">
-                            <tr>
-                                <th className="px-3 py-2 border-b border-gray-200">Issue ID</th>
-                                <th className="px-3 py-2 border-b border-gray-200">Date</th>
-                                <th className="px-3 py-2 border-b border-gray-200">Location</th>
-                                <th className="px-3 py-2 border-b border-gray-200">Sector</th>
-                                <th className="px-3 py-2 border-b border-gray-200">Division</th>
-                                <th className="px-3 py-2 border-b border-gray-200">Local No</th>
-                                <th className="px-3 py-2 border-b border-gray-200">Machine</th>
-                                <th className="px-3 py-2 border-b border-gray-200">Maint. Type</th>
-                                <th className="px-3 py-2 border-b border-gray-200">Item Number</th>
-                                <th className="px-3 py-2 border-b border-gray-200">Item Name</th>
-                                <th className="px-3 py-2 border-b border-gray-200">Model No</th>
-                                <th className="px-3 py-2 border-b border-gray-200 text-right">Qty</th>
-                                <th className="px-3 py-2 border-b border-gray-200">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {getPaginatedData(filteredHistory).length > 0 ? (
-                                getPaginatedData(filteredHistory).map((record) => {
-                                    const item = items.find(i => i.id === record.itemId);
-                                    return (
-                                    <tr key={record.id} className="hover:bg-gray-50 transition">
-                                        <td className="px-3 py-2 font-medium text-gray-900">{record.id}</td>
-                                        <td className="px-3 py-2">
-                                          <div>{new Date(record.timestamp).toLocaleDateString()}</div>
-                                          <div className="text-[10px] text-gray-400">{new Date(record.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                                        </td>
-                                        <td className="px-3 py-2">
-                                            <div className="font-bold text-gray-900">{locations.find(l => l.id === record.locationId)?.name || record.locationId}</div>
-                                            <div className="text-[10px] text-gray-500">{record.locationId}</div>
-                                        </td>
-                                        <td className="px-3 py-2 text-gray-600">{record.sectorName || '-'}</td>
-                                        <td className="px-3 py-2 text-gray-600">{record.divisionName || '-'}</td>
-                                        <td className="px-3 py-2 font-mono text-blue-600 font-bold">
-                                            {machines.find(m => m.id === record.machineId)?.machineLocalNo || '-'}
-                                        </td>
-                                        <td className="px-3 py-2">
-                                            <div className="text-gray-900 font-medium">{record.machineName}</div>
-                                        </td>
-                                        <td className="px-3 py-2">
-                                            <span className="text-[10px] bg-gray-100 px-1 rounded whitespace-nowrap">{record.maintenancePlan || '-'}</span>
-                                        </td>
-                                        <td className="px-3 py-2 font-mono font-bold text-gray-700">
-                                            {record.itemId}
-                                        </td>
-                                        <td className="px-3 py-2 text-gray-800">
-                                            {record.itemName}
-                                        </td>
-                                        <td className="px-3 py-2 text-gray-600">
-                                            {item?.modelNo || '-'}
-                                        </td>
-                                        <td className="px-3 py-2 font-mono font-bold text-right">{record.quantity}</td>
-                                        <td className="px-3 py-2">
-                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                                                record.status === 'Completed' || record.status === 'Approved' ? 'bg-green-100 text-green-700' :
-                                                record.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-                                            }`}>
-                                                {record.status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                )})
-                            ) : (
-                                <tr><td colSpan={13} className="px-6 py-12 text-center text-gray-400">No history records found.</td></tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-                {renderPagination(filteredHistory.length)}
-            </>
          )}
       </div>
     </div>
