@@ -1,4 +1,3 @@
-
 import { IssueRecord, Item, Machine, Location } from '../types';
 
 // CHANGE THIS to your actual local PHP server URL
@@ -10,7 +9,8 @@ export const fetchAllData = async () => {
         if (!response.ok) throw new Error('PHP API Failed');
         return await response.json();
     } catch (error) {
-        console.error("PHP Sync Error:", error);
+        // Suppress errors for pure frontend usage
+        console.warn("PHP Backend unavailable (Offline Mode):", (error as Error).message);
         return null;
     }
 };
@@ -25,7 +25,8 @@ export const saveIssueToPhp = async (issue: IssueRecord) => {
         return await response.json();
     } catch (error) {
         console.error("Failed to save to PHP:", error);
-        throw error;
+        // Do not throw to avoid crashing the UI save flow, just log it.
+        return { status: "error", message: "PHP Backend unavailable" };
     }
 };
 
@@ -39,6 +40,6 @@ export const addItemToPhp = async (item: Item) => {
         return await response.json();
     } catch (error) {
         console.error("Failed to add item to PHP:", error);
-        throw error;
+        return { status: "error", message: "PHP Backend unavailable" };
     }
 };

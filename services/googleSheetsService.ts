@@ -57,7 +57,7 @@ export const fetchRawCSV = async (sheetId: string, gid: string): Promise<string[
     const lines = text.split(/\r?\n/);
     return lines.map(line => parseCSVLine(line));
   } catch (error) {
-    console.error("Sheet Sync Error:", error);
+    // console.error("Sheet Sync Error:", error); // Suppress to avoid spam
     throw error;
   }
 };
@@ -155,8 +155,6 @@ const parseItemsCSV = (csvText: string): Item[] => {
 
 export const sendIssueToSheet = async (scriptUrl: string, issue: IssueRecord) => {
   try {
-    // We do NOT use Content-Type: application/json to avoid preflight OPTIONS request on some browsers
-    // We send plain text (which happens to be JSON) and parse it in the script
     await fetch(scriptUrl, {
       method: 'POST',
       mode: 'no-cors', 
@@ -180,7 +178,7 @@ export const backupTabToSheet = async (scriptUrl: string, tabName: string, rows:
         });
         return await response.json();
     } catch (error) {
-        console.error("Backup Error:", error);
+        // console.error("Backup Error:", error);
         throw error;
     }
 };
@@ -230,13 +228,11 @@ export const uploadFileToDrive = async (scriptUrl: string, fileName: string, bas
 
 export const locateRemoteData = async (scriptUrl: string): Promise<{folderUrl: string, sheetUrl: string, error?: string} | null> => {
     try {
-        // Standard POST request, treating body as text/plain to attempt simple request if possible
         const response = await fetch(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'locate_data' })
         });
         
-        // Handle HTML response error (e.g. from 404 or auth page)
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.indexOf("application/json") === -1) {
              const text = await response.text();
@@ -248,7 +244,6 @@ export const locateRemoteData = async (scriptUrl: string): Promise<{folderUrl: s
         
         if (result.status === 'success') {
             if (!result.folderUrl) {
-                // If status is success but no folderUrl, the script code is likely old and hit the default 'log issue' path
                 return { folderUrl: '', sheetUrl: '', error: 'Script is outdated. Please update code in Apps Script.' };
             }
             return { folderUrl: result.folderUrl, sheetUrl: result.sheetUrl };
@@ -257,7 +252,6 @@ export const locateRemoteData = async (scriptUrl: string): Promise<{folderUrl: s
         }
     } catch (error) {
         console.error("Failed to locate data:", error);
-        // Propagate error message (e.g. "Failed to fetch")
         throw new Error((error as Error).message);
     }
 }
@@ -277,7 +271,6 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
 
-    // --- ACTION: BACKUP FULL TABLE (Clears tab and writes new data) ---
     if (data.action === "backup_tab") {
         var ss = getOrCreateSpreadsheet();
         var tabName = data.tabName;
@@ -295,7 +288,6 @@ function doPost(e) {
         }
         
         if (rows.length > 0) {
-            // Ensure data is rectangular (same length) to avoid setValues error
             var width = rows[0].length;
             var safeRows = rows.map(function(r) {
                var row = r.slice(0, width);
@@ -309,11 +301,9 @@ function doPost(e) {
             .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // --- ACTION: READ FULL DB (Restores all data) ---
     if (data.action === "read_full_db") {
         var ss = getOrCreateSpreadsheet();
         var result = {};
-        // List of tabs to attempt to read
         var tabs = ['items', 'machines', 'breakdowns', 'bom', 'history', 'locations', 'sectors', 'divisions', 'plans', 'users', 'agri_orders', 'irrigation_logs'];
         
         tabs.forEach(function(tabName) {
@@ -364,7 +354,6 @@ function doPost(e) {
         })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Default: Log Issue (Append Row)
     var ss = getOrCreateSpreadsheet();
     var sheet = ss.getSheetByName(SHEET_TAB_NAME);
     
@@ -409,3 +398,4 @@ function getOrCreateSpreadsheet(parentFolder) {
   }
   return newSS;
 }
+`;

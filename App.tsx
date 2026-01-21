@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -108,11 +107,12 @@ const App: React.FC = () => {
             if (loadedBoms) setBomRecords(loadedBoms);
 
         } else {
+            // If PHP is null (caught error), fallback immediately
             throw new Error("PHP Data empty or failed");
         }
 
       } catch (err) {
-        console.warn("PHP Connection Failed. Falling back to Local Storage (IndexedDB).", err);
+        console.warn("PHP Connection Failed. Falling back to Local Storage (IndexedDB).");
         setDataSource('local');
         
         // FALLBACK: Load from IndexedDB
@@ -183,8 +183,11 @@ const App: React.FC = () => {
 
   // --- REUSABLE BACKUP FUNCTION ---
   const performBackup = async () => {
-        const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
-        if (!scriptUrl) throw new Error("No Script URL configured");
+        const scriptUrl = localStorage.getItem('wf_script_url_v3');
+        if (!scriptUrl || scriptUrl === DEFAULT_SCRIPT_URL) {
+            // console.debug("Skipping backup: Script URL not configured.");
+            return;
+        }
 
         const s = stateRef.current;
         const prepareData = (key: string) => {
@@ -337,7 +340,7 @@ const App: React.FC = () => {
                 localStorage.setItem('wf_last_backup_timestamp', now.toString());
                 console.log("[AutoBackup] Complete.");
             } catch (e) {
-                console.error("[AutoBackup] Failed", e);
+                console.error("[AutoBackup] Failed - check settings if persisted.", (e as Error).message);
             }
         }
     }, 60 * 1000); // Check every minute
@@ -464,8 +467,8 @@ const App: React.FC = () => {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 flex-col">
         <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <h2 className="text-xl font-bold text-gray-700">Connecting to WareFlow Backend...</h2>
-        <p className="text-gray-500 text-sm mt-2">Checking MySQL Connection</p>
+        <h2 className="text-xl font-bold text-gray-700">Loading WareFlow...</h2>
+        <p className="text-gray-500 text-sm mt-2">Checking Database Connection</p>
       </div>
     );
   }
@@ -491,7 +494,7 @@ const App: React.FC = () => {
         return <HistoryTable history={history} locations={locations} items={items} machines={machines} />;
       case 'master-data':
         if (user.role !== 'admin') return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
-        return <MasterData history={history} items={items} machines={machines} locations={locations} sectors={sectors} divisions={divisions} plans={plans} users={usersList} onAddItem={handleAddItem} onAddMachine={handleAddMachine} onAddLocation={handleAddLocation} onAddSector={handleAddSector} onAddDivision={handleAddDivision} onAddPlan={handleAddPlan} onAddUser={handleAddUser} onUpdateItem={handleUpdateItem} onUpdateMachine={handleUpdateMachine} onUpdateLocation={handleUpdateLocation} onUpdateSector={handleUpdateSector} onUpdateDivision={handleUpdateDivision} onUpdatePlan={handleUpdatePlan} onUpdateUser={handleUpdateUser} onDeleteItems={handleDeleteItems} onDeleteMachines={handleDeleteMachines} onDeleteLocations={handleDeleteLocations} onDeleteSectors={handleDeleteSectors} onDeleteDivisions={handleDeleteDivisions} onDeletePlans={handleDeletePlans} onDeleteUsers={handleDeleteUsers} onBulkImport={handleBulkImport} />;
+        return <MasterData history={history} items={items} machines={machines} locations={locations} sectors={sectors} divisions={divisions} plans={plans} users={usersList} onAddItem={handleAddItem} onAddMachine={handleAddMachine} onAddLocation={handleAddLocation} onAddSector={handleAddSector} onAddDivision={handleAddDivision} onAddPlan={handleAddPlan} onAddUser={handleAddUser} onUpdateItem={handleUpdateItem} onUpdateMachine={handleUpdateMachine} onUpdateLocation={handleUpdateLocation} onUpdateSector={handleUpdateSector} onUpdateDivision={handleUpdateDivision} onUpdatePlan={handleUpdatePlan} onUpdateUser={handleUpdateUser} onDeleteItems={handleDeleteItems} onDeleteMachines={handleDeleteMachines} onDeleteLocations={handleDeleteLocations} onDeleteSectors={handleDeleteSectors} onDeleteDivisions={handleDeleteDivisions} onDeletePlans={handleDeletePlans} onDeleteUsers={handleDeleteUsers} onBulkImport={handleBulkImport} onRestore={handleManualRestore} />;
       case 'ai-assistant':
         return <AiAssistant />;
       case 'settings':

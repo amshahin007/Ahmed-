@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
-import { fetchRawCSV, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, APP_SCRIPT_TEMPLATE, sendIssueToSheet, DEFAULT_SCRIPT_URL, locateRemoteData, backupTabToSheet } from '../services/googleSheetsService';
+import { fetchRawCSV, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, locateRemoteData, backupTabToSheet, DEFAULT_SCRIPT_URL } from '../services/googleSheetsService';
 import * as XLSX from 'xlsx';
 
 interface MasterDataProps {
@@ -40,6 +39,7 @@ interface MasterDataProps {
   onDeleteUsers: (usernames: string[]) => void;
 
   onBulkImport: (tab: string, added: any[], updated: any[]) => void;
+  onRestore?: () => Promise<void>; // Added restore prop
 }
 
 type TabType = 'items' | 'locations' | 'sectors' | 'divisions' | 'users' | 'plans' | 'history';
@@ -96,11 +96,10 @@ const MasterData: React.FC<MasterDataProps> = ({
   onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision, onAddPlan, onAddUser,
   onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision, onUpdatePlan, onUpdateUser,
   onDeleteItems, onDeleteMachines, onDeleteLocations, onDeleteSectors, onDeleteDivisions, onDeletePlans, onDeleteUsers,
-  onBulkImport
+  onBulkImport, onRestore
 }) => {
   const [activeTab, setActiveTab] = useState<Exclude<TabType, 'history'>>('items');
   const [showForm, setShowForm] = useState(false);
-  const [showSyncModal, setShowSyncModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({});
   
@@ -132,8 +131,7 @@ const MasterData: React.FC<MasterDataProps> = ({
   const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
-  const [remoteLinks, setRemoteLinks] = useState<{folderUrl: string, sheetUrl: string} | null>(null);
-
+  
   // Column Management State
   const [columnSettings, setColumnSettings] = useState<Record<Exclude<TabType, 'history'>, { key: string; label: string; visible: boolean }[]>>(() => {
     const defaults: Record<string, any> = {};
@@ -164,7 +162,6 @@ const MasterData: React.FC<MasterDataProps> = ({
     return defaults;
   });
 
-  const [showColumnMenu, setShowColumnMenu] = useState(false);
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
@@ -194,21 +191,10 @@ const MasterData: React.FC<MasterDataProps> = ({
     setCurrentPage(1);
     setSelectedIds(new Set());
     setSyncMsg(''); // Clear sync message on tab change
-    setRemoteLinks(null);
   }, [activeTab]);
 
   // -- Config Handlers --
   
-  const updateSyncConfig = (tabKey: string, field: 'sheetId' | 'gid', value: string) => {
-      setSyncConfig(prev => ({
-          ...prev,
-          [tabKey]: {
-              ...(prev[tabKey] || { sheetId: '', gid: '' }),
-              [field]: value
-          }
-      }));
-  };
-
   const handleSheetUrlPaste = (val: string) => {
     const extractedId = extractSheetIdFromUrl(val);
     const extractedGid = extractGidFromUrl(val);
@@ -225,33 +211,6 @@ const MasterData: React.FC<MasterDataProps> = ({
     });
   };
 
-  const handleResetDefaults = () => {
-    setSyncConfig(prev => ({
-        ...prev,
-        [activeTab]: { sheetId: DEFAULT_SHEET_ID, gid: activeTab === 'items' ? DEFAULT_ITEMS_GID : '0' }
-    }));
-    setSyncMsg('Defaults restored for this tab.');
-  };
-
-  const handleLocateData = async () => {
-      if (!scriptUrl) {
-          setSyncMsg('Please ensure Web App URL is set.');
-          return;
-      }
-      setSyncLoading(true);
-      setSyncMsg('Locating storage folder and database...');
-      const result = await locateRemoteData(scriptUrl);
-      setSyncLoading(false);
-      
-      if (result) {
-          setRemoteLinks(result);
-          setSyncMsg('Data located successfully! Use the links below.');
-      } else {
-          setSyncMsg('Failed to locate data. Check URL or permissions.');
-      }
-  };
-
-  // --- AUTO CONFIG FROM SHEET LOGIC ---
   const handleAutoConfigFromSheet = async () => {
       const currentId = syncConfig[activeTab]?.sheetId || '';
       if (!currentId) {
@@ -269,9 +228,7 @@ const MasterData: React.FC<MasterDataProps> = ({
       setSyncMsg("Reading Master Config (GID=0)...");
 
       try {
-          // Fetch GID 0 (Default first tab)
           const rows = await fetchRawCSV(cleanId, '0');
-          
           if (!rows || rows.length === 0) {
               throw new Error("Config tab is empty or unreadable.");
           }
@@ -284,10 +241,9 @@ const MasterData: React.FC<MasterDataProps> = ({
               const key = row[0].toString().toLowerCase().trim();
               const val = row[1].toString().trim();
 
-              // Check if key matches one of our supported tabs
               if (['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users', 'history'].includes(key) && val) {
                   newConfig[key] = {
-                      sheetId: cleanId, // Assume all data is in the same workbook
+                      sheetId: cleanId, 
                       gid: val
                   };
                   foundCount++;
@@ -295,7 +251,7 @@ const MasterData: React.FC<MasterDataProps> = ({
           });
 
           if (foundCount === 0) {
-             setSyncMsg("No valid config rows found. Check spelling in Column A (items, machines, etc).");
+             setSyncMsg("No valid config rows found. Check spelling in Column A.");
           } else {
              setSyncConfig(newConfig);
              setSyncMsg(`Success! Configured ${foundCount} tabs automatically.`);
@@ -313,10 +269,8 @@ const MasterData: React.FC<MasterDataProps> = ({
       let data: any[] = [];
       let columns: {key: string, label: string}[] = [];
 
-      // Get data and columns based on tab
       switch(tabName) {
           case 'items': data = items; columns = COLUMNS_CONFIG['items']; break;
-          // Machines removed from here as they are in Asset Management
           case 'locations': data = locations; columns = COLUMNS_CONFIG['locations']; break;
           case 'sectors': data = sectors; columns = COLUMNS_CONFIG['sectors']; break;
           case 'divisions': data = divisions; columns = COLUMNS_CONFIG['divisions']; break;
@@ -341,7 +295,7 @@ const MasterData: React.FC<MasterDataProps> = ({
       return;
     }
     
-    if(!confirm("⚠️ Backup All Master Data?\n\nThis will OVERWRITE the data in your Google Sheet (tabs: items, machines, etc.) with the data currently in this app.\n\nEnsure your Script is updated to the latest version.")) {
+    if(!confirm("⚠️ Backup All Master Data?\n\nThis will OVERWRITE the data in your Google Sheet with the data currently in this app.")) {
         return;
     }
 
@@ -360,10 +314,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             if (rows.length > 0) {
                 await backupTabToSheet(scriptUrl, tab, rows);
                 successCount++;
-            } else {
-                console.warn(`Skipping empty tab: ${tab}`);
             }
-            // Small delay to prevent rate limiting
             await new Promise(r => setTimeout(r, 500));
 
         } catch (e: any) {
@@ -374,10 +325,34 @@ const MasterData: React.FC<MasterDataProps> = ({
 
     setSyncLoading(false);
     if (errors.length > 0) {
-        setSyncMsg(`Backup Finished. ${successCount} tabs saved. Errors: ${errors.join(', ')}`);
+        setSyncMsg(`Backup Finished. Errors: ${errors.join(', ')}`);
     } else {
         setSyncMsg(`✅ Full Backup Complete! ${successCount} tabs updated.`);
     }
+  };
+
+  const handleRestoreClick = async () => {
+      if (!onRestore) {
+          alert("Restore function not available.");
+          return;
+      }
+      if (!scriptUrl) {
+          setSyncMsg("Error: Configure Web App URL first.");
+          return;
+      }
+      if (!confirm("⚠️ RESTORE FROM CLOUD?\n\nThis will OVERWRITE all local data (Items, Machines, History, etc.) with the data currently in your Google Sheet.\n\nAre you sure?")) return;
+
+      setSyncLoading(true);
+      setSyncMsg("Restoring all data from cloud...");
+      try {
+          await onRestore();
+          setSyncMsg("✅ Restore Complete! Page refreshing...");
+          setTimeout(() => window.location.reload(), 1500);
+      } catch (e: any) {
+          console.error(e);
+          setSyncMsg("❌ Restore Failed: " + e.message);
+          setSyncLoading(false);
+      }
   };
 
   const handleAddNew = () => {
@@ -446,7 +421,7 @@ const MasterData: React.FC<MasterDataProps> = ({
       setSelectedIds(new Set(allIds));
   };
 
-  // Generalized Cloud Sync (Single Tab)
+  // Generalized Cloud Sync (Single Tab) - Kept for legacy "CSV" based sync if needed
   const handleSyncData = async (targetTab: string = activeTab) => {
     setSyncLoading(true);
     setSyncMsg(`Fetching ${targetTab} data...`);
@@ -476,68 +451,6 @@ const MasterData: React.FC<MasterDataProps> = ({
     } finally {
       if (targetTab === activeTab) setSyncLoading(false); // Only unset if single sync
     }
-  };
-
-  const handleFullSync = async () => {
-      const tabs: string[] = ['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users', 'history'];
-      setSyncLoading(true);
-      let successCount = 0;
-      let errors = [];
-
-      for (const tab of tabs) {
-          if (syncConfig[tab]?.sheetId && syncConfig[tab]?.gid) {
-              setSyncMsg(`Restoring ${tab}...`);
-              try {
-                  const cleanId = extractSheetIdFromUrl(syncConfig[tab].sheetId);
-                  const rawRows = await fetchRawCSV(cleanId, syncConfig[tab].gid);
-                  if (rawRows && rawRows.length > 1) {
-                      processImportData(rawRows, tab);
-                      successCount++;
-                  }
-              } catch (e) {
-                  errors.push(`${tab}: ${(e as Error).message}`);
-              }
-              // Small delay to prevent rate limits
-              await new Promise(r => setTimeout(r, 200));
-          }
-      }
-      
-      setSyncLoading(false);
-      if (errors.length > 0) {
-          setSyncMsg(`Restored ${successCount} tabs. Errors: ${errors.join(', ')}`);
-      } else {
-          setSyncMsg(`Full Restore Complete! ${successCount} tabs updated.`);
-      }
-  };
-
-  const handleExportHistory = async () => {
-    if (!scriptUrl) {
-      setSyncMsg("Error: Please enter and save the Web App URL first.");
-      return;
-    }
-    if (history.length === 0) {
-      setSyncMsg("No history to export.");
-      return;
-    }
-    if (!confirm(`Are you sure you want to export ${history.length} historical records to the Google Sheet?`)) return;
-
-    setSyncLoading(true);
-    setSyncMsg(`Starting export of ${history.length} records...`);
-    
-    let successCount = 0;
-    for (let i = 0; i < history.length; i++) {
-        const record = history[i];
-        setSyncMsg(`Exporting ${i + 1}/${history.length}...`);
-        try {
-            await sendIssueToSheet(scriptUrl, record);
-            successCount++;
-            await new Promise(r => setTimeout(r, 600)); 
-        } catch (e) {
-            console.error(e);
-        }
-    }
-    setSyncLoading(false);
-    setSyncMsg(`Export Complete! Sent ${successCount} records.`);
   };
 
   const handleExportDataToExcel = (onlySelected: boolean = false) => {
@@ -701,23 +614,6 @@ const MasterData: React.FC<MasterDataProps> = ({
             role: ['role', 'permission'],
             email: ['email']
         };
-    } else if (targetTab === 'history') {
-        fieldMap = {
-            id: ['id', 'issue id'],
-            timestamp: ['date', 'timestamp', 'time'],
-            locationId: ['location', 'site', 'location id'],
-            sectorName: ['sector'],
-            divisionName: ['division'],
-            machineName: ['machine'],
-            maintenancePlan: ['maint. plan', 'plan', 'maintenance plan'],
-            itemId: ['item id', 'item number'],
-            itemName: ['item name', 'item'],
-            quantity: ['quantity', 'qty'],
-            status: ['status'],
-            notes: ['notes', 'remarks'],
-            warehouseEmail: ['warehouse email'],
-            requesterEmail: ['site email', 'requester email']
-        };
     }
 
     const colIndexMap: Record<string, number> = {};
@@ -764,11 +660,6 @@ const MasterData: React.FC<MasterDataProps> = ({
         } else if (targetTab === 'machines') {
              if (!payload.status) payload.status = 'Working';
              if (!payload.chaseNo) payload.chaseNo = 'Unknown';
-        } else if (targetTab === 'history') {
-             if (!payload.id) return; // Skip invalid history lines
-             if (!payload.timestamp) payload.timestamp = new Date().toISOString();
-             // Ensure quantity is number
-             payload.quantity = Number(payload.quantity) || 0;
         }
 
         const list = targetTab === 'items' ? items : 
@@ -810,27 +701,16 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   const handleDrop = (e: React.DragEvent<HTMLTableHeaderCellElement>) => {
     if (dragItem.current === null || dragOverItem.current === null) return;
-    
-    // We are reordering the 'visibleColumns' list visually
-    // We need to apply this reordering to 'columnSettings'
     const currentColumns = [...columnSettings[activeTab]];
     const visibleCols = currentColumns.filter(c => c.visible);
-    
-    // Get the item being dragged and the target item from visible list
     const itemToMove = visibleCols[dragItem.current];
     const itemTarget = visibleCols[dragOverItem.current];
-    
-    // Find their actual indices in the main list
     const realFromIndex = currentColumns.findIndex(c => c.key === itemToMove.key);
     const realToIndex = currentColumns.findIndex(c => c.key === itemTarget.key);
-    
-    // Perform move in main list
     currentColumns.splice(realFromIndex, 1);
     currentColumns.splice(realToIndex, 0, itemToMove);
-
     dragItem.current = null;
     dragOverItem.current = null;
-    
     setColumnSettings(prev => ({
         ...prev,
         [activeTab]: currentColumns
@@ -840,10 +720,7 @@ const MasterData: React.FC<MasterDataProps> = ({
   // --- Form Handlers ---
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
     const payload = { ...formData };
-    
-    // Handle array conversions for Users
     if (activeTab === 'users') {
         ['allowedLocationIds', 'allowedSectorIds', 'allowedDivisionIds'].forEach(key => {
             if (typeof payload[key] === 'string') {
@@ -851,10 +728,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             }
         });
     }
-
-    if (activeTab === 'items' && payload.stockQuantity) {
-        payload.stockQuantity = Number(payload.stockQuantity);
-    }
+    if (activeTab === 'items' && payload.stockQuantity) payload.stockQuantity = Number(payload.stockQuantity);
 
     if (isEditing) {
         switch(activeTab) {
@@ -880,28 +754,19 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   const renderForm = () => {
     if (!showForm) return null;
-
     const fields = COLUMNS_CONFIG[activeTab];
-
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-fade-in-up">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <h3 className="text-xl font-bold text-gray-800">
-                        {isEditing ? 'Edit' : 'Add New'} {activeTab.slice(0, -1)}
-                    </h3>
-                    <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 transition">
-                        ✕
-                    </button>
+                    <h3 className="text-xl font-bold text-gray-800">{isEditing ? 'Edit' : 'Add New'} {activeTab.slice(0, -1)}</h3>
+                    <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 transition">✕</button>
                 </div>
-                
                 <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto p-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {fields.map(field => {
                             const val = formData[field.key];
-                            // Handle array display for users
                             const displayVal = Array.isArray(val) ? val.join(', ') : (val || '');
-                            
                             return (
                                 <div key={field.key} className={field.key === 'name' || field.key === 'fullName' ? "md:col-span-2 space-y-1" : "space-y-1"}>
                                     <label className="block text-sm font-medium text-gray-700">{field.label}</label>
@@ -914,28 +779,14 @@ const MasterData: React.FC<MasterDataProps> = ({
                                         disabled={isEditing && (field.key === 'id' || field.key === 'username')}
                                         required={field.key === 'id' || field.key === 'username'}
                                     />
-                                    {activeTab === 'users' && field.key.includes('Ids') && (
-                                        <p className="text-xs text-gray-400">Comma separated IDs</p>
-                                    )}
+                                    {activeTab === 'users' && field.key.includes('Ids') && <p className="text-xs text-gray-400">Comma separated IDs</p>}
                                 </div>
                             );
                         })}
                     </div>
-
                     <div className="pt-6 mt-6 border-t border-gray-100 flex justify-end gap-3 sticky bottom-0 bg-white">
-                        <button 
-                            type="button" 
-                            onClick={() => setShowForm(false)} 
-                            className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition"
-                        >
-                            Cancel
-                        </button>
-                        <button 
-                            type="submit" 
-                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm font-medium transition"
-                        >
-                            {isEditing ? 'Save Changes' : 'Create Record'}
-                        </button>
+                        <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition">Cancel</button>
+                        <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm font-medium transition">{isEditing ? 'Save Changes' : 'Create Record'}</button>
                     </div>
                 </form>
             </div>
@@ -944,7 +795,6 @@ const MasterData: React.FC<MasterDataProps> = ({
   };
 
   const renderTable = () => {
-    // Data is now memoized in 'currentData' at component level
     const totalPages = Math.ceil(currentData.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const currentItems = currentData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
@@ -960,27 +810,19 @@ const MasterData: React.FC<MasterDataProps> = ({
                                 <input type="checkbox" checked={currentItems.length > 0 && currentItems.every(i => selectedIds.has((i as any).id || (i as any).username))} onChange={() => handleSelectAllPage(currentItems)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                             </th>
                             {visibleColumns.map((col, index) => (
-                                <th key={col.key} className="px-4 py-3 cursor-move hover:bg-gray-100 select-none" draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDrop} onDragOver={(e) => e.preventDefault()}>
-                                    {col.label}
-                                </th>
+                                <th key={col.key} className="px-4 py-3 cursor-move hover:bg-gray-100 select-none" draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDrop} onDragOver={(e) => e.preventDefault()}>{col.label}</th>
                             ))}
                             <th className="px-4 py-3 text-right bg-gray-50 sticky right-0 shadow-sm border-l">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {currentItems.map((item, idx) => {
+                        {currentItems.map((item) => {
                             const anyItem = item as any;
                             const itemId = anyItem.id || anyItem.username;
                             return (
                                 <tr key={itemId} className="hover:bg-blue-50 transition-colors">
-                                    <td className="px-4 py-2 text-center">
-                                        <input type="checkbox" checked={selectedIds.has(itemId)} onChange={() => toggleSelection(itemId)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                                    </td>
-                                    {visibleColumns.map(col => (
-                                        <td key={col.key} className="px-4 py-2 text-gray-600">
-                                            {Array.isArray(anyItem[col.key]) ? anyItem[col.key].join(', ') : (anyItem[col.key] || '-')}
-                                        </td>
-                                    ))}
+                                    <td className="px-4 py-2 text-center"><input type="checkbox" checked={selectedIds.has(itemId)} onChange={() => toggleSelection(itemId)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /></td>
+                                    {visibleColumns.map(col => <td key={col.key} className="px-4 py-2 text-gray-600">{Array.isArray(anyItem[col.key]) ? anyItem[col.key].join(', ') : (anyItem[col.key] || '-')}</td>)}
                                     <td className="px-4 py-2 text-right sticky right-0 bg-white group-hover:bg-blue-50 border-l border-gray-100 flex items-center justify-end gap-2">
                                         <button onClick={() => handleEdit(item)} className="p-1 text-blue-600 hover:bg-blue-100 rounded" title="Edit">✏️</button>
                                         <button onClick={() => handleDeleteSingle(itemId)} className="p-1 text-red-600 hover:bg-red-100 rounded" title="Delete">🗑️</button>
@@ -988,9 +830,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                                 </tr>
                             );
                         })}
-                        {currentItems.length === 0 && (
-                            <tr><td colSpan={visibleColumns.length + 2} className="px-6 py-12 text-center text-gray-400">No records found in {activeTab}.</td></tr>
-                        )}
+                        {currentItems.length === 0 && <tr><td colSpan={visibleColumns.length + 2} className="px-6 py-12 text-center text-gray-400">No records found in {activeTab}.</td></tr>}
                     </tbody>
                 </table>
             </div>
@@ -1075,6 +915,9 @@ const MasterData: React.FC<MasterDataProps> = ({
              </div>
 
              <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                 <button onClick={handleRestoreClick} disabled={syncLoading} className="whitespace-nowrap px-3 py-2 bg-yellow-50 text-yellow-700 rounded-lg text-xs font-bold hover:bg-yellow-100 border border-yellow-200 flex items-center gap-1">
+                     <span>📥</span> Restore Cloud
+                 </button>
                  <button onClick={handleCloudBackup} disabled={syncLoading} className="whitespace-nowrap px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 border border-indigo-200 flex items-center gap-1">
                      <span>☁️</span> Backup All
                  </button>

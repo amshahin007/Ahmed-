@@ -37,6 +37,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const [selectedPlanId, setSelectedPlanId] = useState('');
 
   // --- Machine Filters (Strict Hierarchy) ---
+  const [showTechnicalFilters, setShowTechnicalFilters] = useState(false); // New Toggle
   const [filterCategory, setFilterCategory] = useState(''); 
   const [filterBrand, setFilterBrand] = useState('');       
   const [filterModelNo, setFilterModelNo] = useState('');   
@@ -155,8 +156,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
     } else {
       setRequesterEmail('');
     }
+    // Auto-focus logic: If location selected, focus on Item Entry if machine is not mandatory yet,
+    // but typically we need machine. Let's focus Sector.
     if (locationId) {
-        setTimeout(() => sectorInputRef.current?.focus(), 100);
+        // setTimeout(() => sectorInputRef.current?.focus(), 100);
     }
   }, [locationId, locations]);
 
@@ -622,7 +625,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
           {/* Section 1: HEADER */}
           <div className="bg-blue-50 p-4 md:p-5 rounded-lg border border-blue-100">
              <div className="mb-2">
-                 <SearchableSelect label="1. Select Warehouse Location (First Step)" required options={locationOptions} value={locationId} onChange={setLocationId} placeholder="Start typing to search zone..." disabled={allowedLocations.length === 0}/>
+                 <SearchableSelect label="1. Select Warehouse Location" required options={locationOptions} value={locationId} onChange={setLocationId} placeholder="Start typing to search zone..." disabled={allowedLocations.length === 0}/>
              </div>
              {allowedLocations.length === 0 && <p className="text-xs text-red-500">Permission denied.</p>}
           </div>
@@ -631,28 +634,38 @@ const IssueForm: React.FC<IssueFormProps> = ({
             <>
                 {/* Section 2: Machine Allocation */}
                 <div className="bg-white p-4 md:p-5 rounded-lg border border-gray-200 animate-fade-in-up">
-                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">2. Allocation Details (Machine)</h3>
+                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">2. Allocation Details (Machine)</h3>
+                        <button type="button" onClick={() => setShowTechnicalFilters(!showTechnicalFilters)} className="text-xs text-blue-600 hover:underline font-semibold">
+                            {showTechnicalFilters ? 'Hide Filters' : 'Show Advanced Filters'}
+                        </button>
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." inputRef={sectorInputRef} />
                         <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
                     </div>
 
-                    <div className="mt-4 p-3 bg-gray-50 rounded border border-gray-100">
-                        <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Technical Filter (Hierarchy)</h4>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                            <SearchableSelect label="Equipment Name (Category)" options={categoryOptions} value={filterCategory} onChange={handleCategoryChange} placeholder="e.g. Tractor, Conveyor..." />
-                            <SearchableSelect label="Brand Name" options={brandOptions} value={filterBrand} onChange={handleBrandChange} placeholder="Select Brand..." disabled={!filterCategory} />
+                    {showTechnicalFilters && (
+                        <div className="mt-4 p-3 bg-gray-50 rounded border border-gray-100 animate-fade-in">
+                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Technical Filter (Hierarchy)</h4>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                                <SearchableSelect label="Equipment Name (Category)" options={categoryOptions} value={filterCategory} onChange={handleCategoryChange} placeholder="e.g. Tractor, Conveyor..." />
+                                <SearchableSelect label="Brand Name" options={brandOptions} value={filterBrand} onChange={handleBrandChange} placeholder="Select Brand..." disabled={!filterCategory} />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                                <SearchableSelect label="Model Name" options={modelOptions} value={filterModelNo} onChange={handleModelChange} placeholder="Select Model..." disabled={!filterCategory} />
+                                <SearchableSelect label="Local Number" options={localNoOptions} value={filterLocalNo} onChange={handleLocalNoChange} placeholder="Select Local No..." disabled={!filterCategory} />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <SearchableSelect label="Chase No" options={chaseNoOptions} value={filterChaseNo} onChange={handleChaseChange} placeholder="Select Chase..." disabled={!filterCategory} />
+                            </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                            <SearchableSelect label="Model Name" options={modelOptions} value={filterModelNo} onChange={handleModelChange} placeholder="Select Model..." disabled={!filterCategory} />
-                            <SearchableSelect label="Local Number" options={localNoOptions} value={filterLocalNo} onChange={handleLocalNoChange} placeholder="Select Local No..." disabled={!filterCategory} />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <SearchableSelect label="Chase No" options={chaseNoOptions} value={filterChaseNo} onChange={handleChaseChange} placeholder="Select Chase..." disabled={!filterCategory} />
-                            <SearchableSelect label="Asset ID / Code (Final)" required options={machineOptions} value={machineId} onChange={handleMachineIdChange} placeholder={machineOptions.length === 0 ? "..." : "Select Asset ID"} />
-                        </div>
+                    )}
+                    
+                    <div className="mt-4">
+                        <SearchableSelect label="Asset ID / Code (Final Machine)" required options={machineOptions} value={machineId} onChange={handleMachineIdChange} placeholder={machineOptions.length === 0 ? "Select Filters above..." : "Select Asset ID"} />
                     </div>
                 </div>
 
