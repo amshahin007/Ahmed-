@@ -197,6 +197,11 @@ export const fetchAllDataFromCloud = async (scriptUrl: string): Promise<Record<s
         }
 
         const result = await response.json();
+        
+        if (!result || typeof result !== 'object') {
+             throw new Error("Invalid response received from script.");
+        }
+
         if (result.status === 'success') {
             if (!result.data) {
                 // If status is success but no data, it means the script logic fell through or didn't execute 'read_full_db' correctly.

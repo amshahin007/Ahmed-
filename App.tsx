@@ -286,6 +286,9 @@ const App: React.FC = () => {
       const mapData = (rows: any[], map: Record<string, string>): any[] => {
           if (!rows || rows.length === 0) return [];
           return rows.map(row => {
+              // PROTECT AGAINST NULL/UNDEFINED ROWS
+              if (!row || typeof row !== 'object') return {}; 
+              
               const newObj: any = {};
               Object.keys(row).forEach(header => {
                   const key = map[header] || header; // Use mapped key or fallback to header name
