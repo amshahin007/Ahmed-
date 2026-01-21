@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Item, Location, Sector, Division, ForecastPeriod, ForecastRecord, IssueRecord, User } from '../types';
 import SearchableSelect from './SearchableSelect';
 import * as XLSX from 'xlsx';
@@ -41,6 +41,9 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
 
   // -- ADMIN STATE --
   const [newPeriod, setNewPeriod] = useState<Partial<ForecastPeriod>>({ status: 'Open' });
+
+  // -- REFS --
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // -- HELPERS --
   const currentPeriod = forecastPeriods.find(p => p.id === selectedPeriodId);
@@ -112,14 +115,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
           }
       });
 
-      // Filter out records that are being updated from the global list, then add new ones
-      // We only update records that were actually touched (in editBuffer) or exist in current view
-      // Ideally, we batch update.
-      
-      // Efficient Strategy: Remove ALL records for this combo, replace with new ones (including 0s if we want to keep them, or filter 0s)
-      // But we need to keep untouched items if any.
-      // Better: Merge logic in parent or here.
-      
       // Let's create a map of ALL items for this specific view context
       const existingMap = new Map(entryRecords.map(r => [r.itemId, r]));
       
@@ -165,6 +160,88 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       }
       onAddPeriod(newPeriod as ForecastPeriod);
       setNewPeriod({ status: 'Open' });
+  };
+
+  // --- EXCEL UPLOAD HANDLERS ---
+  const handleDownloadTemplate = () => {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([
+          ["Item Code", "Quantity", "Item Name (Ref Only)"], 
+          ["ITM-001", 100, "Ball Bearing"], 
+          ["ITM-002", 50, "Hydraulic Fluid"]
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, "Forecast_Template");
+      XLSX.writeFile(wb, "Forecast_Entry_Template.xlsx");
+  };
+
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!canEdit) {
+          alert("Period is closed or not selected. Cannot upload.");
+          return;
+      }
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+          const bstr = evt.target?.result;
+          try {
+              const wb = XLSX.read(bstr, { type: 'binary' });
+              const wsname = wb.SheetNames[0];
+              const ws = wb.Sheets[wsname];
+              const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+
+              if (data.length < 2) { 
+                  alert("File appears empty."); 
+                  return; 
+              }
+
+              // Simple header check
+              const headers = data[0].map(h => String(h).toLowerCase().trim());
+              const idIdx = headers.findIndex(h => h.includes('item') || h.includes('code'));
+              const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('quantity'));
+
+              if (idIdx === -1 || qtyIdx === -1) {
+                  alert("Could not find 'Item Code' or 'Quantity' columns.");
+                  return;
+              }
+
+              const newBuffer = { ...editBuffer };
+              let count = 0;
+              let missing = 0;
+
+              for (let i = 1; i < data.length; i++) {
+                  const row = data[i];
+                  if (!row || row.length === 0) continue;
+                  
+                  const rawId = row[idIdx];
+                  const rawQty = row[qtyIdx];
+
+                  if (rawId !== undefined && rawQty !== undefined) {
+                      const id = String(rawId).trim();
+                      const qty = Number(rawQty);
+                      
+                      if (items.some(it => it.id === id)) {
+                          if (qty >= 0) {
+                              newBuffer[id] = qty;
+                              count++;
+                          }
+                      } else {
+                          missing++;
+                      }
+                  }
+              }
+              
+              setEditBuffer(newBuffer);
+              alert(`Import Successful!\nUpdated ${count} items.\n${missing > 0 ? `Skipped ${missing} items not found in Master Data.` : ''}`);
+
+          } catch (err) {
+              console.error(err);
+              alert("Failed to parse Excel file.");
+          }
+      };
+      reader.readAsBinaryString(file);
+      e.target.value = ''; // Reset
   };
 
   // -- ANALYTICS CALCULATION --
@@ -296,9 +373,20 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                     </div>
                 )}
 
-                {/* Items Grid */}
-                <div className="mb-2">
-                    <input type="text" placeholder="Search Item Code or Name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full p-2 border rounded text-sm" />
+                {/* Items Grid Actions */}
+                <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-4">
+                    <div className="w-full md:flex-1">
+                        <input type="text" placeholder="Search Item Code or Name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={handleDownloadTemplate} className="px-3 py-2 bg-gray-100 text-gray-700 rounded text-xs font-bold hover:bg-gray-200 border border-gray-300 flex items-center gap-1">
+                            <span>⬇️</span> Template
+                        </button>
+                        <button onClick={() => fileInputRef.current?.click()} disabled={!canEdit} className={`px-3 py-2 bg-green-50 text-green-700 rounded text-xs font-bold hover:bg-green-100 border border-green-200 flex items-center gap-1 ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                            <span>📂</span> Upload Excel
+                        </button>
+                        <input type="file" ref={fileInputRef} hidden accept=".xlsx,.xls,.csv" onChange={handleImportExcel} />
+                    </div>
                 </div>
                 
                 <div className="flex-1 overflow-auto border rounded">
