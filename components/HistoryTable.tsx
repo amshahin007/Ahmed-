@@ -67,6 +67,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
         transUm: string;
         sites: Set<string>;
         sumOfQnty: number;
+        currentStock: number;
     }>();
 
     filteredHistory.forEach(h => {
@@ -80,7 +81,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                 fullName: masterItem?.fullName || masterItem?.name || h.itemName,
                 transUm: masterItem?.unit || 'EA',
                 sites: new Set(),
-                sumOfQnty: 0
+                sumOfQnty: 0,
+                currentStock: masterItem?.stockQuantity || 0
             });
         }
         
@@ -122,13 +124,14 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
     XLSX.utils.book_append_sheet(wb, wsHist, "Issue Requests");
 
     // Sheet 2: Inventory Tracking
-    const trackHeaders = ["Item Number", "Full Name", "Trans UM", "Sites", "Sum of Transaction Qty"];
+    const trackHeaders = ["Item Number", "Full Name", "Trans UM", "Sites", "Sum of Transaction Qty", "Current Stock"];
     const trackRows = trackingData.map(s => [
         s.itemNumber,
         s.fullName,
         s.transUm,
         s.sitesDisplay,
-        s.sumOfQnty
+        s.sumOfQnty,
+        s.currentStock
     ]);
     const wsTrack = XLSX.utils.aoa_to_sheet([trackHeaders, ...trackRows]);
     XLSX.utils.book_append_sheet(wb, wsTrack, "Inventory Tracking");
@@ -405,6 +408,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                 <th className="px-3 py-2 border-b border-orange-100">Sites</th>
                                 <th className="px-3 py-2 border-b border-orange-100">Full Name</th>
                                 <th className="px-3 py-2 border-b border-orange-100 text-right">Sum of Transaction Qty</th>
+                                <th className="px-3 py-2 border-b border-orange-100 text-right">Current Stock</th>
                                 <th className="px-3 py-2 border-b border-orange-100 text-right">Trans UM</th>
                             </tr>
                         </thead>
@@ -416,11 +420,12 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                         <td className="px-3 py-2 text-gray-600">{row.sitesDisplay}</td>
                                         <td className="px-3 py-2 text-gray-800">{row.fullName}</td>
                                         <td className="px-3 py-2 text-right font-bold text-gray-900">{row.sumOfQnty}</td>
+                                        <td className="px-3 py-2 text-right font-mono text-gray-600">{row.currentStock}</td>
                                         <td className="px-3 py-2 text-right text-gray-500">{row.transUm}</td>
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan={5} className="p-8 text-center text-gray-400">No tracking data found.</td></tr>
+                                <tr><td colSpan={6} className="p-8 text-center text-gray-400">No tracking data found.</td></tr>
                             )}
                         </tbody>
                     </table>

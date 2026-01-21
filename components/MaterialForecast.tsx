@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Item, Location, Sector, Division, ForecastPeriod, ForecastRecord, IssueRecord, User } from '../types';
 import SearchableSelect from './SearchableSelect';
 import * as XLSX from 'xlsx';
@@ -23,6 +23,8 @@ interface MaterialForecastProps {
 
 type Tab = 'entry' | 'hub' | 'analytics' | 'admin';
 
+const ITEMS_PER_PAGE = 50;
+
 const MaterialForecast: React.FC<MaterialForecastProps> = ({
   items, locations, sectors, divisions, history,
   forecastPeriods, onAddPeriod, onUpdatePeriod,
@@ -38,6 +40,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   // Temp state for editing quantities in the grid
   const [editBuffer, setEditBuffer] = useState<Record<string, number>>({});
+  const [entryPage, setEntryPage] = useState(1);
 
   // -- HUB / ANALYTICS FILTERS --
   const [hubPeriod, setHubPeriod] = useState('');
@@ -45,6 +48,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   const [hubSector, setHubSector] = useState('');
   const [hubDivision, setHubDivision] = useState('');
   const [hubSearch, setHubSearch] = useState('');
+  const [hubPage, setHubPage] = useState(1);
 
   // -- ADMIN STATE --
   const [newPeriod, setNewPeriod] = useState<Partial<ForecastPeriod>>({ status: 'Open' });
@@ -52,6 +56,10 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   // -- REFS --
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset pagination when filters change
+  useEffect(() => { setEntryPage(1); }, [selectedLocation, selectedSector, selectedDivision, selectedPeriodId, searchTerm]);
+  useEffect(() => { setHubPage(1); }, [hubPeriod, hubLocation, hubSector, hubDivision, hubSearch, activeTab]);
 
   // -- HELPERS --
   const currentPeriod = forecastPeriods.find(p => p.id === selectedPeriodId);
@@ -92,6 +100,11 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
           };
       });
   }, [items, searchTerm, entryRecords, editBuffer]);
+
+  const paginatedEntryItems = useMemo(() => {
+      const start = (entryPage - 1) * ITEMS_PER_PAGE;
+      return itemsForEntry.slice(start, start + ITEMS_PER_PAGE);
+  }, [itemsForEntry, entryPage]);
 
   // -- HANDLERS --
 
@@ -341,11 +354,9 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       e.target.value = '';
   };
 
-  // -- ANALYTICS CALCULATION --
+  // -- ANALYTICS CALCULATION (Optimized) --
   const analyticsData = useMemo(() => {
-      // 1. Filter raw records based on Hub Context Filters (Location, Sector, Division)
-      // Note: Period filter is applied LATER to the rows view, 
-      // ensuring 'Total All Periods' is accurate for the selected spatial context.
+      // 1. Filter raw records based on Hub Context Filters
       const contextRecords = forecastRecords.filter(r => {
           if (hubLocation && r.locationId !== hubLocation) return false;
           if (hubSector && r.sectorId !== hubSector) return false;
@@ -353,16 +364,26 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
           return true;
       });
 
-      // 2. Calculate Global Totals per Item/Location (Aggregating all periods for this filtered context)
+      // 2. Pre-process history into a lookup map for faster access
+      // Key: `${locationId}|${itemId}` -> Array of Issues
+      const historyLookup = new Map<string, IssueRecord[]>();
+      history.forEach(h => {
+          // Optimization: Only index relevant history if possible, but location check is fast enough here
+          if (hubLocation && h.locationId !== hubLocation) return;
+          
+          const key = `${h.locationId}|${h.itemId}`;
+          if (!historyLookup.has(key)) historyLookup.set(key, []);
+          historyLookup.get(key)!.push(h);
+      });
+
+      // 3. Calculate Global Totals per Item/Location
       const globalTotals = new Map<string, number>();
       contextRecords.forEach(r => {
           const key = `${r.locationId}|${r.itemId}`;
           globalTotals.set(key, (globalTotals.get(key) || 0) + r.quantity);
       });
 
-      // 3. Group by Location/Item/Period for the table rows
-      // We aggregate quantities if multiple records exist for same Location/Item/Period 
-      // (e.g. if we are viewing All Sectors, we sum Sector A and Sector B)
+      // 4. Group by Location/Item/Period
       const aggregation = new Map<string, {
           key: string;
           locationId: string;
@@ -378,7 +399,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
           aggregation.set(key, current);
       });
 
-      // 4. Calculate Issued Qty from History & Finalize Rows
+      // 5. Finalize Rows with History Lookup
       const results = Array.from(aggregation.values()).map(row => {
           const period = forecastPeriods.find(p => p.id === row.periodId);
           let issuedQty = 0;
@@ -387,18 +408,15 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
               const start = new Date(period.startDate).getTime();
               const end = new Date(period.endDate).getTime();
               
-              const relevantIssues = history.filter(h => {
-                  const t = new Date(h.timestamp).getTime();
-                  // Apply same spatial filters to history to match context
-                  if (hubLocation && h.locationId !== hubLocation) return false;
-                  // Note: History records typically don't store Sector/Division explicitly in a way that matches forecast reliably 
-                  // unless we join with machine/division data. 
-                  // For now, we match Location and Item within the Period.
-                  // Ideally, IssueRecord should have sector/division stored or derived.
-                  return h.locationId === row.locationId && h.itemId === row.itemId && t >= start && t <= end;
-              });
+              // FAST LOOKUP
+              const issues = historyLookup.get(`${row.locationId}|${row.itemId}`) || [];
               
-              issuedQty = relevantIssues.reduce((sum, h) => sum + h.quantity, 0);
+              // Filter mostly by time now, since location/item match is guaranteed by lookup key
+              issuedQty = issues.reduce((sum, h) => {
+                  const t = new Date(h.timestamp).getTime();
+                  if (t >= start && t <= end) return sum + h.quantity;
+                  return sum;
+              }, 0);
           }
 
           const variance = row.forecastQty - issuedQty;
@@ -411,10 +429,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
           else if (issuedQty > row.forecastQty) status = 'Over-Issue';
           else if (issuedQty < row.forecastQty) status = 'Under-Issue';
           
-          // Get Item Details
           const itemDef = items.find(i => i.id === row.itemId);
-          
-          // Get Grand Total for this Location/Item combo (across all periods in context)
           const grandTotal = globalTotals.get(`${row.locationId}|${row.itemId}`) || 0;
 
           return {
@@ -424,7 +439,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
               issuedQty,
               variance,
               status,
-              grandTotal // New Field
+              grandTotal
           };
       });
 
@@ -433,7 +448,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
 
   const filteredAnalytics = useMemo(() => {
       return analyticsData.filter(row => {
-          // Period filter applied here to show specific slices of time
           if (hubPeriod && row.periodId !== hubPeriod) return false;
           if (hubSearch) {
               const search = hubSearch.toLowerCase();
@@ -446,6 +460,11 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       });
   }, [analyticsData, hubPeriod, hubSearch]);
 
+  const paginatedHubRows = useMemo(() => {
+      const start = (hubPage - 1) * ITEMS_PER_PAGE;
+      return filteredAnalytics.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredAnalytics, hubPage]);
+
   const exportAnalytics = () => {
       const ws = XLSX.utils.json_to_sheet(filteredAnalytics);
       const wb = XLSX.utils.book_new();
@@ -453,28 +472,40 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       XLSX.writeFile(wb, "Forecast_Variance_Analysis.xlsx");
   };
 
+  const renderPaginationControls = (totalItems: number, page: number, setPage: (p: number) => void) => {
+      const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+      if (totalPages <= 1) return null;
+      return (
+          <div className="flex justify-between items-center p-3 border-t bg-gray-50 text-xs mt-auto sticky bottom-0">
+              <button disabled={page === 1} onClick={() => setPage(page - 1)} className="px-3 py-1 border rounded bg-white disabled:opacity-50 hover:bg-gray-100">Previous</button>
+              <span>Page {page} of {totalPages} ({totalItems} records)</span>
+              <button disabled={page === totalPages} onClick={() => setPage(page + 1)} className="px-3 py-1 border rounded bg-white disabled:opacity-50 hover:bg-gray-100">Next</button>
+          </div>
+      );
+  };
+
   return (
     <div className="flex flex-col h-full space-y-4 animate-fade-in-up font-cairo">
         {/* Header Tabs */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center shrink-0">
             <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                 <span>🔮</span> Material Forecasting
             </h2>
-            <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
-                <button onClick={() => setActiveTab('entry')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'entry' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Entry Form</button>
-                <button onClick={() => setActiveTab('hub')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'hub' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Aggregation Hub</button>
-                <button onClick={() => setActiveTab('analytics')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'analytics' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Variance Analysis</button>
+            <div className="flex gap-2 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+                <button onClick={() => setActiveTab('entry')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'entry' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Entry Form</button>
+                <button onClick={() => setActiveTab('hub')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'hub' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Aggregation Hub</button>
+                <button onClick={() => setActiveTab('analytics')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'analytics' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Variance Analysis</button>
                 {currentUser.role === 'admin' && (
-                    <button onClick={() => setActiveTab('admin')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'admin' ? 'bg-white text-orange-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Period Settings</button>
+                    <button onClick={() => setActiveTab('admin')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'admin' ? 'bg-white text-orange-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Period Settings</button>
                 )}
             </div>
         </div>
 
         {/* --- VIEW: ENTRY FORM --- */}
         {activeTab === 'entry' && (
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden min-h-0">
                 {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 shrink-0">
                     <div>
                         <label className="block text-xs font-bold text-gray-500 mb-1">1. Location</label>
                         <select value={selectedLocation} onChange={(e) => setSelectedLocation(e.target.value)} className="w-full border rounded p-2 text-sm">
@@ -509,13 +540,13 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
 
                 {/* Status Banner */}
                 {selectedPeriodId && (
-                    <div className={`p-2 mb-4 rounded text-center text-sm font-bold ${isPeriodClosed ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                    <div className={`p-2 mb-4 rounded text-center text-sm font-bold shrink-0 ${isPeriodClosed ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                         {isPeriodClosed ? '🔒 PERIOD CLOSED - Read Only' : '🔓 PERIOD OPEN - Editing Enabled'}
                     </div>
                 )}
 
                 {/* Items Grid Actions */}
-                <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-4">
+                <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-4 shrink-0">
                     <div className="w-full md:flex-1">
                         <input type="text" placeholder="Search Item Code or Name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                     </div>
@@ -530,9 +561,9 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                     </div>
                 </div>
                 
-                <div className="flex-1 overflow-auto border rounded">
+                <div className="flex-1 overflow-auto border rounded relative">
                     <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50 text-gray-700 sticky top-0">
+                        <thead className="bg-gray-50 text-gray-700 sticky top-0 z-10 shadow-sm">
                             <tr>
                                 <th className="p-3 border-b">Item Code</th>
                                 <th className="p-3 border-b">Item Name</th>
@@ -544,10 +575,10 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                         <tbody>
                             {(!selectedLocation || !selectedDivision || !selectedPeriodId) ? (
                                 <tr><td colSpan={5} className="p-8 text-center text-gray-400">Select all hierarchy fields above to load items.</td></tr>
-                            ) : itemsForEntry.length === 0 ? (
+                            ) : paginatedEntryItems.length === 0 ? (
                                 <tr><td colSpan={5} className="p-8 text-center text-gray-400">No items match search.</td></tr>
                             ) : (
-                                itemsForEntry.map(item => (
+                                paginatedEntryItems.map(item => (
                                     <tr key={item.id} className="hover:bg-gray-50 border-b border-gray-100">
                                         <td className="p-3 font-mono text-gray-600">{item.id}</td>
                                         <td className="p-3 font-medium text-gray-800">{item.name}</td>
@@ -569,9 +600,10 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                         </tbody>
                     </table>
                 </div>
+                {renderPaginationControls(itemsForEntry.length, entryPage, setEntryPage)}
 
                 {/* Footer Save */}
-                <div className="pt-4 border-t mt-4 flex justify-end">
+                <div className="pt-4 border-t mt-4 flex justify-end shrink-0">
                     <button 
                         onClick={handleSaveForecast} 
                         disabled={!canEdit || Object.keys(editBuffer).length === 0}
@@ -585,8 +617,8 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
 
         {/* --- VIEW: HUB & ANALYTICS (Merged visual style) --- */}
         {(activeTab === 'hub' || activeTab === 'analytics') && (
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden">
-                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-4 gap-4">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-4 gap-4 shrink-0">
                     <div className="flex-1 w-full">
                         <h3 className="font-bold text-gray-700 mb-3">
                             {activeTab === 'hub' ? 'Aggregated Demand (Hub)' : 'Forecast vs. Actuals'}
@@ -632,9 +664,9 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                     </div>
                 </div>
                 
-                <div className="flex-1 overflow-auto border rounded">
+                <div className="flex-1 overflow-auto border rounded relative">
                     <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-100 text-gray-700 sticky top-0">
+                        <thead className="bg-gray-100 text-gray-700 sticky top-0 z-10 shadow-sm">
                             <tr>
                                 <th className="p-3 border-b">Period</th>
                                 <th className="p-3 border-b">Location</th>
@@ -652,7 +684,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredAnalytics.map((row, idx) => (
+                            {paginatedHubRows.map((row, idx) => (
                                 <tr key={idx} className="hover:bg-gray-50 border-b border-gray-100">
                                     <td className="p-3">{row.periodId}</td>
                                     <td className="p-3">{locations.find(l => l.id === row.locationId)?.name || row.locationId}</td>
@@ -680,16 +712,17 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                         </tbody>
                     </table>
                 </div>
+                {renderPaginationControls(filteredAnalytics.length, hubPage, setHubPage)}
             </div>
         )}
 
         {/* --- VIEW: ADMIN --- */}
         {activeTab === 'admin' && (
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden">
-                <h3 className="font-bold text-gray-700 mb-4">Period Management</h3>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden min-h-0">
+                <h3 className="font-bold text-gray-700 mb-4 shrink-0">Period Management</h3>
                 
                 {/* Create Period */}
-                <div className="grid grid-cols-5 gap-3 mb-6 bg-gray-50 p-4 rounded border">
+                <div className="grid grid-cols-5 gap-3 mb-6 bg-gray-50 p-4 rounded border shrink-0">
                     <input className="border p-2 rounded text-sm" placeholder="ID (e.g. 2025-P1)" value={newPeriod.id || ''} onChange={e => setNewPeriod({...newPeriod, id: e.target.value})} />
                     <input className="border p-2 rounded text-sm" placeholder="Name (e.g. Oct-Jan)" value={newPeriod.name || ''} onChange={e => setNewPeriod({...newPeriod, name: e.target.value})} />
                     <input type="date" className="border p-2 rounded text-sm" value={newPeriod.startDate || ''} onChange={e => setNewPeriod({...newPeriod, startDate: e.target.value})} />

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { IssueRecord, Item, Location, Machine, Sector, Division, User, MaintenancePlan, BOMRecord } from '../types';
 import { generateIssueEmail } from '../services/geminiService';
@@ -22,6 +23,8 @@ interface LineItem {
   itemName: string;
   unit: string;
   quantity: number;
+  locationStock?: number; // Stock at selected location
+  otherStock?: number;    // Stock at all other locations
 }
 
 const IssueForm: React.FC<IssueFormProps> = ({ 
@@ -116,6 +119,28 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
   const selectedItemObj = useMemo(() => items.find(i => i.id === currentItemId), [items, currentItemId]);
   
+  // --- STOCK CALCULATION HELPER ---
+  const getStockInfo = (item?: Item) => {
+      if (!item) return { local: 0, other: 0 };
+      const total = item.stockQuantity || 0;
+      
+      // If we have explicit distribution
+      if (item.quantitiesByLocation) {
+          const local = item.quantitiesByLocation[locationId] || 0;
+          return { local, other: total - local };
+      }
+      
+      // Fallback: Assume WH-001 has all stock if no distribution is defined
+      if (locationId === 'WH-001') {
+          return { local: total, other: 0 };
+      }
+      
+      // If we are not WH-001 and no distribution map, assume stock is elsewhere (at WH-001)
+      return { local: 0, other: total };
+  };
+
+  const currentStockInfo = useMemo(() => getStockInfo(selectedItemObj), [selectedItemObj, locationId]);
+
   useEffect(() => {
     if (selectedItemObj) {
       setCurrentItemName(selectedItemObj.fullName || selectedItemObj.name);
@@ -156,18 +181,13 @@ const IssueForm: React.FC<IssueFormProps> = ({
     } else {
       setRequesterEmail('');
     }
-    // Auto-focus logic: If location selected, focus on Item Entry if machine is not mandatory yet,
-    // but typically we need machine. Let's focus Sector.
-    if (locationId) {
-        // setTimeout(() => sectorInputRef.current?.focus(), 100);
-    }
   }, [locationId, locations]);
 
   const handleAddLineItem = () => {
     if (!currentItemId || !currentQuantity || Number(currentQuantity) <= 0) return;
 
-    if (selectedItemObj && (selectedItemObj.stockQuantity || 0) < Number(currentQuantity)) {
-        if (!confirm(`Warning: Requested Quantity (${currentQuantity}) exceeds Available Stock (${selectedItemObj.stockQuantity || 0}). Continue?`)) {
+    if (currentStockInfo.local < Number(currentQuantity)) {
+        if (!confirm(`Warning: Requested Quantity (${currentQuantity}) exceeds Local Stock (${currentStockInfo.local}) for ${locationId}. \n\nOther locations have: ${currentStockInfo.other}.\n\nContinue?`)) {
             return;
         }
     }
@@ -176,7 +196,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
       itemId: currentItemId,
       itemName: currentItemName,
       unit: selectedItemObj?.unit || 'pcs',
-      quantity: Number(currentQuantity)
+      quantity: Number(currentQuantity),
+      locationStock: currentStockInfo.local,
+      otherStock: currentStockInfo.other
     };
 
     setLineItems([...lineItems, newItem]);
@@ -254,11 +276,14 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
                       const masterItem = items.find(it => it.id === cleanCode);
                       if(masterItem) {
+                          const stock = getStockInfo(masterItem);
                           newLines.push({
                               itemId: masterItem.id,
                               itemName: masterItem.fullName || masterItem.name,
                               unit: masterItem.unit || 'pcs',
-                              quantity: qty
+                              quantity: qty,
+                              locationStock: stock.local,
+                              otherStock: stock.other
                           });
                       } else {
                           notFoundCount++;
@@ -553,9 +578,26 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const divisionOptions = useMemo(() => divisions.filter(d => !sectorId || d.sectorId === sectorId).map(d => ({ id: d.id, label: d.name })), [divisions, sectorId]);
   
   const itemOptions = useMemo(() => items.map(i => {
-      const parts = [i.partNumber ? `PN: ${i.partNumber}` : '', i.modelNo ? `Model: ${i.modelNo}` : ''].filter(Boolean).join(' | ');
+      // Calculate stock preview based on selected location
+      let stockDisplay = '';
+      const total = i.stockQuantity || 0;
+      if (i.quantitiesByLocation) {
+          const local = i.quantitiesByLocation[locationId] || 0;
+          stockDisplay = `Loc: ${local} | Other: ${total - local}`;
+      } else {
+          // Fallback: If WH-001, it has all stock
+          if (locationId === 'WH-001') stockDisplay = `Loc: ${total} | Other: 0`;
+          else stockDisplay = `Loc: 0 | Other: ${total}`;
+      }
+
+      const parts = [
+          i.partNumber ? `PN: ${i.partNumber}` : '', 
+          i.modelNo ? `Model: ${i.modelNo}` : '',
+          stockDisplay
+      ].filter(Boolean).join(' | ');
       return { id: i.id, label: i.id, subLabel: parts ? `${i.name} | ${parts}` : i.name };
-  }), [items]);
+  }), [items, locationId]);
+  
   const itemNameOptions = useMemo(() => items.map(i => ({ id: i.id, label: i.fullName || i.name, subLabel: i.id })), [items]);
 
   const handleItemKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -693,9 +735,16 @@ const IssueForm: React.FC<IssueFormProps> = ({
                                     <button type="button" onClick={handleAddLineItem} disabled={!currentItemId || !currentQuantity} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 transition shadow-sm h-[42px] font-bold">Add</button>
                                 </div>
                                 {selectedItemObj && (
-                                    <div className="text-xs flex items-center gap-1 bg-white border px-2 py-1 rounded w-fit">
-                                        <span className="text-gray-500 font-bold">STOCK:</span>
-                                        <span className={(selectedItemObj.stockQuantity || 0) <= 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}>{selectedItemObj.stockQuantity || 0}</span>
+                                    <div className="text-xs flex items-center gap-3 bg-white border px-2 py-2 rounded w-fit">
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-gray-500 font-bold">LOC STOCK:</span>
+                                            <span className={(currentStockInfo.local) <= 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}>{currentStockInfo.local}</span>
+                                        </div>
+                                        <div className="w-px h-4 bg-gray-300"></div>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-gray-500 font-bold">OTHER STOCK:</span>
+                                            <span className="text-blue-600 font-bold">{currentStockInfo.other}</span>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -724,8 +773,30 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         {lineItems.length > 0 ? (
                             <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-100 text-gray-700 font-semibold"><tr><th className="px-4 py-2">Item Number</th><th className="px-4 py-2">Item Name</th><th className="px-4 py-2">Unit</th><th className="px-4 py-2 text-center">Qty</th><th className="px-4 py-2 text-center">Action</th></tr></thead>
-                                    <tbody className="divide-y divide-gray-100">{lineItems.map((line, idx) => (<tr key={idx} className="hover:bg-gray-50"><td className="px-4 py-2 font-mono text-gray-600 font-bold">{line.itemId}</td><td className="px-4 py-2">{line.itemName}</td><td className="px-4 py-2 text-sm text-gray-500">{line.unit}</td><td className="px-4 py-2 text-center font-bold text-lg">{line.quantity}</td><td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveLineItem(idx)} className="text-red-500 hover:text-red-700 font-medium">Remove</button></td></tr>))}</tbody>
+                                    <thead className="bg-gray-100 text-gray-700 font-semibold">
+                                        <tr>
+                                            <th className="px-4 py-2">Item Number</th>
+                                            <th className="px-4 py-2">Item Name</th>
+                                            <th className="px-4 py-2">Unit</th>
+                                            <th className="px-4 py-2 text-center">Qty</th>
+                                            <th className="px-4 py-2 text-center">Loc. Stock</th>
+                                            <th className="px-4 py-2 text-center">Other Stock</th>
+                                            <th className="px-4 py-2 text-center">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {lineItems.map((line, idx) => (
+                                            <tr key={idx} className="hover:bg-gray-50">
+                                                <td className="px-4 py-2 font-mono text-gray-600 font-bold">{line.itemId}</td>
+                                                <td className="px-4 py-2">{line.itemName}</td>
+                                                <td className="px-4 py-2 text-sm text-gray-500">{line.unit}</td>
+                                                <td className="px-4 py-2 text-center font-bold text-lg">{line.quantity}</td>
+                                                <td className="px-4 py-2 text-center font-mono text-gray-500">{line.locationStock}</td>
+                                                <td className="px-4 py-2 text-center font-mono text-blue-500">{line.otherStock}</td>
+                                                <td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveLineItem(idx)} className="text-red-500 hover:text-red-700 font-medium">Remove</button></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
                                 </table>
                             </div>
                         ) : <div className="text-center py-4 text-gray-400 bg-gray-50 rounded border border-dashed text-xs">No items added yet.</div>}

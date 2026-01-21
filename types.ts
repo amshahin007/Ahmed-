@@ -14,7 +14,8 @@ export interface Item {
   oem?: string;            // "OEM"
   partNumber?: string;     // "Part No"
   modelNo?: string;        // "Model No (طراز المعده)" - NEW
-  stockQuantity?: number;  // Current Warehouse Stock
+  stockQuantity?: number;  // Current Warehouse Stock (Total)
+  quantitiesByLocation?: Record<string, number>; // Distributed stock per location
 }
 
 export interface Sector {
