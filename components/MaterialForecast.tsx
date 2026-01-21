@@ -49,6 +49,10 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   const [hubDivision, setHubDivision] = useState('');
   const [hubSearch, setHubSearch] = useState('');
   const [hubPage, setHubPage] = useState(1);
+  
+  // -- NEW: Custom Date Range for Actuals --
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
 
   // -- ADMIN STATE --
   const [newPeriod, setNewPeriod] = useState<Partial<ForecastPeriod>>({ status: 'Open' });
@@ -59,7 +63,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
 
   // Reset pagination when filters change
   useEffect(() => { setEntryPage(1); }, [selectedLocation, selectedSector, selectedDivision, selectedPeriodId, searchTerm]);
-  useEffect(() => { setHubPage(1); }, [hubPeriod, hubLocation, hubSector, hubDivision, hubSearch, activeTab]);
+  useEffect(() => { setHubPage(1); }, [hubPeriod, hubLocation, hubSector, hubDivision, hubSearch, activeTab, customStartDate, customEndDate]);
 
   // -- HELPERS --
   const currentPeriod = forecastPeriods.find(p => p.id === selectedPeriodId);
@@ -405,9 +409,17 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
           let issuedQty = 0;
           
           if (period) {
-              const start = new Date(period.startDate).getTime();
-              const end = new Date(period.endDate).getTime();
+              let start = new Date(period.startDate).getTime();
+              let end = new Date(period.endDate).getTime();
               
+              // NEW: Override with custom dates if provided
+              if (customStartDate && customEndDate) {
+                  start = new Date(customStartDate).getTime();
+                  end = new Date(customEndDate).getTime();
+                  // Ensure end date covers the full day
+                  end += (24 * 60 * 60 * 1000) - 1; 
+              }
+
               // FAST LOOKUP
               const issues = historyLookup.get(`${row.locationId}|${row.itemId}`) || [];
               
@@ -444,7 +456,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       });
 
       return results;
-  }, [forecastRecords, history, forecastPeriods, items, hubLocation, hubSector, hubDivision]);
+  }, [forecastRecords, history, forecastPeriods, items, hubLocation, hubSector, hubDivision, customStartDate, customEndDate]);
 
   const filteredAnalytics = useMemo(() => {
       return analyticsData.filter(row => {
@@ -649,6 +661,35 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                 className="border rounded p-2 text-sm w-40"
                             />
                         </div>
+                        {/* NEW: Date Range Override for Analytics */}
+                        {activeTab === 'analytics' && (
+                            <div className="mt-3 flex items-center gap-2 bg-yellow-50 p-2 rounded border border-yellow-200 w-fit">
+                                <span className="text-xs font-bold text-yellow-800 uppercase">Override Actuals Date Range:</span>
+                                <input 
+                                    type="date" 
+                                    value={customStartDate} 
+                                    onChange={(e) => setCustomStartDate(e.target.value)} 
+                                    className="border rounded px-2 py-1 text-xs"
+                                    title="Start Date"
+                                />
+                                <span className="text-gray-400">→</span>
+                                <input 
+                                    type="date" 
+                                    value={customEndDate} 
+                                    onChange={(e) => setCustomEndDate(e.target.value)} 
+                                    className="border rounded px-2 py-1 text-xs"
+                                    title="End Date"
+                                />
+                                {(customStartDate || customEndDate) && (
+                                    <button 
+                                        onClick={() => {setCustomStartDate(''); setCustomEndDate('');}}
+                                        className="text-xs text-red-600 font-bold hover:underline ml-2"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <div className="flex gap-2">
                         <button onClick={handleBulkTemplate} className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded text-sm font-bold hover:bg-blue-100 whitespace-nowrap" title="Download Bulk Template">
@@ -676,7 +717,9 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                 <th className="p-3 border-b text-right bg-gray-50 border-l border-gray-200">Total All Periods</th>
                                 {activeTab === 'analytics' && (
                                     <>
-                                        <th className="p-3 border-b text-right">Issued Qty</th>
+                                        <th className={`p-3 border-b text-right ${customStartDate && customEndDate ? 'bg-yellow-100 text-yellow-900 border-yellow-200' : ''}`}>
+                                            Issued Qty {customStartDate && customEndDate ? '(Custom Range)' : ''}
+                                        </th>
                                         <th className="p-3 border-b text-right">Variance</th>
                                         <th className="p-3 border-b text-center">Status</th>
                                     </>
@@ -694,7 +737,9 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                     <td className="p-3 text-right font-bold text-gray-600 bg-gray-50 border-l border-gray-200">{row.grandTotal}</td>
                                     {activeTab === 'analytics' && (
                                         <>
-                                            <td className="p-3 text-right text-blue-700 font-bold">{row.issuedQty}</td>
+                                            <td className={`p-3 text-right font-bold ${customStartDate && customEndDate ? 'bg-yellow-50 text-yellow-800' : 'text-blue-700'}`}>
+                                                {row.issuedQty}
+                                            </td>
                                             <td className={`p-3 text-right font-bold ${row.variance < 0 ? 'text-red-600' : 'text-green-600'}`}>{row.variance}</td>
                                             <td className="p-3 text-center">
                                                 <span className={`px-2 py-1 rounded text-xs font-bold 
