@@ -198,9 +198,13 @@ export const fetchAllDataFromCloud = async (scriptUrl: string): Promise<Record<s
 
         const result = await response.json();
         if (result.status === 'success') {
+            if (!result.data) {
+                // If status is success but no data, it means the script logic fell through or didn't execute 'read_full_db' correctly.
+                throw new Error("Script connected but returned no data. Your script code might be outdated. Please Copy Code -> Deploy -> New Version.");
+            }
             return result.data;
         } else {
-            throw new Error(result.message || "Script connected but returned an error. Ensure code is updated.");
+            throw new Error(result.message || "Script connected but returned an error status.");
         }
     } catch (error) {
         console.error("Fetch Data Error:", error);
@@ -404,4 +408,3 @@ function getOrCreateSpreadsheet(parentFolder) {
   }
   return newSS;
 }
-`;

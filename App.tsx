@@ -274,7 +274,13 @@ const App: React.FC = () => {
       const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
       if (!scriptUrl) throw new Error("No Script URL configured");
 
+      // Guard: fetchAllDataFromCloud throws if script is outdated (missing data field)
       const rawData = await fetchAllDataFromCloud(scriptUrl);
+      
+      // Guard: Ensure rawData is an object before accessing properties
+      if (!rawData) {
+          throw new Error("Received empty response from cloud. Ensure the database sheet has data.");
+      }
       
       // Mapping Helper: Maps header names (from Sheet) to keys (Application State)
       const mapData = (rows: any[], map: Record<string, string>): any[] => {
