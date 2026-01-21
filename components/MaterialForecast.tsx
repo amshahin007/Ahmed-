@@ -39,23 +39,36 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   // Temp state for editing quantities in the grid
   const [editBuffer, setEditBuffer] = useState<Record<string, number>>({});
 
+  // -- HUB / ANALYTICS FILTERS --
+  const [hubPeriod, setHubPeriod] = useState('');
+  const [hubLocation, setHubLocation] = useState('');
+  const [hubSector, setHubSector] = useState('');
+  const [hubDivision, setHubDivision] = useState('');
+  const [hubSearch, setHubSearch] = useState('');
+
   // -- ADMIN STATE --
   const [newPeriod, setNewPeriod] = useState<Partial<ForecastPeriod>>({ status: 'Open' });
 
   // -- REFS --
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bulkInputRef = useRef<HTMLInputElement>(null);
 
   // -- HELPERS --
   const currentPeriod = forecastPeriods.find(p => p.id === selectedPeriodId);
   const isPeriodClosed = currentPeriod?.status === 'Closed';
   const canEdit = currentUser.role === 'admin' || (!isPeriodClosed && !!selectedPeriodId);
 
-  // Filtered Divisions based on Sector
+  // Filtered Divisions based on Sector (Entry)
   const filteredDivisions = useMemo(() => {
       return divisions.filter(d => d.sectorId === selectedSector);
   }, [divisions, selectedSector]);
 
-  // Filtered Forecast Records for Entry View
+  // Filtered Divisions based on Hub Sector
+  const hubFilteredDivisions = useMemo(() => {
+      return divisions.filter(d => d.sectorId === hubSector);
+  }, [divisions, hubSector]);
+
+  // Filtered Forecast Records for Entry View (Specific to current Period)
   const entryRecords = useMemo(() => {
       if (!selectedLocation || !selectedSector || !selectedDivision || !selectedPeriodId) return [];
       return forecastRecords.filter(r => 
@@ -162,7 +175,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       setNewPeriod({ status: 'Open' });
   };
 
-  // --- EXCEL UPLOAD HANDLERS ---
+  // --- ENTRY TEMPLATE & IMPORT ---
   const handleDownloadTemplate = () => {
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([
@@ -196,7 +209,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                   return; 
               }
 
-              // Simple header check
               const headers = data[0].map(h => String(h).toLowerCase().trim());
               const idIdx = headers.findIndex(h => h.includes('item') || h.includes('code'));
               const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('quantity'));
@@ -244,9 +256,113 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       e.target.value = ''; // Reset
   };
 
+  // --- HUB BULK TEMPLATE & IMPORT ---
+  const handleBulkTemplate = () => {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([
+          ["Period ID", "Location ID", "Sector ID", "Division ID", "Item Code", "Quantity"], 
+          ["2025-P1", "WH-001", "SEC-001", "DIV-001", "ITM-001", 100], 
+          ["2025-P1", "WH-001", "SEC-001", "DIV-001", "ITM-002", 50]
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, "Bulk_Forecast");
+      XLSX.writeFile(wb, "Bulk_Forecast_Upload_Template.xlsx");
+  };
+
+  const handleBulkImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+          const bstr = evt.target?.result;
+          try {
+              const wb = XLSX.read(bstr, { type: 'binary' });
+              const ws = wb.Sheets[wb.SheetNames[0]];
+              const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+              if (data.length === 0) { alert("File is empty."); return; }
+
+              const newRecords: ForecastRecord[] = [];
+              const timestamp = new Date().toISOString();
+              let count = 0;
+              let errors = 0;
+
+              data.forEach(row => {
+                  // Normalize keys to allow case-insensitivity
+                  const normRow: any = {};
+                  Object.keys(row).forEach(k => normRow[k.toLowerCase().replace(/[\s-_]/g, '')] = row[k]);
+
+                  const pId = String(normRow['periodid'] || normRow['period'] || '').trim();
+                  const lId = String(normRow['locationid'] || normRow['location'] || '').trim();
+                  const sId = String(normRow['sectorid'] || normRow['sector'] || '').trim();
+                  const dId = String(normRow['divisionid'] || normRow['division'] || '').trim();
+                  const iId = String(normRow['itemcode'] || normRow['itemid'] || '').trim();
+                  const qty = Number(normRow['quantity'] || normRow['qty'] || 0);
+
+                  if (pId && lId && sId && dId && iId && qty >= 0) {
+                      // Verify existence
+                      const itemExists = items.some(i => i.id === iId);
+                      const locExists = locations.some(l => l.id === lId);
+                      
+                      if (itemExists && locExists) {
+                          newRecords.push({
+                              id: `${lId}-${dId}-${iId}-${pId}`,
+                              periodId: pId,
+                              locationId: lId,
+                              sectorId: sId,
+                              divisionId: dId,
+                              itemId: iId,
+                              quantity: qty,
+                              lastUpdated: timestamp,
+                              updatedBy: currentUser.username
+                          });
+                          count++;
+                      } else {
+                          errors++;
+                      }
+                  } else {
+                      errors++;
+                  }
+              });
+
+              if (count > 0) {
+                  onUpdateForecast(newRecords); // This merges in App.tsx
+                  alert(`Bulk Import Successful!\nImported/Updated: ${count} records.\nSkipped/Invalid: ${errors}`);
+              } else {
+                  alert("No valid records found. Check IDs and try again.");
+              }
+
+          } catch (err) {
+              console.error(err);
+              alert("Failed to process file.");
+          }
+      };
+      reader.readAsBinaryString(file);
+      e.target.value = '';
+  };
+
   // -- ANALYTICS CALCULATION --
   const analyticsData = useMemo(() => {
-      // Group forecasts by Location/Item/Period
+      // 1. Filter raw records based on Hub Context Filters (Location, Sector, Division)
+      // Note: Period filter is applied LATER to the rows view, 
+      // ensuring 'Total All Periods' is accurate for the selected spatial context.
+      const contextRecords = forecastRecords.filter(r => {
+          if (hubLocation && r.locationId !== hubLocation) return false;
+          if (hubSector && r.sectorId !== hubSector) return false;
+          if (hubDivision && r.divisionId !== hubDivision) return false;
+          return true;
+      });
+
+      // 2. Calculate Global Totals per Item/Location (Aggregating all periods for this filtered context)
+      const globalTotals = new Map<string, number>();
+      contextRecords.forEach(r => {
+          const key = `${r.locationId}|${r.itemId}`;
+          globalTotals.set(key, (globalTotals.get(key) || 0) + r.quantity);
+      });
+
+      // 3. Group by Location/Item/Period for the table rows
+      // We aggregate quantities if multiple records exist for same Location/Item/Period 
+      // (e.g. if we are viewing All Sectors, we sum Sector A and Sector B)
       const aggregation = new Map<string, {
           key: string;
           locationId: string;
@@ -255,14 +371,14 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
           forecastQty: number;
       }>();
 
-      forecastRecords.forEach(r => {
+      contextRecords.forEach(r => {
           const key = `${r.locationId}|${r.itemId}|${r.periodId}`;
           const current = aggregation.get(key) || { key, locationId: r.locationId, periodId: r.periodId, itemId: r.itemId, forecastQty: 0 };
           current.forecastQty += r.quantity;
           aggregation.set(key, current);
       });
 
-      // Calculate Issued Qty from History
+      // 4. Calculate Issued Qty from History & Finalize Rows
       const results = Array.from(aggregation.values()).map(row => {
           const period = forecastPeriods.find(p => p.id === row.periodId);
           let issuedQty = 0;
@@ -273,6 +389,12 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
               
               const relevantIssues = history.filter(h => {
                   const t = new Date(h.timestamp).getTime();
+                  // Apply same spatial filters to history to match context
+                  if (hubLocation && h.locationId !== hubLocation) return false;
+                  // Note: History records typically don't store Sector/Division explicitly in a way that matches forecast reliably 
+                  // unless we join with machine/division data. 
+                  // For now, we match Location and Item within the Period.
+                  // Ideally, IssueRecord should have sector/division stored or derived.
                   return h.locationId === row.locationId && h.itemId === row.itemId && t >= start && t <= end;
               });
               
@@ -291,6 +413,9 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
           
           // Get Item Details
           const itemDef = items.find(i => i.id === row.itemId);
+          
+          // Get Grand Total for this Location/Item combo (across all periods in context)
+          const grandTotal = globalTotals.get(`${row.locationId}|${row.itemId}`) || 0;
 
           return {
               ...row,
@@ -298,15 +423,31 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
               itemUnit: itemDef?.unit || '',
               issuedQty,
               variance,
-              status
+              status,
+              grandTotal // New Field
           };
       });
 
       return results;
-  }, [forecastRecords, history, forecastPeriods, items]);
+  }, [forecastRecords, history, forecastPeriods, items, hubLocation, hubSector, hubDivision]);
+
+  const filteredAnalytics = useMemo(() => {
+      return analyticsData.filter(row => {
+          // Period filter applied here to show specific slices of time
+          if (hubPeriod && row.periodId !== hubPeriod) return false;
+          if (hubSearch) {
+              const search = hubSearch.toLowerCase();
+              return (
+                  row.itemId.toLowerCase().includes(search) || 
+                  row.itemName.toLowerCase().includes(search)
+              );
+          }
+          return true;
+      });
+  }, [analyticsData, hubPeriod, hubSearch]);
 
   const exportAnalytics = () => {
-      const ws = XLSX.utils.json_to_sheet(analyticsData);
+      const ws = XLSX.utils.json_to_sheet(filteredAnalytics);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Forecast_Variance");
       XLSX.writeFile(wb, "Forecast_Variance_Analysis.xlsx");
@@ -445,13 +586,50 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
         {/* --- VIEW: HUB & ANALYTICS (Merged visual style) --- */}
         {(activeTab === 'hub' || activeTab === 'analytics') && (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-gray-700">
-                        {activeTab === 'hub' ? 'Aggregated Demand (Hub)' : 'Forecast vs. Actuals'}
-                    </h3>
-                    <button onClick={exportAnalytics} className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded text-sm font-bold hover:bg-green-100">
-                        Export Excel
-                    </button>
+                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-4 gap-4">
+                    <div className="flex-1 w-full">
+                        <h3 className="font-bold text-gray-700 mb-3">
+                            {activeTab === 'hub' ? 'Aggregated Demand (Hub)' : 'Forecast vs. Actuals'}
+                        </h3>
+                        {/* Filters for Hub/Analytics */}
+                        <div className="flex flex-wrap gap-2 items-center">
+                            <select value={hubPeriod} onChange={(e) => setHubPeriod(e.target.value)} className="border rounded p-2 text-sm bg-gray-50 w-32">
+                                <option value="">All Periods</option>
+                                {forecastPeriods.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                            <select value={hubLocation} onChange={(e) => setHubLocation(e.target.value)} className="border rounded p-2 text-sm bg-gray-50 w-36">
+                                <option value="">All Locations</option>
+                                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                            </select>
+                            <select value={hubSector} onChange={(e) => {setHubSector(e.target.value); setHubDivision('');}} className="border rounded p-2 text-sm bg-gray-50 w-36">
+                                <option value="">All Sectors</option>
+                                {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                            <select value={hubDivision} onChange={(e) => setHubDivision(e.target.value)} disabled={!hubSector} className="border rounded p-2 text-sm bg-gray-50 w-36">
+                                <option value="">All Divisions</option>
+                                {hubFilteredDivisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                            </select>
+                            <input 
+                                type="text" 
+                                placeholder="Filter items..." 
+                                value={hubSearch} 
+                                onChange={(e) => setHubSearch(e.target.value)} 
+                                className="border rounded p-2 text-sm w-40"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={handleBulkTemplate} className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded text-sm font-bold hover:bg-blue-100 whitespace-nowrap" title="Download Bulk Template">
+                            ⬇️ Template
+                        </button>
+                        <button onClick={() => bulkInputRef.current?.click()} className="px-3 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded text-sm font-bold hover:bg-orange-100 whitespace-nowrap">
+                            📂 Upload Data
+                        </button>
+                        <input type="file" ref={bulkInputRef} hidden accept=".xlsx,.xls,.csv" onChange={handleBulkImport} />
+                        <button onClick={exportAnalytics} className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded text-sm font-bold hover:bg-green-100 whitespace-nowrap">
+                            Export Excel
+                        </button>
+                    </div>
                 </div>
                 
                 <div className="flex-1 overflow-auto border rounded">
@@ -462,7 +640,8 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                 <th className="p-3 border-b">Location</th>
                                 <th className="p-3 border-b">Item Code</th>
                                 <th className="p-3 border-b">Description</th>
-                                <th className="p-3 border-b text-right">Total Forecast</th>
+                                <th className="p-3 border-b text-right">Period Forecast</th>
+                                <th className="p-3 border-b text-right bg-gray-50 border-l border-gray-200">Total All Periods</th>
                                 {activeTab === 'analytics' && (
                                     <>
                                         <th className="p-3 border-b text-right">Issued Qty</th>
@@ -473,13 +652,14 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                             </tr>
                         </thead>
                         <tbody>
-                            {analyticsData.map((row, idx) => (
+                            {filteredAnalytics.map((row, idx) => (
                                 <tr key={idx} className="hover:bg-gray-50 border-b border-gray-100">
                                     <td className="p-3">{row.periodId}</td>
                                     <td className="p-3">{locations.find(l => l.id === row.locationId)?.name || row.locationId}</td>
                                     <td className="p-3 font-mono">{row.itemId}</td>
                                     <td className="p-3">{row.itemName}</td>
-                                    <td className="p-3 text-right font-bold">{row.forecastQty}</td>
+                                    <td className="p-3 text-right font-bold text-blue-700">{row.forecastQty}</td>
+                                    <td className="p-3 text-right font-bold text-gray-600 bg-gray-50 border-l border-gray-200">{row.grandTotal}</td>
                                     {activeTab === 'analytics' && (
                                         <>
                                             <td className="p-3 text-right text-blue-700 font-bold">{row.issuedQty}</td>
@@ -496,7 +676,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                     )}
                                 </tr>
                             ))}
-                            {analyticsData.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-gray-400">No data found.</td></tr>}
+                            {filteredAnalytics.length === 0 && <tr><td colSpan={9} className="p-8 text-center text-gray-400">No data found matching filters.</td></tr>}
                         </tbody>
                     </table>
                 </div>
