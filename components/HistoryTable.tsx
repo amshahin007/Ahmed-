@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { IssueRecord, Location, Item, Machine } from '../types';
 import * as XLSX from 'xlsx';
@@ -10,12 +11,12 @@ interface HistoryTableProps {
   machines: Machine[];
 }
 
-type TabType = 'stock' | 'history';
+type TabType = 'tracking' | 'requests';
 
 const ITEMS_PER_PAGE = 50;
 
 const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, machines }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('history'); // Default to History view now
+  const [activeTab, setActiveTab] = useState<TabType>('requests'); // Default to Requests (History Log)
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -46,7 +47,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
     });
   }, [history, searchTerm, selectedLocation]);
 
-  // Aggregate for Stock View
+  // Aggregate for Inventory Tracking (Stock View)
   const stockData = useMemo(() => {
     const map = new Map<string, {
         itemNumber: string;
@@ -106,7 +107,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
         ];
     });
     const wsHist = XLSX.utils.aoa_to_sheet([histHeaders, ...histRows]);
-    XLSX.utils.book_append_sheet(wb, wsHist, "Issue Tracking");
+    XLSX.utils.book_append_sheet(wb, wsHist, "Issue Requests");
 
     // Sheet 2: Stock Summary
     const stockHeaders = ["Item Number", "Full Name", "Trans UM", "Sites", "Sum of Qnty"];
@@ -118,7 +119,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
         s.sumOfQnty
     ]);
     const wsStock = XLSX.utils.aoa_to_sheet([stockHeaders, ...stockRows]);
-    XLSX.utils.book_append_sheet(wb, wsStock, "Stock Summary");
+    XLSX.utils.book_append_sheet(wb, wsStock, "Inventory Tracking");
 
     return wb;
   };
@@ -204,16 +205,16 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
         {/* Tabs */}
         <div className="flex bg-gray-100 p-1 rounded-lg">
             <button 
-                onClick={() => setActiveTab('history')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'history' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setActiveTab('requests')}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'requests' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
-                Tracking
+                Issue Requests
             </button>
             <button 
-                onClick={() => setActiveTab('stock')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'stock' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setActiveTab('tracking')}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'tracking' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
-                Stock Summary
+                Inventory Tracking
             </button>
         </div>
 
@@ -262,8 +263,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
       {/* Content Area */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col min-h-0">
          
-         {/* HISTORY VIEW (Issue Tracking) - Updated Columns */}
-         {activeTab === 'history' && (
+         {/* ISSUE REQUESTS VIEW (History Log) */}
+         {activeTab === 'requests' && (
             <>
                 <div className="overflow-auto flex-1">
                     <table className="w-full text-left text-xs text-gray-600 border-separate border-spacing-0 whitespace-nowrap">
@@ -274,7 +275,6 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                 <th className="px-3 py-2 border-b border-gray-200 bg-gray-50">G/L Date</th>
                                 <th className="px-3 py-2 border-b border-gray-200 bg-gray-50">Full Name</th>
                                 <th className="px-3 py-2 border-b border-gray-200 bg-gray-50 text-right">Sum of Transaction Qty</th>
-                                {/* Extra Columns useful for context */}
                                 <th className="px-3 py-2 border-b border-gray-200 bg-gray-50">Machine</th>
                                 <th className="px-3 py-2 border-b border-gray-200 bg-gray-50">Status</th>
                             </tr>
@@ -314,7 +314,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                     </tr>
                                 )})
                             ) : (
-                                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No records found.</td></tr>
+                                <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No requests found.</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -323,8 +323,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
             </>
          )}
 
-         {/* STOCK VIEW */}
-         {activeTab === 'stock' && (
+         {/* INVENTORY TRACKING VIEW (Stock Summary) */}
+         {activeTab === 'tracking' && (
              <>
                 <div className="overflow-auto flex-1">
                     <table className="w-full text-left text-xs border-separate border-spacing-0 whitespace-nowrap">
@@ -349,7 +349,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan={5} className="p-8 text-center text-gray-400">No stock data found.</td></tr>
+                                <tr><td colSpan={5} className="p-8 text-center text-gray-400">No inventory data found.</td></tr>
                             )}
                         </tbody>
                     </table>

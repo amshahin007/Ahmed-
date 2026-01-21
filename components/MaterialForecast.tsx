@@ -715,8 +715,22 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                 <tr key={p.id} className="border-b">
                                     <td className="p-3 font-mono">{p.id}</td>
                                     <td className="p-3">{p.name}</td>
-                                    <td className="p-3">{p.startDate}</td>
-                                    <td className="p-3">{p.endDate}</td>
+                                    <td className="p-3">
+                                        <input 
+                                            type="date" 
+                                            value={p.startDate} 
+                                            onChange={(e) => onUpdatePeriod({...p, startDate: e.target.value})} 
+                                            className="border rounded p-1 text-xs"
+                                        />
+                                    </td>
+                                    <td className="p-3">
+                                        <input 
+                                            type="date" 
+                                            value={p.endDate} 
+                                            onChange={(e) => onUpdatePeriod({...p, endDate: e.target.value})} 
+                                            className="border rounded p-1 text-xs"
+                                        />
+                                    </td>
                                     <td className="p-3">
                                         <span className={`px-2 py-1 rounded text-xs ${p.status === 'Open' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{p.status}</span>
                                     </td>
