@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -315,7 +314,7 @@ const App: React.FC = () => {
           if (!rows || rows.length === 0) return [];
           return rows.map(row => {
               // PROTECT AGAINST NULL/UNDEFINED ROWS
-              if (!row || typeof row !== 'object') return {}; 
+              if (!row || typeof row !== 'object') return null; // Return null to filter later
               
               const newObj: any = {};
               Object.keys(row).forEach(header => {
@@ -326,7 +325,7 @@ const App: React.FC = () => {
                   newObj[key] = val;
               });
               return newObj;
-          });
+          }).filter(item => item !== null && (item.id || item.username)); // FILTER OUT NULLS AND EMPTY IDS
       };
 
       // Define mappings for critical fields

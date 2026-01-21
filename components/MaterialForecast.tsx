@@ -66,8 +66,8 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   // Items List for Entry (Merged with existing forecasts)
   const itemsForEntry = useMemo(() => {
       return items.filter(i => 
-          (i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-           i.id.toLowerCase().includes(searchTerm.toLowerCase()))
+          ((i.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+           (i.id || '').toLowerCase().includes(searchTerm.toLowerCase()))
       ).map(item => {
           const existing = entryRecords.find(r => r.itemId === item.id);
           return {
