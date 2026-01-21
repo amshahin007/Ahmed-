@@ -117,8 +117,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
       setIsDragging(true);
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setDragImage(e.currentTarget, 20, 20);
+      
+      // Capture currentTarget because it becomes null in the timeout callback
+      const target = e.currentTarget;
       setTimeout(() => {
-          e.currentTarget.classList.add('opacity-50');
+          target.classList.add('opacity-50');
       }, 0);
   };
 

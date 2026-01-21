@@ -11,12 +11,12 @@ interface HistoryTableProps {
   machines: Machine[];
 }
 
-type TabType = 'tracking' | 'requests';
+type TabType = 'requests' | 'tracking' | 'stock';
 
 const ITEMS_PER_PAGE = 50;
 
 const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, machines }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('requests'); // Default to Requests (History Log)
+  const [activeTab, setActiveTab] = useState<TabType>('requests'); 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -29,7 +29,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
     setCurrentPage(1);
   }, [searchTerm, selectedLocation, activeTab]);
 
-  // Filter history based on search terms
+  // 1. Filtered History (Issue Requests)
   const filteredHistory = useMemo(() => {
     return history.filter(record => {
       const term = searchTerm.toLowerCase();
@@ -47,8 +47,20 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
     });
   }, [history, searchTerm, selectedLocation]);
 
-  // Aggregate for Inventory Tracking (Stock View)
-  const stockData = useMemo(() => {
+  // 2. Filtered Stock (Current Inventory)
+  const filteredStock = useMemo(() => {
+      const term = searchTerm.toLowerCase();
+      return items.filter(item => 
+          (item.name || '').toLowerCase().includes(term) ||
+          (item.id || '').toLowerCase().includes(term) ||
+          (item.category || '').toLowerCase().includes(term) ||
+          (item.partNumber || '').toLowerCase().includes(term) ||
+          (item.modelNo || '').toLowerCase().includes(term)
+      );
+  }, [items, searchTerm]);
+
+  // 3. Aggregate for Inventory Tracking (Consumption/Usage)
+  const trackingData = useMemo(() => {
     const map = new Map<string, {
         itemNumber: string;
         fullName: string;
@@ -87,7 +99,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
   const generateWorkbook = () => {
     const wb = XLSX.utils.book_new();
 
-    // Sheet 1: Detailed History (Matches requested columns)
+    // Sheet 1: Issue Requests
     const histHeaders = [
       "Item Number", "Sites", "G/L Date", "Full Name", "Sum of Transaction Qty", "Trans UM", "Status", "Machine", "Maint. Plan", "ID"
     ];
@@ -109,24 +121,32 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
     const wsHist = XLSX.utils.aoa_to_sheet([histHeaders, ...histRows]);
     XLSX.utils.book_append_sheet(wb, wsHist, "Issue Requests");
 
-    // Sheet 2: Stock Summary
-    const stockHeaders = ["Item Number", "Full Name", "Trans UM", "Sites", "Sum of Qnty"];
-    const stockRows = stockData.map(s => [
+    // Sheet 2: Inventory Tracking
+    const trackHeaders = ["Item Number", "Full Name", "Trans UM", "Sites", "Sum of Transaction Qty"];
+    const trackRows = trackingData.map(s => [
         s.itemNumber,
         s.fullName,
         s.transUm,
         s.sitesDisplay,
         s.sumOfQnty
     ]);
+    const wsTrack = XLSX.utils.aoa_to_sheet([trackHeaders, ...trackRows]);
+    XLSX.utils.book_append_sheet(wb, wsTrack, "Inventory Tracking");
+
+    // Sheet 3: Current Stock
+    const stockHeaders = ["Item Number", "Description", "Full Name", "Category", "Part No", "Model No", "Unit", "Current Stock"];
+    const stockRows = filteredStock.map(i => [
+        i.id, i.name, i.fullName || '', i.category, i.partNumber || '', i.modelNo || '', i.unit, i.stockQuantity || 0
+    ]);
     const wsStock = XLSX.utils.aoa_to_sheet([stockHeaders, ...stockRows]);
-    XLSX.utils.book_append_sheet(wb, wsStock, "Inventory Tracking");
+    XLSX.utils.book_append_sheet(wb, wsStock, "Current Stock");
 
     return wb;
   };
 
   const downloadExcel = () => {
     const wb = generateWorkbook();
-    XLSX.writeFile(wb, `Issue_Tracking_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, `Inventory_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   const saveToDrive = async () => {
@@ -141,7 +161,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
       try {
           const wb = generateWorkbook();
           const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-          const fileName = `Issue_Tracking_Report_${new Date().toISOString().slice(0,10)}.xlsx`;
+          const fileName = `Inventory_Report_${new Date().toISOString().slice(0,10)}.xlsx`;
           
           const url = await uploadFileToDrive(scriptUrl, fileName, wbOut);
           
@@ -203,16 +223,22 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm shrink-0">
         
         {/* Tabs */}
-        <div className="flex bg-gray-100 p-1 rounded-lg">
+        <div className="flex bg-gray-100 p-1 rounded-lg overflow-x-auto">
             <button 
                 onClick={() => setActiveTab('requests')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'requests' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'requests' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
                 Issue Requests
             </button>
             <button 
+                onClick={() => setActiveTab('stock')}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'stock' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                Current Stock
+            </button>
+            <button 
                 onClick={() => setActiveTab('tracking')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'tracking' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'tracking' ? 'bg-white text-orange-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
                 Inventory Tracking
             </button>
@@ -230,16 +256,18 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
             </div>
-            <select
-                value={selectedLocation}
-                onChange={(e) => setSelectedLocation(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700"
-            >
-                <option value="">All Sites</option>
-                {locations.map(loc => (
-                    <option key={loc.id} value={loc.id}>{loc.name}</option>
-                ))}
-            </select>
+            {activeTab !== 'stock' && (
+                <select
+                    value={selectedLocation}
+                    onChange={(e) => setSelectedLocation(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700 max-w-[150px]"
+                >
+                    <option value="">All Sites</option>
+                    {locations.map(loc => (
+                        <option key={loc.id} value={loc.id}>{loc.name}</option>
+                    ))}
+                </select>
+            )}
         </div>
 
         {/* Actions */}
@@ -263,7 +291,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
       {/* Content Area */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col min-h-0">
          
-         {/* ISSUE REQUESTS VIEW (History Log) */}
+         {/* TAB 1: ISSUE REQUESTS VIEW (History Log) */}
          {activeTab === 'requests' && (
             <>
                 <div className="overflow-auto flex-1">
@@ -323,24 +351,67 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
             </>
          )}
 
-         {/* INVENTORY TRACKING VIEW (Stock Summary) */}
+         {/* TAB 2: CURRENT STOCK VIEW (New) */}
+         {activeTab === 'stock' && (
+             <>
+                <div className="overflow-auto flex-1">
+                    <table className="w-full text-left text-xs border-separate border-spacing-0 whitespace-nowrap">
+                        <thead className="bg-green-50 text-green-900 font-bold sticky top-0 z-10">
+                            <tr>
+                                <th className="px-3 py-2 border-b border-green-100">Item Number</th>
+                                <th className="px-3 py-2 border-b border-green-100">Description</th>
+                                <th className="px-3 py-2 border-b border-green-100">Category</th>
+                                <th className="px-3 py-2 border-b border-green-100">Part No / Model</th>
+                                <th className="px-3 py-2 border-b border-green-100 text-right">Current Stock</th>
+                                <th className="px-3 py-2 border-b border-green-100 text-center">Unit</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {getPaginatedData(filteredStock).length > 0 ? (
+                                getPaginatedData(filteredStock).map((item) => (
+                                    <tr key={item.id} className="hover:bg-green-50 transition">
+                                        <td className="px-3 py-2 font-mono font-bold text-gray-700 border-r border-gray-50">{item.id}</td>
+                                        <td className="px-3 py-2 text-gray-800 border-r border-gray-50">{item.name}</td>
+                                        <td className="px-3 py-2 text-gray-600 border-r border-gray-50">{item.category}</td>
+                                        <td className="px-3 py-2 text-gray-500 border-r border-gray-50">
+                                            {item.partNumber && <span>PN: {item.partNumber}</span>}
+                                            {item.partNumber && item.modelNo && <span className="mx-1">|</span>}
+                                            {item.modelNo && <span>Model: {item.modelNo}</span>}
+                                        </td>
+                                        <td className="px-3 py-2 text-right font-bold text-green-700 bg-green-50/30 border-r border-gray-50">
+                                            {item.stockQuantity || 0}
+                                        </td>
+                                        <td className="px-3 py-2 text-center text-gray-500">{item.unit}</td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr><td colSpan={6} className="p-8 text-center text-gray-400">No items found matching filter.</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+                {renderPagination(filteredStock.length)}
+             </>
+         )}
+
+         {/* TAB 3: INVENTORY TRACKING VIEW (Aggregated Usage) */}
          {activeTab === 'tracking' && (
              <>
                 <div className="overflow-auto flex-1">
                     <table className="w-full text-left text-xs border-separate border-spacing-0 whitespace-nowrap">
-                        <thead className="bg-blue-50 text-blue-900 font-bold sticky top-0 z-10">
+                        <thead className="bg-orange-50 text-orange-900 font-bold sticky top-0 z-10">
                             <tr>
-                                <th className="px-3 py-2 border-b border-blue-100">Item Number</th>
-                                <th className="px-3 py-2 border-b border-blue-100">Sites</th>
-                                <th className="px-3 py-2 border-b border-blue-100">Full Name</th>
-                                <th className="px-3 py-2 border-b border-blue-100 text-right">Sum of Qnty</th>
-                                <th className="px-3 py-2 border-b border-blue-100 text-right">Trans UM</th>
+                                <th className="px-3 py-2 border-b border-orange-100">Item Number</th>
+                                <th className="px-3 py-2 border-b border-orange-100">Sites</th>
+                                <th className="px-3 py-2 border-b border-orange-100">Full Name</th>
+                                <th className="px-3 py-2 border-b border-orange-100 text-right">Sum of Transaction Qty</th>
+                                <th className="px-3 py-2 border-b border-orange-100 text-right">Trans UM</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {getPaginatedData(stockData).length > 0 ? (
-                                getPaginatedData(stockData).map((row, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50 transition">
+                            {getPaginatedData(trackingData).length > 0 ? (
+                                getPaginatedData(trackingData).map((row, idx) => (
+                                    <tr key={idx} className="hover:bg-orange-50 transition">
                                         <td className="px-3 py-2 font-mono font-bold text-gray-700">{row.itemNumber}</td>
                                         <td className="px-3 py-2 text-gray-600">{row.sitesDisplay}</td>
                                         <td className="px-3 py-2 text-gray-800">{row.fullName}</td>
@@ -349,15 +420,15 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
                                     </tr>
                                 ))
                             ) : (
-                                <tr><td colSpan={5} className="p-8 text-center text-gray-400">No inventory data found.</td></tr>
+                                <tr><td colSpan={5} className="p-8 text-center text-gray-400">No tracking data found.</td></tr>
                             )}
                         </tbody>
                     </table>
                 </div>
-                {renderPagination(stockData.length)}
-                {stockData.length > 0 && (
+                {renderPagination(trackingData.length)}
+                {trackingData.length > 0 && (
                      <div className="bg-gray-50 font-bold border-t p-2 text-xs flex justify-end">
-                         <span>Total Quantity (All Pages): {stockData.reduce((acc, curr) => acc + curr.sumOfQnty, 0)}</span>
+                         <span>Total Quantity (All Pages): {trackingData.reduce((acc, curr) => acc + curr.sumOfQnty, 0)}</span>
                      </div>
                 )}
              </>
