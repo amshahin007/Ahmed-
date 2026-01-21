@@ -190,11 +190,17 @@ export const fetchAllDataFromCloud = async (scriptUrl: string): Promise<Record<s
             body: JSON.stringify({ action: 'read_full_db' })
         });
         
+        // --- ERROR HANDLING FOR PERMISSIONS ---
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("text/html")) {
+            throw new Error("Permission Blocked by Google. Please Redeploy Script and set 'Who has access' to 'Anyone'.");
+        }
+
         const result = await response.json();
         if (result.status === 'success') {
             return result.data;
         } else {
-            throw new Error(result.message || "Unknown error fetching data");
+            throw new Error(result.message || "Script connected but returned an error. Ensure code is updated.");
         }
     } catch (error) {
         console.error("Fetch Data Error:", error);

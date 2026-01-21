@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { DEFAULT_SCRIPT_URL, locateRemoteData, APP_SCRIPT_TEMPLATE } from '../services/googleSheetsService';
 
@@ -152,8 +151,8 @@ const Settings: React.FC<SettingsProps> = ({ onBackup, onRestore }) => {
           await onRestore();
           alert("Restore Complete! Page will reload.");
           window.location.reload();
-      } catch (e) {
-          alert("Restore Failed. Ensure script is updated. See console.");
+      } catch (e: any) {
+          alert(`Restore Failed: ${e.message}\n\nPlease check script permissions.`);
       } finally {
           setRestoreLoading(false);
       }
