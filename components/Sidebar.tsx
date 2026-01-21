@@ -102,8 +102,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
   const dragOverItem = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Guard: Ensure user role is defined before filtering
   const visibleNavItems = navItems.filter(item => 
-    item.roles.includes(currentUser.role)
+    item.roles.includes(currentUser?.role || 'user')
   );
 
   const handleNavClick = (viewId: string) => {
@@ -157,6 +158,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
   const handleDragOver = (e: React.DragEvent) => {
       e.preventDefault(); 
   };
+
+  // Safe user display
+  const userInitials = (currentUser?.username || 'U').substring(0,2).toUpperCase();
+  const displayRole = (currentUser?.role || 'user').replace('_', ' ');
 
   return (
     <>
@@ -234,11 +239,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, currentU
         <div className="bg-[#FFD700] text-[#00695c] py-2 px-3">
           <div className="flex items-center gap-2 mb-2">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 border-2 border-[#00695c] bg-white text-[#00695c]`}>
-              {currentUser.username.substring(0,2).toUpperCase()}
+              {userInitials}
             </div>
             <div className="overflow-hidden">
-              <p className="text-sm font-bold truncate leading-tight">{currentUser.name}</p>
-              <p className="text-[10px] font-semibold capitalize leading-tight opacity-90">{currentUser.role.replace('_', ' ')}</p>
+              <p className="text-sm font-bold truncate leading-tight">{currentUser?.name || 'Guest'}</p>
+              <p className="text-[10px] font-semibold capitalize leading-tight opacity-90">{displayRole}</p>
             </div>
           </div>
           <button 

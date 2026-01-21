@@ -110,12 +110,12 @@ const App: React.FC = () => {
                  storageService.getItem<ForecastPeriod[]>('wf_forecast_periods'),
                  storageService.getItem<ForecastRecord[]>('wf_forecast_records'),
             ]);
-            if (loadedAgri) setAgriOrders(loadedAgri);
-            if (loadedBreakdowns) setBreakdowns(loadedBreakdowns);
-            if (loadedIrrigation) setIrrigationLogs(loadedIrrigation);
-            if (loadedBoms) setBomRecords(loadedBoms);
-            if (loadedPeriods) setForecastPeriods(loadedPeriods);
-            if (loadedForecasts) setForecastRecords(loadedForecasts);
+            if (loadedAgri) setAgriOrders(loadedAgri.filter(x => x && x.id));
+            if (loadedBreakdowns) setBreakdowns(loadedBreakdowns.filter(x => x && x.id));
+            if (loadedIrrigation) setIrrigationLogs(loadedIrrigation.filter(x => x && x.id));
+            if (loadedBoms) setBomRecords(loadedBoms.filter(x => x && x.id));
+            if (loadedPeriods) setForecastPeriods(loadedPeriods.filter(x => x && x.id));
+            if (loadedForecasts) setForecastRecords(loadedForecasts.filter(x => x && x.id));
 
         } else {
             // If PHP is null (caught error), fallback immediately
@@ -127,6 +127,7 @@ const App: React.FC = () => {
         setDataSource('local');
         
         // FALLBACK: Load from IndexedDB
+        // We apply filter(Boolean) and id checks to prevent white screens from corrupted local data
         const [
           loadedHistory, loadedItems, loadedMachines, loadedLocations, 
           loadedSectors, loadedDivisions, loadedPlans, loadedUsers, 
@@ -149,20 +150,20 @@ const App: React.FC = () => {
           storageService.getItem<ForecastRecord[]>('wf_forecast_records'),
         ]);
 
-        if (loadedHistory) setHistory(loadedHistory);
-        if (loadedItems) setItems(loadedItems);
-        if (loadedMachines) setMachines(loadedMachines);
-        if (loadedLocations) setLocations(loadedLocations);
-        if (loadedSectors) setSectors(loadedSectors);
-        if (loadedDivisions) setDivisions(loadedDivisions);
-        if (loadedPlans) setPlans(loadedPlans);
-        if (loadedUsers) setUsersList(loadedUsers);
-        if (loadedAgri) setAgriOrders(loadedAgri);
-        if (loadedBreakdowns) setBreakdowns(loadedBreakdowns);
-        if (loadedIrrigation) setIrrigationLogs(loadedIrrigation);
-        if (loadedBoms) setBomRecords(loadedBoms);
-        if (loadedPeriods) setForecastPeriods(loadedPeriods);
-        if (loadedForecasts) setForecastRecords(loadedForecasts);
+        if (loadedHistory) setHistory(loadedHistory.filter(i => i && i.id));
+        if (loadedItems) setItems(loadedItems.filter(i => i && i.id));
+        if (loadedMachines) setMachines(loadedMachines.filter(i => i && i.id));
+        if (loadedLocations) setLocations(loadedLocations.filter(i => i && i.id));
+        if (loadedSectors) setSectors(loadedSectors.filter(i => i && i.id));
+        if (loadedDivisions) setDivisions(loadedDivisions.filter(i => i && i.id));
+        if (loadedPlans) setPlans(loadedPlans.filter(i => i && i.id));
+        if (loadedUsers) setUsersList(loadedUsers.filter(i => i && i.username));
+        if (loadedAgri) setAgriOrders(loadedAgri.filter(i => i && i.id));
+        if (loadedBreakdowns) setBreakdowns(loadedBreakdowns.filter(i => i && i.id));
+        if (loadedIrrigation) setIrrigationLogs(loadedIrrigation.filter(i => i && i.id));
+        if (loadedBoms) setBomRecords(loadedBoms.filter(i => i && i.id));
+        if (loadedPeriods) setForecastPeriods(loadedPeriods.filter(i => i && i.id));
+        if (loadedForecasts) setForecastRecords(loadedForecasts.filter(i => i && i.id));
       } finally {
         setIsDataLoaded(true);
       }
