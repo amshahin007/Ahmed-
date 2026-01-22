@@ -38,6 +38,11 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   const [selectedDivision, setSelectedDivision] = useState('');
   const [selectedPeriodId, setSelectedPeriodId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // -- ENTRY FORM: REFERENCE HISTORY STATE --
+  const [refStartDate, setRefStartDate] = useState('');
+  const [refEndDate, setRefEndDate] = useState('');
+
   // Temp state for editing quantities in the grid
   const [editBuffer, setEditBuffer] = useState<Record<string, number>>({});
   const [entryPage, setEntryPage] = useState(1);
@@ -50,7 +55,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   const [hubSearch, setHubSearch] = useState('');
   const [hubPage, setHubPage] = useState(1);
   
-  // -- NEW: Custom Date Range for Actuals --
+  // -- NEW: Custom Date Range for Actuals (Analytics Tab) --
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
@@ -91,19 +96,42 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       );
   }, [forecastRecords, selectedLocation, selectedSector, selectedDivision, selectedPeriodId]);
 
-  // Items List for Entry (Merged with existing forecasts)
+  // -- CALCULATE REFERENCE HISTORY (Optimized Lookup) --
+  const referenceHistoryMap = useMemo(() => {
+      if (!refStartDate || !refEndDate || !selectedLocation) return new Map<string, number>();
+
+      const start = new Date(refStartDate).getTime();
+      const end = new Date(refEndDate).getTime() + (24 * 60 * 60 * 1000) - 1; // End of day
+
+      const map = new Map<string, number>();
+
+      // Filter history for the selected location and date range
+      history.forEach(h => {
+          if (h.locationId !== selectedLocation) return;
+          const t = new Date(h.timestamp).getTime();
+          if (t >= start && t <= end) {
+              const current = map.get(h.itemId) || 0;
+              map.set(h.itemId, current + h.quantity);
+          }
+      });
+      return map;
+  }, [history, selectedLocation, refStartDate, refEndDate]);
+
+  // Items List for Entry (Merged with existing forecasts and Reference Data)
   const itemsForEntry = useMemo(() => {
       return items.filter(i => 
           ((i.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
            (i.id || '').toLowerCase().includes(searchTerm.toLowerCase()))
       ).map(item => {
           const existing = entryRecords.find(r => r.itemId === item.id);
+          const refQty = referenceHistoryMap.get(item.id) || 0;
           return {
               ...item,
-              forecastQty: editBuffer[item.id] ?? existing?.quantity ?? 0
+              forecastQty: editBuffer[item.id] ?? existing?.quantity ?? 0,
+              referenceQty: refQty
           };
       });
-  }, [items, searchTerm, entryRecords, editBuffer]);
+  }, [items, searchTerm, entryRecords, editBuffer, referenceHistoryMap]);
 
   const paginatedEntryItems = useMemo(() => {
       const start = (entryPage - 1) * ITEMS_PER_PAGE;
@@ -517,7 +545,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
         {activeTab === 'entry' && (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden min-h-0">
                 {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 shrink-0">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 shrink-0">
                     <div>
                         <label className="block text-xs font-bold text-gray-500 mb-1">1. Location</label>
                         <select value={selectedLocation} onChange={(e) => setSelectedLocation(e.target.value)} className="w-full border rounded p-2 text-sm">
@@ -547,6 +575,37 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                 <option key={p.id} value={p.id}>{p.name} ({p.status})</option>
                             ))}
                         </select>
+                    </div>
+                </div>
+
+                {/* Reference History Section (NEW) */}
+                <div className="mb-6 p-3 bg-gray-50 border border-gray-200 rounded shrink-0">
+                    <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">Reference Data (Actual Usage)</label>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <input 
+                            type="date" 
+                            value={refStartDate} 
+                            onChange={(e) => setRefStartDate(e.target.value)} 
+                            className="border rounded px-2 py-1 text-sm text-gray-700"
+                            title="Reference Start Date"
+                        />
+                        <span className="text-gray-400">→</span>
+                        <input 
+                            type="date" 
+                            value={refEndDate} 
+                            onChange={(e) => setRefEndDate(e.target.value)} 
+                            className="border rounded px-2 py-1 text-sm text-gray-700"
+                            title="Reference End Date"
+                        />
+                        <span className="text-xs text-gray-500 ml-2 italic">Select date range to see past consumption.</span>
+                        {(refStartDate || refEndDate) && (
+                            <button 
+                                onClick={() => {setRefStartDate(''); setRefEndDate('');}}
+                                className="text-xs text-red-600 hover:underline font-bold ml-auto"
+                            >
+                                Clear
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -581,14 +640,15 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                 <th className="p-3 border-b">Item Name</th>
                                 <th className="p-3 border-b">Part No</th>
                                 <th className="p-3 border-b">Unit</th>
+                                <th className={`p-3 border-b text-center ${refStartDate && refEndDate ? 'bg-yellow-50 text-yellow-800' : 'text-gray-400'}`}>Actual Usage (Ref)</th>
                                 <th className="p-3 border-b text-center bg-blue-50">Forecast Qty</th>
                             </tr>
                         </thead>
                         <tbody>
                             {(!selectedLocation || !selectedDivision || !selectedPeriodId) ? (
-                                <tr><td colSpan={5} className="p-8 text-center text-gray-400">Select all hierarchy fields above to load items.</td></tr>
+                                <tr><td colSpan={6} className="p-8 text-center text-gray-400">Select all hierarchy fields above to load items.</td></tr>
                             ) : paginatedEntryItems.length === 0 ? (
-                                <tr><td colSpan={5} className="p-8 text-center text-gray-400">No items match search.</td></tr>
+                                <tr><td colSpan={6} className="p-8 text-center text-gray-400">No items match search.</td></tr>
                             ) : (
                                 paginatedEntryItems.map(item => (
                                     <tr key={item.id} className="hover:bg-gray-50 border-b border-gray-100">
@@ -596,6 +656,9 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                         <td className="p-3 font-medium text-gray-800">{item.name}</td>
                                         <td className="p-3 text-gray-500">{item.partNumber || '-'}</td>
                                         <td className="p-3 text-gray-500">{item.unit}</td>
+                                        <td className={`p-3 text-center font-bold border-l border-r ${refStartDate && refEndDate ? 'bg-yellow-50 text-gray-700' : 'text-gray-300'}`}>
+                                            {item.referenceQty}
+                                        </td>
                                         <td className="p-2 text-center bg-blue-50/30">
                                             <input 
                                                 type="number" 
