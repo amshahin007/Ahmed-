@@ -22,6 +22,7 @@ interface MaterialForecastProps {
   onUpdateForecast: (records: ForecastRecord[]) => void;
   
   currentUser: User;
+  onBulkImport: (tab: string, added: any[], updated: any[]) => void;
 }
 
 type Tab = 'entry' | 'hub' | 'analytics' | 'admin' | 'config';
@@ -41,7 +42,8 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   items, locations, sectors, divisions, history,
   machines, bomRecords,
   forecastPeriods, onAddPeriod, onUpdatePeriod,
-  forecastRecords, onUpdateForecast, currentUser
+  forecastRecords, onUpdateForecast, currentUser,
+  onBulkImport
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('entry');
   const [entrySubTab, setEntrySubTab] = useState<EntrySubTab>('planned');
@@ -115,6 +117,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
   const adhocUploadRef = useRef<HTMLInputElement>(null);
+  const periodFileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset pagination when filters change
   useEffect(() => { setEntryPage(1); }, [selectedLocation, selectedSector, selectedDivision, selectedPeriodId, searchTerm, entrySubTab]);
@@ -389,6 +392,69 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       }
       onAddPeriod(newPeriod as ForecastPeriod);
       setNewPeriod({ status: 'Open' });
+  };
+
+  const handleExportPeriods = () => {
+      const ws = XLSX.utils.json_to_sheet(forecastPeriods);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Forecast_Periods");
+      XLSX.writeFile(wb, "Forecast_Periods.xlsx");
+  };
+
+  const handleImportPeriods = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+          const bstr = evt.target?.result;
+          try {
+              const wb = XLSX.read(bstr, { type: 'binary' });
+              const ws = wb.Sheets[wb.SheetNames[0]];
+              const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+              if (data.length === 0) { alert("File is empty."); return; }
+
+              const toAdd: any[] = [];
+              const toUpdate: any[] = [];
+
+              data.forEach(row => {
+                  // Normalize keys
+                  const pId = String(row['ID'] || row['id'] || '').trim();
+                  const pName = String(row['Name'] || row['name'] || '').trim();
+                  const pStart = String(row['startDate'] || row['Start Date'] || '').trim();
+                  const pEnd = String(row['endDate'] || row['End Date'] || '').trim();
+                  const pStatus = String(row['status'] || row['Status'] || 'Open').trim();
+
+                  if (pId && pName && pStart && pEnd) {
+                      const newP: ForecastPeriod = {
+                          id: pId,
+                          name: pName,
+                          startDate: pStart,
+                          endDate: pEnd,
+                          status: pStatus === 'Closed' ? 'Closed' : 'Open'
+                      };
+                      
+                      const exists = forecastPeriods.find(p => p.id === pId);
+                      if (exists) toUpdate.push(newP);
+                      else toAdd.push(newP);
+                  }
+              });
+
+              if (toAdd.length > 0 || toUpdate.length > 0) {
+                  onBulkImport('periods', toAdd, toUpdate);
+                  alert(`Processed ${toAdd.length + toUpdate.length} periods.`);
+              } else {
+                  alert("No valid period rows found.");
+              }
+
+          } catch (err) {
+              console.error(err);
+              alert("Failed to process file.");
+          }
+      };
+      reader.readAsBinaryString(file);
+      e.target.value = '';
   };
 
   // --- AD-HOC CONFIG HANDLERS ---
@@ -1229,7 +1295,18 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
         {/* --- VIEW: ADMIN --- */}
         {activeTab === 'admin' && (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden min-h-0">
-                <h3 className="font-bold text-gray-700 mb-4 shrink-0">Period Management</h3>
+                <div className="flex justify-between items-center mb-4 shrink-0">
+                    <h3 className="font-bold text-gray-700">Period Management</h3>
+                    <div className="flex gap-2">
+                        <button onClick={handleExportPeriods} className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded text-sm font-bold hover:bg-green-100 flex items-center gap-1">
+                            <span>📊</span> Export
+                        </button>
+                        <button onClick={() => periodFileInputRef.current?.click()} className="px-3 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded text-sm font-bold hover:bg-orange-100 flex items-center gap-1">
+                            <span>📂</span> Import
+                        </button>
+                        <input type="file" ref={periodFileInputRef} hidden accept=".xlsx,.xls,.csv" onChange={handleImportPeriods} />
+                    </div>
+                </div>
                 
                 {/* Create Period */}
                 <div className="grid grid-cols-5 gap-3 mb-6 bg-gray-50 p-4 rounded border shrink-0">

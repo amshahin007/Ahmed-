@@ -222,6 +222,11 @@ const App: React.FC = () => {
          added.forEach(a => newUsers.push(a));
          updated.forEach(u => { const idx = newUsers.findIndex(usr => usr.username === u.username); if (idx > -1) newUsers[idx] = u; });
          saveData('users', newUsers, setUsers);
+      } else if (tab === 'periods') {
+         const newPeriods = [...forecastPeriods];
+         added.forEach(a => newPeriods.push(a));
+         updated.forEach(u => { const idx = newPeriods.findIndex(p => p.id === u.id); if (idx > -1) newPeriods[idx] = u; });
+         saveData('forecastPeriods', newPeriods, setForecastPeriods);
       }
   };
 
@@ -316,7 +321,8 @@ const App: React.FC = () => {
                                     machines={machines} bomRecords={bomRecords}
                                     forecastPeriods={forecastPeriods} onAddPeriod={handleAddForecastPeriod} onUpdatePeriod={handleUpdateForecastPeriod} 
                                     forecastRecords={forecastRecords} onUpdateForecast={handleUpdateForecastRecords} 
-                                    currentUser={user} 
+                                    currentUser={user}
+                                    onBulkImport={handleBulkImport} 
                                 />;
                             case 'ai-assistant':
                                 return <AiAssistant />;
