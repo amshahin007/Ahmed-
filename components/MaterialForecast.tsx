@@ -27,6 +27,14 @@ interface MaterialForecastProps {
 type Tab = 'entry' | 'hub' | 'analytics' | 'admin' | 'config';
 type EntrySubTab = 'planned' | 'manual';
 
+// Internal type for Ad-hoc configuration
+interface AdHocConfigItem {
+    id: string; // Unique ID for the config row
+    itemId: string;
+    sectorId: string;   // '' means All
+    divisionId: string; // '' means All
+}
+
 const ITEMS_PER_PAGE = 50;
 
 const MaterialForecast: React.FC<MaterialForecastProps> = ({
@@ -59,18 +67,26 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   // State to track manually added items (Session only)
   const [manuallyAddedItems, setManuallyAddedItems] = useState<Set<string>>(new Set());
 
-  // -- NEW: PERSISTENT AD-HOC ITEMS LIST --
-  const [adhocItemIds, setAdhocItemIds] = useState<Set<string>>(() => {
+  // -- NEW: PERSISTENT AD-HOC CONFIGURATION --
+  const [adhocConfig, setAdhocConfig] = useState<AdHocConfigItem[]>(() => {
       try {
-          const saved = localStorage.getItem('wf_adhoc_ids');
-          return saved ? new Set(JSON.parse(saved)) : new Set();
-      } catch { return new Set(); }
+          const saved = localStorage.getItem('wf_adhoc_config');
+          if (saved) return JSON.parse(saved);
+          
+          // Migration from old simple ID list if exists
+          const oldIds = localStorage.getItem('wf_adhoc_ids');
+          if (oldIds) {
+              const ids = JSON.parse(oldIds) as string[];
+              return ids.map(id => ({ id: `migrated-${id}-${Date.now()}`, itemId: id, sectorId: '', divisionId: '' }));
+          }
+          return [];
+      } catch { return []; }
   });
 
   // Save Ad-hoc list when changed
   useEffect(() => {
-      localStorage.setItem('wf_adhoc_ids', JSON.stringify(Array.from(adhocItemIds)));
-  }, [adhocItemIds]);
+      localStorage.setItem('wf_adhoc_config', JSON.stringify(adhocConfig));
+  }, [adhocConfig]);
   
   const [entryPage, setEntryPage] = useState(1);
 
@@ -90,11 +106,15 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   const [newPeriod, setNewPeriod] = useState<Partial<ForecastPeriod>>({ status: 'Open' });
 
   // -- CONFIG TAB STATE --
+  const [configAddSector, setConfigAddSector] = useState('');
+  const [configAddDivision, setConfigAddDivision] = useState('');
+  const [configAddItem, setConfigAddItem] = useState('');
   const [configSearch, setConfigSearch] = useState('');
 
   // -- REFS --
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
+  const adhocUploadRef = useRef<HTMLInputElement>(null);
 
   // Reset pagination when filters change
   useEffect(() => { setEntryPage(1); }, [selectedLocation, selectedSector, selectedDivision, selectedPeriodId, searchTerm, entrySubTab]);
@@ -121,7 +141,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       return forecastRecords.filter(r => 
           r.locationId === selectedLocation && 
           r.sectorId === selectedSector && 
-          r.divisionId === selectedDivision &&
+          r.divisionId === selectedDivision && 
           r.periodId === selectedPeriodId
       );
   }, [forecastRecords, selectedLocation, selectedSector, selectedDivision, selectedPeriodId]);
@@ -151,20 +171,16 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   const plannedItemIds = useMemo(() => {
       if (!selectedLocation) return new Set<string>();
 
-      // 1. Identify machines in the selected hierarchy
       const relevantMachines = machines.filter(m => {
-          // Check Location
           const locName = locations.find(l => l.id === selectedLocation)?.name;
           const isInLocation = m.locationId === selectedLocation || m.locationId === locName;
           if (!isInLocation) return false;
 
-          // Check Sector (if selected)
           if (selectedSector && m.sectorId !== selectedSector) {
               const secName = sectors.find(s => s.id === selectedSector)?.name;
               if (m.sectorId !== secName) return false;
           }
 
-          // Check Division (if selected)
           if (selectedDivision && m.divisionId !== selectedDivision) {
               const divName = divisions.find(d => d.id === selectedDivision)?.name;
               if (m.divisionId !== divName) return false;
@@ -172,11 +188,9 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
           return true;
       });
 
-      // 2. Get unique models/categories from these machines
       const relevantModels = new Set(relevantMachines.map(m => m.modelNo).filter(Boolean));
       const relevantCategories = new Set(relevantMachines.map(m => m.category).filter(Boolean));
 
-      // 3. Find Items that belong to these machines via BOM
       const ids = new Set<string>();
       bomRecords.forEach(b => {
           if (relevantModels.has(b.modelNo) || relevantCategories.has(b.machineCategory)) {
@@ -192,28 +206,33 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       let baseList: Item[] = [];
 
       if (entrySubTab === 'planned') {
-          // Show only items in the BOM list
           baseList = items.filter(i => plannedItemIds.has(i.id));
       } else {
-          // Show items NOT in BOM list
+          // Identify relevant ad-hoc items for current context
+          const validAdhocIds = new Set<string>();
+          adhocConfig.forEach(cfg => {
+              const sectorMatch = !cfg.sectorId || cfg.sectorId === selectedSector;
+              const divisionMatch = !cfg.divisionId || cfg.divisionId === selectedDivision;
+              if (sectorMatch && divisionMatch) {
+                  validAdhocIds.add(cfg.itemId);
+              }
+          });
+
           if (searchTerm) {
-              // If searching, show any match from Master Data that isn't planned
               baseList = items.filter(i => !plannedItemIds.has(i.id));
           } else {
-              // If NOT searching, show: Forecasted OR Manually Added OR Configured Ad-hoc
               baseList = items.filter(i => {
                   if (plannedItemIds.has(i.id)) return false;
                   
                   const hasForecast = entryRecords.some(r => r.itemId === i.id);
                   const isManual = manuallyAddedItems.has(i.id);
-                  const isAdhocConfig = adhocItemIds.has(i.id); // Show configured items by default
+                  const isAdhoc = validAdhocIds.has(i.id);
                   
-                  return hasForecast || isManual || isAdhocConfig;
+                  return hasForecast || isManual || isAdhoc;
               });
           }
       }
 
-      // Apply Search Filter (common for both tabs if typed)
       if (searchTerm) {
           const lower = searchTerm.toLowerCase();
           baseList = baseList.filter(i => 
@@ -222,7 +241,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
           );
       }
 
-      // Map to Display Object
       return baseList.map(item => {
           const existing = entryRecords.find(r => r.itemId === item.id);
           const refQty = referenceHistoryMap.get(item.id) || 0;
@@ -233,7 +251,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
           let pcsPerMachine = 0;
           let machineCount = 0;
 
-          // Only calculate machine info for 'planned' tab items generally, but valid for all if BOM exists
           const bom = bomRecords.find(b => 
               b.itemId === item.id && 
               (machines.some(m => m.modelNo === b.modelNo && (m.locationId === selectedLocation || m.locationId === locations.find(l => l.id === selectedLocation)?.name)))
@@ -244,7 +261,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
               modelNo = bom.modelNo;
               pcsPerMachine = bom.quantity;
 
-              // Calculate count in this location
               const matchingMachinesInLoc = machines.filter(m => 
                   (m.locationId === selectedLocation || m.locationId === locations.find(l => l.id === selectedLocation)?.name) &&
                   (m.modelNo === bom.modelNo || m.category === bom.machineCategory)
@@ -270,27 +286,39 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
               machineCount
           };
       });
-  }, [items, searchTerm, entryRecords, editBuffer, referenceHistoryMap, bomRecords, machines, selectedLocation, selectedSector, selectedDivision, manuallyAddedItems, entrySubTab, plannedItemIds, adhocItemIds]);
+  }, [items, searchTerm, entryRecords, editBuffer, referenceHistoryMap, bomRecords, machines, selectedLocation, selectedSector, selectedDivision, manuallyAddedItems, entrySubTab, plannedItemIds, adhocConfig]);
 
   const paginatedEntryItems = useMemo(() => {
       const start = (entryPage - 1) * ITEMS_PER_PAGE;
       return currentViewItems.slice(start, start + ITEMS_PER_PAGE);
   }, [currentViewItems, entryPage]);
 
-  // -- LOGIC 3: CONFIG TAB LISTS --
-  const configSourceItems = useMemo(() => {
-      if (!configSearch) return [];
-      const lower = configSearch.toLowerCase();
-      // Filter items NOT already in adhoc list
-      return items.filter(i => 
-          !adhocItemIds.has(i.id) && 
-          ((i.name || '').toLowerCase().includes(lower) || (i.id || '').toLowerCase().includes(lower))
-      ).slice(0, 50);
-  }, [items, adhocItemIds, configSearch]);
-
-  const configSelectedItems = useMemo(() => {
-      return items.filter(i => adhocItemIds.has(i.id));
-  }, [items, adhocItemIds]);
+  // -- LOGIC 3: CONFIG TAB LIST --
+  const displayedAdhocConfig = useMemo(() => {
+      let filtered = adhocConfig;
+      if (configSearch) {
+          const lower = configSearch.toLowerCase();
+          filtered = filtered.filter(c => {
+              const item = items.find(i => i.id === c.itemId);
+              if (!item) return false;
+              return item.name.toLowerCase().includes(lower) || item.id.toLowerCase().includes(lower);
+          });
+      }
+      return filtered.map(c => {
+          const item = items.find(i => i.id === c.itemId);
+          const sector = sectors.find(s => s.id === c.sectorId);
+          const division = divisions.find(d => d.id === c.divisionId);
+          return {
+              ...c,
+              sectorName: sector ? sector.name : (c.sectorId ? c.sectorId : 'All Sectors'),
+              divisionName: division ? division.name : (c.divisionId ? c.divisionId : 'All Divisions'),
+              itemCode: c.itemId,
+              itemName: item?.name || 'Unknown Item',
+              itemUnit: item?.unit || '-',
+              partNo: item?.partNumber || '-'
+          };
+      });
+  }, [adhocConfig, items, sectors, divisions, configSearch]);
 
   // -- HANDLERS --
 
@@ -307,7 +335,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       }
       setNewItemId('');
       setNewItemQty('');
-      // Switch to manual tab if adding item not in planned
       if (!plannedItemIds.has(newItemId)) {
           setEntrySubTab('manual');
       }
@@ -321,8 +348,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       
       const newRecords: ForecastRecord[] = [];
       const timestamp = new Date().toISOString();
-
-      // Merge editBuffer with existing records for this context
       const existingMap = new Map(entryRecords.map(r => [r.itemId, r]));
       
       Object.keys(editBuffer).forEach(itemId => {
@@ -341,14 +366,11 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                   updatedBy: currentUser.username
               });
           } else {
-              // If 0, remove it from forecast
               existingMap.delete(itemId);
           }
       });
 
       const updatedSubset = Array.from(existingMap.values());
-      
-      // Remove OLD records for this context from master list to avoid dupes
       const otherRecords = forecastRecords.filter(r => 
           !(r.locationId === selectedLocation && 
             r.divisionId === selectedDivision &&
@@ -369,7 +391,96 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       setNewPeriod({ status: 'Open' });
   };
 
-  // --- ENTRY TEMPLATE & IMPORT ---
+  // --- AD-HOC CONFIG HANDLERS ---
+  const handleAdhocAdd = () => {
+      if (!configAddItem) return;
+      const newItem: AdHocConfigItem = {
+          id: `${Date.now()}-${Math.random()}`,
+          itemId: configAddItem,
+          sectorId: configAddSector,
+          divisionId: configAddDivision
+      };
+      // Prevent duplicates with same scope
+      const exists = adhocConfig.some(c => 
+          c.itemId === newItem.itemId && 
+          c.sectorId === newItem.sectorId && 
+          c.divisionId === newItem.divisionId
+      );
+      if (exists) {
+          alert("This item is already configured for this Sector/Division scope.");
+          return;
+      }
+      setAdhocConfig(prev => [...prev, newItem]);
+      setConfigAddItem('');
+  };
+
+  const handleAdhocDelete = (id: string) => {
+      setAdhocConfig(prev => prev.filter(c => c.id !== id));
+  };
+
+  const handleAdhocUploadTemplate = () => {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([
+          ["Sector ID", "Division ID", "Item Code"], 
+          ["SEC-001", "DIV-001", "ITM-005"], 
+          ["", "", "ITM-007"]
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, "Adhoc_Template");
+      XLSX.writeFile(wb, "Adhoc_Items_Template.xlsx");
+  };
+
+  const handleAdhocUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+          const bstr = evt.target?.result;
+          try {
+              const wb = XLSX.read(bstr, { type: 'binary' });
+              const ws = wb.Sheets[wb.SheetNames[0]];
+              const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+              if (data.length === 0) { alert("File is empty."); return; }
+
+              let count = 0;
+              const newItems: AdHocConfigItem[] = [];
+
+              data.forEach(row => {
+                  const normRow: any = {};
+                  Object.keys(row).forEach(k => normRow[k.toLowerCase().replace(/[\s-_]/g, '')] = row[k]);
+
+                  const sId = String(normRow['sectorid'] || normRow['sector'] || '').trim();
+                  const dId = String(normRow['divisionid'] || normRow['division'] || '').trim();
+                  const iId = String(normRow['itemcode'] || normRow['itemid'] || normRow['item'] || '').trim();
+
+                  if (iId) {
+                      const itemExists = items.some(i => i.id === iId);
+                      if (itemExists) {
+                          newItems.push({
+                              id: `${Date.now()}-${Math.random()}`,
+                              itemId: iId,
+                              sectorId: sId,
+                              divisionId: dId
+                          });
+                          count++;
+                      }
+                  }
+              });
+
+              setAdhocConfig(prev => [...prev, ...newItems]);
+              alert(`Imported ${count} ad-hoc items.`);
+
+          } catch (err) {
+              console.error(err);
+              alert("Failed to process file.");
+          }
+      };
+      reader.readAsBinaryString(file);
+      e.target.value = '';
+  };
+
+  // --- ENTRY EXCEL HANDLERS ---
   const handleDownloadTemplate = () => {
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([
@@ -451,7 +562,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       e.target.value = ''; // Reset
   };
 
-  // --- HUB BULK TEMPLATE & IMPORT ---
   const handleBulkTemplate = () => {
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([
@@ -667,6 +777,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   };
 
   const itemOptions = useMemo(() => items.map(i => ({ id: i.id, label: i.id, subLabel: i.name })), [items]);
+  const configFilteredDivisions = useMemo(() => divisions.filter(d => !configAddSector || d.sectorId === configAddSector), [divisions, configAddSector]);
 
   return (
     <div className="flex flex-col h-full space-y-4 animate-fade-in-up font-cairo">
@@ -858,7 +969,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                         <td className="p-3 font-medium text-gray-800">{item.name}</td>
                                         <td className="p-3 text-center text-gray-500">{item.unit || '-'}</td>
                                         
-                                        {/* Helper Data Display */}
                                         <td className="p-3 text-gray-600 bg-blue-50/20">{item.machineName !== '-' ? item.machineName : ''}</td>
                                         <td className="p-3 text-gray-600 bg-blue-50/20">{item.brandName !== '-' ? item.brandName : ''}</td>
                                         <td className="p-3 text-gray-600 bg-blue-50/20">{item.modelNo !== '-' ? item.modelNo : ''}</td>
@@ -885,7 +995,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                     </table>
                 </div>
                 {renderPaginationControls(currentViewItems.length, entryPage, setEntryPage)}
-
                 {/* Footer Save */}
                 <div className="pt-4 border-t mt-4 flex justify-end shrink-0">
                     <button 
@@ -1038,82 +1147,81 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
         {/* --- VIEW: CONFIG --- */}
         {activeTab === 'config' && (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden min-h-0">
-                <h3 className="font-bold text-gray-700 mb-2">Ad-hoc Items Configuration</h3>
-                <p className="text-sm text-gray-500 mb-6">Select items that should always appear in the "Other Items" list for quick access (e.g. Consumables, PPE, Fasteners).</p>
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 className="font-bold text-gray-700 mb-1">Ad-hoc Items Configuration</h3>
+                        <p className="text-sm text-gray-500">Define items that should always appear in the "Other Items" list for specific sectors/divisions.</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={handleAdhocUploadTemplate} className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded text-sm font-bold hover:bg-blue-100">
+                            ⬇️ Template
+                        </button>
+                        <button onClick={() => adhocUploadRef.current?.click()} className="px-3 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded text-sm font-bold hover:bg-orange-100">
+                            📂 Upload Excel
+                        </button>
+                        <input type="file" ref={adhocUploadRef} hidden accept=".xlsx,.xls,.csv" onChange={handleAdhocUpload} />
+                    </div>
+                </div>
                 
-                <div className="flex flex-1 gap-6 overflow-hidden">
-                    {/* Left: Source */}
-                    <div className="flex-1 flex flex-col border rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 p-3 border-b sticky top-0">
-                            <h4 className="font-bold text-sm text-gray-700 mb-2">Available Master Items</h4>
-                            <input 
-                                className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
-                                placeholder="Search by name or code..." 
-                                value={configSearch}
-                                onChange={(e) => setConfigSearch(e.target.value)}
-                            />
-                        </div>
-                        <div className="flex-1 overflow-auto p-2 space-y-1">
-                            {configSourceItems.map(item => (
-                                <div key={item.id} className="flex justify-between items-center p-2 hover:bg-gray-50 border border-transparent hover:border-gray-100 rounded group">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-bold text-sm text-gray-700 truncate">{item.name}</div>
-                                        <div className="text-xs text-gray-400 font-mono">{item.id}</div>
-                                    </div>
-                                    <button 
-                                        onClick={() => setAdhocItemIds(prev => new Set(prev).add(item.id))}
-                                        className="text-green-600 hover:bg-green-50 p-1 rounded font-bold text-xs border border-green-200"
-                                    >
-                                        + Add
-                                    </button>
-                                </div>
-                            ))}
-                            {configSourceItems.length === 0 && (
-                                <div className="text-center p-4 text-gray-400 text-xs">
-                                    {configSearch ? "No items found." : "Start typing to search..."}
-                                </div>
-                            )}
-                        </div>
+                {/* Add New Bar */}
+                <div className="flex flex-wrap gap-2 items-end bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4 shrink-0">
+                    <div className="w-48">
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Scope: Sector (Optional)</label>
+                        <select className="w-full border rounded p-1.5 text-sm" value={configAddSector} onChange={e => {setConfigAddSector(e.target.value); setConfigAddDivision('');}}>
+                            <option value="">All Sectors (Global)</option>
+                            {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
                     </div>
+                    <div className="w-48">
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Scope: Division (Optional)</label>
+                        <select className="w-full border rounded p-1.5 text-sm" value={configAddDivision} onChange={e => setConfigAddDivision(e.target.value)} disabled={!configAddSector}>
+                            <option value="">All Divisions</option>
+                            {configFilteredDivisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex-1 min-w-[200px]">
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Select Item to Add</label>
+                        <SearchableSelect label="" placeholder="Search item..." options={itemOptions} value={configAddItem} onChange={setConfigAddItem} compact={true} />
+                    </div>
+                    <button onClick={handleAdhocAdd} disabled={!configAddItem} className="px-4 py-1.5 bg-green-600 text-white font-bold rounded hover:bg-green-700 text-sm h-[36px] disabled:bg-gray-300">
+                        + Add Configuration
+                    </button>
+                </div>
 
-                    {/* Arrow */}
-                    <div className="flex items-center justify-center text-gray-300">
-                        <span className="text-2xl">➔</span>
+                {/* Table View */}
+                <div className="flex-1 overflow-auto border rounded relative">
+                    <div className="absolute top-0 right-0 p-2 z-10">
+                        <input className="border rounded p-1 text-xs w-48 shadow-sm" placeholder="Filter table..." value={configSearch} onChange={e => setConfigSearch(e.target.value)} />
                     </div>
-
-                    {/* Right: Target */}
-                    <div className="flex-1 flex flex-col border rounded-lg overflow-hidden bg-blue-50/30 border-blue-100">
-                        <div className="bg-blue-100 p-3 border-b border-blue-200 flex justify-between items-center sticky top-0">
-                            <h4 className="font-bold text-sm text-blue-800">Selected Ad-hoc Items ({adhocItemIds.size})</h4>
-                            <button 
-                                onClick={() => { if(confirm("Clear all ad-hoc items?")) setAdhocItemIds(new Set()); }}
-                                className="text-xs text-blue-600 hover:underline"
-                            >
-                                Clear All
-                            </button>
-                        </div>
-                        <div className="flex-1 overflow-auto p-2 space-y-1">
-                            {configSelectedItems.map(item => (
-                                <div key={item.id} className="flex justify-between items-center p-2 bg-white border border-blue-100 rounded shadow-sm group">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-bold text-sm text-gray-800 truncate">{item.name}</div>
-                                        <div className="text-xs text-gray-500 font-mono">{item.id}</div>
-                                    </div>
-                                    <button 
-                                        onClick={() => setAdhocItemIds(prev => { const n = new Set(prev); n.delete(item.id); return n; })}
-                                        className="text-red-500 hover:bg-red-50 p-1 rounded font-bold text-xs"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
+                    <table className="w-full text-left text-xs whitespace-nowrap">
+                        <thead className="bg-gray-100 text-gray-700 sticky top-0 shadow-sm">
+                            <tr>
+                                <th className="p-3 border-b">Scope: Sector</th>
+                                <th className="p-3 border-b">Scope: Division</th>
+                                <th className="p-3 border-b">Item Code</th>
+                                <th className="p-3 border-b">Description</th>
+                                <th className="p-3 border-b">Part No</th>
+                                <th className="p-3 border-b text-center">Unit</th>
+                                <th className="p-3 border-b text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {displayedAdhocConfig.map(row => (
+                                <tr key={row.id} className="hover:bg-blue-50 border-b border-gray-50">
+                                    <td className="p-3 font-medium text-gray-600">{row.sectorName}</td>
+                                    <td className="p-3 text-gray-500">{row.divisionName}</td>
+                                    <td className="p-3 font-mono font-bold text-blue-700">{row.itemCode}</td>
+                                    <td className="p-3">{row.itemName}</td>
+                                    <td className="p-3 font-mono">{row.partNo}</td>
+                                    <td className="p-3 text-center">{row.itemUnit}</td>
+                                    <td className="p-3 text-center">
+                                        <button onClick={() => handleAdhocDelete(row.id)} className="text-red-500 hover:bg-red-50 p-1 rounded font-bold px-2">Delete</button>
+                                    </td>
+                                </tr>
                             ))}
-                            {configSelectedItems.length === 0 && (
-                                <div className="text-center p-8 text-gray-400 text-xs">
-                                    No items selected. The "Other Items" tab will start empty.
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                            {displayedAdhocConfig.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-gray-400">No ad-hoc configurations found.</td></tr>}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         )}
