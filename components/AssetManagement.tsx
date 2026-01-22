@@ -141,6 +141,20 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       
       const toAdd: any[] = [];
       const toUpdate: any[] = [];
+
+      // Helper to resolve Name/ID to ID for hierarchy fields
+      const resolveId = (val: string, list: {id: string, name: string}[]) => {
+          if (!val) return '';
+          const trimmed = String(val).trim();
+          // Check for direct ID match
+          const byId = list.find(i => i.id === trimmed);
+          if (byId) return byId.id;
+          // Check for Name match
+          const byName = list.find(i => i.name.toLowerCase() === trimmed.toLowerCase());
+          if (byName) return byName.id;
+          // Return as is if no match (maybe new ID)
+          return trimmed;
+      };
       
       dataRows.forEach(row => {
           const obj: any = {};
@@ -156,9 +170,12 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
              else if (h.includes('model') && tab !== 'bom') obj.modelNo = String(row[i]); // for machines
              else if (h.includes('model') && tab === 'bom') obj.modelNo = String(row[i]); // for bom
              else if (h.includes('chase')) obj.chaseNo = String(row[i]);
-             else if (h.includes('division')) obj.divisionId = String(row[i]);
-             else if (h.includes('sector')) obj.sectorId = String(row[i]);
-             else if (h.includes('location')) obj.locationId = String(row[i]);
+             
+             // Hierarchy fields with resolution
+             else if (h.includes('division')) obj.divisionId = resolveId(String(row[i]), divisions);
+             else if (h.includes('sector')) obj.sectorId = resolveId(String(row[i]), sectors);
+             else if (h.includes('location')) obj.locationId = resolveId(String(row[i]), locations);
+             
              else if ((h.includes('main') && h.includes('group'))) obj.mainGroup = String(row[i]);
              else if ((h.includes('sub') && h.includes('group'))) obj.subGroup = String(row[i]);
              else if (h.includes('local') && h.includes('no')) obj.machineLocalNo = String(row[i]);
@@ -275,9 +292,27 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
 
   const handleExport = () => {
       let data: any[] = [];
-      if (activeTab === 'assets') data = machines;
-      if (activeTab === 'breakdowns') data = breakdowns;
-      if (activeTab === 'bom') data = bomRecords;
+      if (activeTab === 'assets') {
+          // Explicit mapping for Machines to include all user-requested fields with readable headers
+          data = machines.map(m => ({
+              'ID': m.id,
+              'Machine Name': m.category || '',
+              'Local No': m.machineLocalNo || '',
+              'Status': m.status,
+              'Brand': m.brand || '',
+              'Model No': m.modelNo || '',
+              'Chase No': m.chaseNo || '',
+              'Location': locations.find(l => l.id === m.locationId)?.name || m.locationId || '',
+              'Sector': sectors.find(s => s.id === m.sectorId)?.name || m.sectorId || '',
+              'Division': divisions.find(d => d.id === m.divisionId)?.name || m.divisionId || '',
+              'Main Group': m.mainGroup || '',
+              'Sub Group': m.subGroup || ''
+          }));
+      } else if (activeTab === 'breakdowns') {
+          data = breakdowns;
+      } else if (activeTab === 'bom') {
+          data = bomRecords;
+      }
 
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
@@ -296,16 +331,21 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       const reader = new FileReader();
       reader.onload = (evt) => {
           const bstr = evt.target?.result;
-          const wb = XLSX.read(bstr, {type: 'binary'});
-          const wsname = wb.SheetNames[0];
-          const ws = wb.Sheets[wsname];
-          const data = XLSX.utils.sheet_to_json(ws, {header: 1}) as any[][];
-          
-          let tab = 'machines';
-          if (activeTab === 'breakdowns') tab = 'breakdowns';
-          if (activeTab === 'bom') tab = 'bom';
+          try {
+              const wb = XLSX.read(bstr, {type: 'binary'});
+              const wsname = wb.SheetNames[0];
+              const ws = wb.Sheets[wsname];
+              const data = XLSX.utils.sheet_to_json(ws, {header: 1}) as any[][];
+              
+              let tab = 'machines';
+              if (activeTab === 'breakdowns') tab = 'breakdowns';
+              if (activeTab === 'bom') tab = 'bom';
 
-          processImport(data, tab);
+              processImport(data, tab);
+          } catch(err) {
+              console.error(err);
+              alert("Failed to parse file.");
+          }
       };
       reader.readAsBinaryString(file);
       e.target.value = ''; // reset
