@@ -12,14 +12,15 @@ import AgriWorkOrder from './components/AgriWorkOrder';
 import MaterialForecast from './components/MaterialForecast';
 import AiAssistant from './components/AiAssistant';
 import MROManagement from './components/MROManagement';
+import MaintenancePlanning from './components/MaintenancePlanning';
 import Settings from './components/Settings';
 import ErrorBoundary from './components/ErrorBoundary';
 
 import { getItem, setItem } from './services/storageService';
 import { fetchAllDataFromCloud, DEFAULT_SCRIPT_URL } from './services/googleSheetsService';
 import { fetchAllData as fetchApiData, upsertRecord, deleteRecord } from './services/phpApiService';
-import { USERS, ITEMS, MACHINES, LOCATIONS, SECTORS, DIVISIONS, MAINTENANCE_PLANS, INITIAL_HISTORY, INITIAL_BREAKDOWNS, INITIAL_PURCHASE_ORDERS } from './constants';
-import { User, Item, Machine, Location, Sector, Division, IssueRecord, MaintenancePlan, BreakdownRecord, BOMRecord, AgriOrderRecord, IrrigationLogRecord, ForecastPeriod, ForecastRecord, PurchaseOrder } from './types';
+import { USERS, ITEMS, MACHINES, LOCATIONS, SECTORS, DIVISIONS, MAINTENANCE_PLANS, INITIAL_HISTORY, INITIAL_BREAKDOWNS, INITIAL_PURCHASE_ORDERS, INITIAL_TASKS, INITIAL_SCHEDULES, INITIAL_MAINTENANCE_WOS } from './constants';
+import { User, Item, Machine, Location, Sector, Division, IssueRecord, MaintenancePlan, BreakdownRecord, BOMRecord, AgriOrderRecord, IrrigationLogRecord, ForecastPeriod, ForecastRecord, PurchaseOrder, MaintenanceTask, MaintenanceSchedule, MaintenanceWorkOrder } from './types';
 
 const App: React.FC = () => {
   // User State
@@ -43,6 +44,11 @@ const App: React.FC = () => {
   const [forecastPeriods, setForecastPeriods] = useState<ForecastPeriod[]>([]);
   const [forecastRecords, setForecastRecords] = useState<ForecastRecord[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(INITIAL_PURCHASE_ORDERS);
+  
+  // -- Maintenance Planning Data --
+  const [maintenanceTasks, setMaintenanceTasks] = useState<MaintenanceTask[]>(INITIAL_TASKS);
+  const [maintenanceSchedules, setMaintenanceSchedules] = useState<MaintenanceSchedule[]>(INITIAL_SCHEDULES);
+  const [maintenanceWorkOrders, setMaintenanceWorkOrders] = useState<MaintenanceWorkOrder[]>(INITIAL_MAINTENANCE_WOS);
 
   // Loading State
   const [isLoading, setIsLoading] = useState(true);
@@ -77,7 +83,8 @@ const App: React.FC = () => {
               storedUser, storedUsers, storedItems, storedMachines, storedLocations, 
               storedSectors, storedDivisions, storedPlans, storedHistory, 
               storedBreakdowns, storedBom, storedAgri, storedIrrigation,
-              storedPeriods, storedForecasts, storedPOs
+              storedPeriods, storedForecasts, storedPOs,
+              storedTasks, storedSchedules, storedWOs
             ] = await Promise.all([
               getItem<User>('user'), getItem<User[]>('users'), getItem<Item[]>('items'), 
               getItem<Machine[]>('machines'), getItem<Location[]>('locations'), getItem<Sector[]>('sectors'),
@@ -85,7 +92,8 @@ const App: React.FC = () => {
               getItem<BreakdownRecord[]>('breakdowns'), getItem<BOMRecord[]>('bomRecords'),
               getItem<AgriOrderRecord[]>('agriOrders'), getItem<IrrigationLogRecord[]>('irrigationLogs'),
               getItem<ForecastPeriod[]>('forecastPeriods'), getItem<ForecastRecord[]>('forecastRecords'),
-              getItem<PurchaseOrder[]>('purchaseOrders')
+              getItem<PurchaseOrder[]>('purchaseOrders'),
+              getItem<MaintenanceTask[]>('maintenanceTasks'), getItem<MaintenanceSchedule[]>('maintenanceSchedules'), getItem<MaintenanceWorkOrder[]>('maintenanceWorkOrders')
             ]);
 
             if (storedUser) setUser(storedUser);
@@ -104,6 +112,9 @@ const App: React.FC = () => {
             if (storedPeriods) setForecastPeriods(storedPeriods);
             if (storedForecasts) setForecastRecords(storedForecasts);
             if (storedPOs) setPurchaseOrders(storedPOs);
+            if (storedTasks) setMaintenanceTasks(storedTasks);
+            if (storedSchedules) setMaintenanceSchedules(storedSchedules);
+            if (storedWOs) setMaintenanceWorkOrders(storedWOs);
         }
         
         // Always check for logged in user in local storage
@@ -325,6 +336,17 @@ const App: React.FC = () => {
       // upsertRecord('purchaseOrders', po); // Enable if backend table exists
   };
 
+  // --- Maintenance Planning Handlers ---
+  const handleAddTask = (t: MaintenanceTask) => {
+      saveData('maintenanceTasks', [...maintenanceTasks, t], setMaintenanceTasks);
+  };
+  const handleAddSchedule = (s: MaintenanceSchedule) => {
+      saveData('maintenanceSchedules', [...maintenanceSchedules, s], setMaintenanceSchedules);
+  };
+  const handleUpdateWorkOrder = (wo: MaintenanceWorkOrder) => {
+      saveData('maintenanceWorkOrders', maintenanceWorkOrders.map(w => w.id === wo.id ? wo : w), setMaintenanceWorkOrders);
+  };
+
   // Bulk Import Wrapper
   const handleBulkImport = (tab: string, added: any[], updated: any[]) => {
       // 1. Update State & Local Storage
@@ -495,10 +517,10 @@ const App: React.FC = () => {
                             case 'master-data':
                                 if (user.role !== 'admin') return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
                                 return <MasterData 
-                                    history={history} items={items} machines={machines} locations={locations} sectors={sectors} divisions={divisions} plans={plans} users={users}
-                                    onAddItem={handleAddItem} onAddMachine={handleAddMachine} onAddLocation={handleAddLocation} onAddSector={handleAddSector} onAddDivision={handleAddDivision} onAddPlan={handleAddPlan} onAddUser={handleAddUser}
-                                    onUpdateItem={handleUpdateItem} onUpdateMachine={handleUpdateMachine} onUpdateLocation={handleUpdateLocation} onUpdateSector={handleUpdateSector} onUpdateDivision={handleUpdateDivision} onUpdatePlan={handleUpdatePlan} onUpdateUser={handleUpdateUser}
-                                    onDeleteItems={handleDeleteItems} onDeleteMachines={handleDeleteMachines} onDeleteLocations={handleDeleteLocations} onDeleteSectors={handleDeleteSectors} onDeleteDivisions={handleDeleteDivisions} onDeletePlans={handleDeletePlans} onDeleteUsers={handleDeleteUsers}
+                                    history={history} items={items} machines={machines} locations={locations} sectors={sectors} divisions={divisions} plans={plans}
+                                    onAddItem={handleAddItem} onAddMachine={handleAddMachine} onAddLocation={handleAddLocation} onAddSector={handleAddSector} onAddDivision={handleAddDivision} onAddPlan={handleAddPlan}
+                                    onUpdateItem={handleUpdateItem} onUpdateMachine={handleUpdateMachine} onUpdateLocation={handleUpdateLocation} onUpdateSector={handleUpdateSector} onUpdateDivision={handleUpdateDivision} onUpdatePlan={handleUpdatePlan}
+                                    onDeleteItems={handleDeleteItems} onDeleteMachines={handleDeleteMachines} onDeleteLocations={handleDeleteLocations} onDeleteSectors={handleDeleteSectors} onDeleteDivisions={handleDeleteDivisions} onDeletePlans={handleDeletePlans}
                                     onBulkImport={handleBulkImport} onRestore={handleRestore}
                                 />;
                             case 'asset-management':
@@ -530,10 +552,23 @@ const App: React.FC = () => {
                                     purchaseOrders={purchaseOrders} onAddPO={handleAddPO}
                                     machines={machines} locations={locations}
                                 />;
+                            case 'maintenance-planning':
+                                return <MaintenancePlanning 
+                                    tasks={maintenanceTasks} onAddTask={handleAddTask}
+                                    schedules={maintenanceSchedules} onAddSchedule={handleAddSchedule}
+                                    workOrders={maintenanceWorkOrders} onUpdateWorkOrder={handleUpdateWorkOrder}
+                                    machines={machines} items={items} locations={locations}
+                                />;
                             case 'ai-assistant':
                                 return <AiAssistant />;
                             case 'settings':
-                                return <Settings onRestore={handleRestore} />;
+                                return <Settings 
+                                    onRestore={handleRestore} 
+                                    users={users} 
+                                    onAddUser={handleAddUser} 
+                                    onUpdateUser={handleUpdateUser} 
+                                    onDeleteUsers={handleDeleteUsers}
+                                />;
                             default:
                                 return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
                         }

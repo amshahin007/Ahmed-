@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Item, Machine, Location, Sector, Division, User, IssueRecord, MaintenancePlan } from '../types';
+import { Item, Machine, Location, Sector, Division, IssueRecord, MaintenancePlan } from '../types';
 import SearchableSelect from './SearchableSelect';
 import { fetchRawCSV, DEFAULT_SHEET_ID, DEFAULT_ITEMS_GID, extractSheetIdFromUrl, extractGidFromUrl, locateRemoteData, backupTabToSheet, DEFAULT_SCRIPT_URL } from '../services/googleSheetsService';
 import * as XLSX from 'xlsx';
@@ -12,7 +12,6 @@ interface MasterDataProps {
   sectors: Sector[];
   divisions: Division[];
   plans: MaintenancePlan[];
-  users: User[];
   
   onAddItem: (item: Item) => void;
   onAddMachine: (machine: Machine) => void;
@@ -20,7 +19,6 @@ interface MasterDataProps {
   onAddSector: (sector: Sector) => void;
   onAddDivision: (division: Division) => void;
   onAddPlan: (plan: MaintenancePlan) => void;
-  onAddUser: (user: User) => void;
 
   onUpdateItem: (item: Item) => void;
   onUpdateMachine: (machine: Machine) => void;
@@ -28,7 +26,6 @@ interface MasterDataProps {
   onUpdateSector: (sector: Sector) => void;
   onUpdateDivision: (division: Division) => void;
   onUpdatePlan: (plan: MaintenancePlan) => void;
-  onUpdateUser: (user: User) => void;
 
   onDeleteItems: (ids: string[]) => void;
   onDeleteMachines: (ids: string[]) => void;
@@ -36,13 +33,12 @@ interface MasterDataProps {
   onDeleteSectors: (ids: string[]) => void;
   onDeleteDivisions: (ids: string[]) => void;
   onDeletePlans: (ids: string[]) => void;
-  onDeleteUsers: (usernames: string[]) => void;
 
   onBulkImport: (tab: string, added: any[], updated: any[]) => void;
-  onRestore?: () => Promise<void>; // Added restore prop
+  onRestore?: () => Promise<void>; 
 }
 
-type TabType = 'items' | 'locations' | 'sectors' | 'divisions' | 'users' | 'plans' | 'history';
+type TabType = 'items' | 'locations' | 'sectors' | 'divisions' | 'plans' | 'history';
 
 const ITEMS_PER_PAGE = 80;
 
@@ -50,7 +46,7 @@ const ITEMS_PER_PAGE = 80;
 const COLUMNS_CONFIG: Record<Exclude<TabType, 'history'>, { key: string, label: string }[]> = {
   items: [
     { key: 'id', label: 'Item Number' },
-    { key: 'stockQuantity', label: 'Stock Qty' }, // New Stock Column
+    { key: 'stockQuantity', label: 'Stock Qty' }, 
     { key: 'thirdId', label: '3rd Item No' },
     { key: 'name', label: 'Description' },
     { key: 'description2', label: 'Desc Line 2' },
@@ -79,23 +75,14 @@ const COLUMNS_CONFIG: Record<Exclude<TabType, 'history'>, { key: string, label: 
   plans: [
     { key: 'id', label: 'ID' },
     { key: 'name', label: 'Plan Name' }
-  ],
-  users: [
-    { key: 'username', label: 'Username' },
-    { key: 'name', label: 'Name' },
-    { key: 'role', label: 'Role' },
-    { key: 'email', label: 'Email' },
-    { key: 'allowedLocationIds', label: 'Locations' },
-    { key: 'allowedSectorIds', label: 'Sectors' },
-    { key: 'allowedDivisionIds', label: 'Divisions' }
   ]
 };
 
 const MasterData: React.FC<MasterDataProps> = ({ 
-  history, items, machines, locations, sectors, divisions, plans, users,
-  onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision, onAddPlan, onAddUser,
-  onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision, onUpdatePlan, onUpdateUser,
-  onDeleteItems, onDeleteMachines, onDeleteLocations, onDeleteSectors, onDeleteDivisions, onDeletePlans, onDeleteUsers,
+  history, items, machines, locations, sectors, divisions, plans,
+  onAddItem, onAddMachine, onAddLocation, onAddSector, onAddDivision, onAddPlan,
+  onUpdateItem, onUpdateMachine, onUpdateLocation, onUpdateSector, onUpdateDivision, onUpdatePlan,
+  onDeleteItems, onDeleteMachines, onDeleteLocations, onDeleteSectors, onDeleteDivisions, onDeletePlans,
   onBulkImport, onRestore
 }) => {
   const [activeTab, setActiveTab] = useState<Exclude<TabType, 'history'>>('items');
@@ -177,7 +164,6 @@ const MasterData: React.FC<MasterDataProps> = ({
       case 'sectors': data = sectors; break;
       case 'divisions': data = divisions; break;
       case 'plans': data = plans; break;
-      case 'users': data = users; break;
     }
 
     // Search Filtering
@@ -208,7 +194,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     }
 
     return data;
-  }, [activeTab, items, locations, sectors, divisions, plans, users, searchTerm]);
+  }, [activeTab, items, locations, sectors, divisions, plans, searchTerm]);
 
   // Save config when changed
   useEffect(() => { 
@@ -273,7 +259,7 @@ const MasterData: React.FC<MasterDataProps> = ({
               const key = row[0].toString().toLowerCase().trim();
               const val = row[1].toString().trim();
 
-              if (['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'users', 'history'].includes(key) && val) {
+              if (['items', 'machines', 'locations', 'sectors', 'divisions', 'plans', 'history'].includes(key) && val) {
                   newConfig[key] = {
                       sheetId: cleanId, 
                       gid: val
@@ -307,7 +293,6 @@ const MasterData: React.FC<MasterDataProps> = ({
           case 'sectors': data = sectors; columns = COLUMNS_CONFIG['sectors']; break;
           case 'divisions': data = divisions; columns = COLUMNS_CONFIG['divisions']; break;
           case 'plans': data = plans; columns = COLUMNS_CONFIG['plans']; break;
-          case 'users': data = users; columns = COLUMNS_CONFIG['users']; break;
       }
       
       if (data.length === 0) return [];
@@ -334,7 +319,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     setSyncLoading(true);
     setSyncMsg("Starting Full Backup...");
     
-    const tabsToBackup = ['items', 'locations', 'sectors', 'divisions', 'plans', 'users'];
+    const tabsToBackup = ['items', 'locations', 'sectors', 'divisions', 'plans'];
     let successCount = 0;
     let errors: string[] = [];
 
@@ -422,7 +407,6 @@ const MasterData: React.FC<MasterDataProps> = ({
         case 'sectors': onDeleteSectors(ids); break;
         case 'divisions': onDeleteDivisions(ids); break;
         case 'plans': onDeletePlans(ids); break;
-        case 'users': onDeleteUsers(ids); break;
       }
   };
 
@@ -437,19 +421,18 @@ const MasterData: React.FC<MasterDataProps> = ({
   };
 
   const handleSelectAllPage = (pageItems: any[]) => {
-      const allSelected = pageItems.every(item => selectedIds.has(item.id || item.username));
+      const allSelected = pageItems.every(item => selectedIds.has(item.id));
       const newSet = new Set(selectedIds);
       if (allSelected) {
-          pageItems.forEach(item => newSet.delete(item.id || item.username));
+          pageItems.forEach(item => newSet.delete(item.id));
       } else {
-          pageItems.forEach(item => newSet.add(item.id || item.username));
+          pageItems.forEach(item => newSet.add(item.id));
       }
       setSelectedIds(newSet);
   };
 
   const handleSelectAllGlobal = () => {
-      const idKey = activeTab === 'users' ? 'username' : 'id';
-      const allIds = currentData.map((item: any) => String(item[idKey]));
+      const allIds = currentData.map((item: any) => String(item.id));
       setSelectedIds(new Set(allIds));
   };
 
@@ -497,11 +480,10 @@ const MasterData: React.FC<MasterDataProps> = ({
       case 'sectors': data = sectors; break;
       case 'divisions': data = divisions; break;
       case 'plans': data = plans; break;
-      case 'users': data = users; break;
     }
 
     if (onlySelected && selectedIds.size > 0) {
-        data = data.filter(d => selectedIds.has(d.id || d.username));
+        data = data.filter(d => selectedIds.has(d.id));
     }
     if (data.length === 0) {
         alert("No data to export.");
@@ -531,15 +513,6 @@ const MasterData: React.FC<MasterDataProps> = ({
       case 'plans':
         headers = ['ID', 'Plan Name'];
         rows = data.map((p: MaintenancePlan) => [p.id, p.name]);
-        break;
-      case 'users':
-        headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations', 'Allowed Sectors', 'Allowed Divisions'];
-        rows = data.map((u: User) => [
-            u.username, u.name, u.role, u.email, 
-            (u.allowedLocationIds || []).join(';'),
-            (u.allowedSectorIds || []).join(';'),
-            (u.allowedDivisionIds || []).join(';')
-        ]);
         break;
     }
 
@@ -594,8 +567,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     }
 
     let headerRowIndex = -1;
-    const primaryKeywords = targetTab === 'users' ? ['username', 'user'] : 
-                            targetTab === 'history' ? ['id', 'date', 'location'] :
+    const primaryKeywords = targetTab === 'history' ? ['id', 'date', 'location'] :
                             ['id', 'item number', 'item no', 'name', 'description'];
     
     for (let i = 0; i < Math.min(rows.length, 10); i++) {
@@ -639,13 +611,6 @@ const MasterData: React.FC<MasterDataProps> = ({
         fieldMap = { id: ['id'], name: ['name', 'division name'], sectorId: ['sector id', 'sector'] };
     } else if (targetTab === 'plans') {
         fieldMap = { id: ['id'], name: ['name', 'plan name', 'plan'] };
-    } else if (targetTab === 'users') {
-        fieldMap = {
-            username: ['username', 'user', 'login'],
-            name: ['name', 'full name'],
-            role: ['role', 'permission'],
-            email: ['email']
-        };
     }
 
     const colIndexMap: Record<string, number> = {};
@@ -655,7 +620,7 @@ const MasterData: React.FC<MasterDataProps> = ({
         if (index !== -1) colIndexMap[fieldKey] = index;
     });
 
-    const idKey = targetTab === 'users' ? 'username' : 'id';
+    const idKey = 'id';
     
     // Only warn if not history (history ID might be generated if missing, but better to have)
     if (colIndexMap[idKey] === undefined && targetTab !== 'history') {
@@ -689,9 +654,6 @@ const MasterData: React.FC<MasterDataProps> = ({
              if (!payload.category) payload.category = 'General';
              if (!payload.unit) payload.unit = 'pcs';
              if (payload.stockQuantity) payload.stockQuantity = Number(payload.stockQuantity);
-        } else if (targetTab === 'machines') {
-             if (!payload.status) payload.status = 'Working';
-             if (!payload.chaseNo) payload.chaseNo = 'Unknown';
         }
 
         const list = targetTab === 'items' ? items : 
@@ -700,7 +662,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                      targetTab === 'sectors' ? sectors :
                      targetTab === 'divisions' ? divisions :
                      targetTab === 'plans' ? plans : 
-                     targetTab === 'users' ? users : history;
+                     history;
         
         // @ts-ignore
         const exists = list.find((item: any) => item[idKey] === (payload[idKey] || idVal));
@@ -753,13 +715,6 @@ const MasterData: React.FC<MasterDataProps> = ({
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const payload = { ...formData };
-    if (activeTab === 'users') {
-        ['allowedLocationIds', 'allowedSectorIds', 'allowedDivisionIds'].forEach(key => {
-            if (typeof payload[key] === 'string') {
-                payload[key] = payload[key].split(',').map((s: string) => s.trim()).filter(Boolean);
-            }
-        });
-    }
     if (activeTab === 'items' && payload.stockQuantity) payload.stockQuantity = Number(payload.stockQuantity);
 
     if (isEditing) {
@@ -769,7 +724,6 @@ const MasterData: React.FC<MasterDataProps> = ({
             case 'sectors': onUpdateSector(payload); break;
             case 'divisions': onUpdateDivision(payload); break;
             case 'plans': onUpdatePlan(payload); break;
-            case 'users': onUpdateUser(payload); break;
         }
     } else {
         switch(activeTab) {
@@ -778,7 +732,6 @@ const MasterData: React.FC<MasterDataProps> = ({
             case 'sectors': onAddSector(payload); break;
             case 'divisions': onAddDivision(payload); break;
             case 'plans': onAddPlan(payload); break;
-            case 'users': onAddUser(payload); break;
         }
     }
     setShowForm(false);
@@ -808,10 +761,9 @@ const MasterData: React.FC<MasterDataProps> = ({
                                         onChange={(e) => setFormData({...formData, [field.key]: e.target.value})}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                                         placeholder={`Enter ${field.label}`}
-                                        disabled={isEditing && (field.key === 'id' || field.key === 'username')}
-                                        required={field.key === 'id' || field.key === 'username'}
+                                        disabled={isEditing && (field.key === 'id')}
+                                        required={field.key === 'id'}
                                     />
-                                    {activeTab === 'users' && field.key.includes('Ids') && <p className="text-xs text-gray-400">Comma separated IDs</p>}
                                 </div>
                             );
                         })}
@@ -839,7 +791,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                     <thead className="bg-gray-50 text-gray-700 font-semibold border-b border-gray-200">
                         <tr>
                             <th className="px-4 py-3 w-10 text-center">
-                                <input type="checkbox" checked={currentItems.length > 0 && currentItems.every(i => selectedIds.has((i as any).id || (i as any).username))} onChange={() => handleSelectAllPage(currentItems)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                <input type="checkbox" checked={currentItems.length > 0 && currentItems.every(i => selectedIds.has((i as any).id))} onChange={() => handleSelectAllPage(currentItems)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                             </th>
                             {visibleColumns.map((col, index) => (
                                 <th key={col.key} className="px-4 py-3 cursor-move hover:bg-gray-100 select-none" draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDrop} onDragOver={(e) => e.preventDefault()}>{col.label}</th>
@@ -850,7 +802,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                     <tbody className="divide-y divide-gray-100">
                         {currentItems.map((item) => {
                             const anyItem = item as any;
-                            const itemId = anyItem.id || anyItem.username;
+                            const itemId = anyItem.id;
                             return (
                                 <tr key={itemId} className="hover:bg-blue-50 transition-colors">
                                     <td className="px-4 py-2 text-center"><input type="checkbox" checked={selectedIds.has(itemId)} onChange={() => toggleSelection(itemId)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" /></td>
@@ -884,7 +836,7 @@ const MasterData: React.FC<MasterDataProps> = ({
             
             {/* Tabs */}
             <div className="flex overflow-x-auto w-full lg:w-auto pb-2 lg:pb-0 gap-2 scrollbar-hide">
-                {(['items', 'locations', 'sectors', 'divisions', 'plans', 'users'] as const).map(tab => (
+                {(['items', 'locations', 'sectors', 'divisions', 'plans'] as const).map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -894,7 +846,7 @@ const MasterData: React.FC<MasterDataProps> = ({
                             : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100'
                         }`}
                     >
-                        {tab === 'users' ? 'Users & Roles' : tab}
+                        {tab}
                     </button>
                 ))}
             </div>

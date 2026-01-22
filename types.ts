@@ -192,6 +192,53 @@ export interface PurchaseOrder {
   status: 'Open' | 'Partial' | 'Closed';
 }
 
+// --- NEW MAINTENANCE PLANNING TYPES ---
+
+export interface MaintenanceTask {
+  id: string;
+  description: string;
+  type: 'Preventive' | 'Corrective' | 'Predictive';
+  machineId: string; // Related Machine
+  machineName: string;
+  requiredMroItems: { itemId: string; quantity: number }[]; // JSON array in DB
+  standardDurationHours: number;
+  requiredSkills: string;
+  priority: 'High' | 'Medium' | 'Low';
+  defaultLocationId: string;
+  status: 'Active' | 'Inactive';
+}
+
+export interface MaintenanceSchedule {
+  id: string;
+  taskId: string;
+  machineId: string;
+  locationId: string;
+  plannedStartDate: string; // ISO Date
+  plannedEndDate: string; // ISO Date (Auto-calc)
+  frequency: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Condition-based';
+  assignedTechnician: string;
+  checkMroAvailability: boolean;
+  status: 'Planned' | 'Released' | 'Completed' | 'Delayed';
+}
+
+export interface MaintenanceWorkOrder {
+  id: string; // WO Number
+  taskId: string;
+  machineId: string;
+  locationId: string;
+  type: 'Preventive' | 'Corrective' | 'Predictive';
+  plannedDate: string;
+  actualStartDate?: string;
+  actualEndDate?: string;
+  plannedDurationHours: number;
+  actualDurationHours?: number;
+  mroItemsReserved: boolean;
+  mroItemsConsumed: { itemId: string; quantity: number }[];
+  status: 'Draft' | 'Released' | 'In Progress' | 'Completed' | 'Cancelled';
+  downtimeRecordedMinutes?: number;
+  rootCause?: string;
+}
+
 export interface DashboardMetrics {
   totalIssues: number;
   topItem: string;

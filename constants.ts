@@ -1,5 +1,5 @@
 
-import { Item, Machine, Location, IssueRecord, Sector, Division, User, MaintenancePlan, BreakdownRecord, PurchaseOrder } from './types';
+import { Item, Machine, Location, IssueRecord, Sector, Division, User, MaintenancePlan, BreakdownRecord, PurchaseOrder, MaintenanceTask, MaintenanceSchedule, MaintenanceWorkOrder } from './types';
 
 export const USERS: User[] = [
   { 
@@ -195,5 +195,79 @@ export const INITIAL_BREAKDOWNS: BreakdownRecord[] = [
     rootCause: 'Fuse Blown',
     actionTaken: 'Replaced Fuse',
     status: 'Closed'
+  }
+];
+
+// --- MAINTENANCE PLANNING MOCK DATA ---
+
+export const INITIAL_TASKS: MaintenanceTask[] = [
+  {
+    id: 'TSK-001',
+    description: 'Quarterly Conveyor Inspection',
+    type: 'Preventive',
+    machineId: 'M-101',
+    machineName: 'Conveyor Belt Alpha',
+    requiredMroItems: [{ itemId: 'ITM-007', quantity: 1 }],
+    standardDurationHours: 4,
+    requiredSkills: 'Mechanical Level 2',
+    priority: 'Medium',
+    defaultLocationId: 'WH-001',
+    status: 'Active'
+  },
+  {
+    id: 'TSK-002',
+    description: 'Robotic Arm Calibration',
+    type: 'Preventive',
+    machineId: 'M-102',
+    machineName: 'Robotic Arm Bravo',
+    requiredMroItems: [{ itemId: 'ITM-002', quantity: 2 }],
+    standardDurationHours: 6,
+    requiredSkills: 'Electrical Level 3',
+    priority: 'High',
+    defaultLocationId: 'WH-002',
+    status: 'Active'
+  }
+];
+
+export const INITIAL_SCHEDULES: MaintenanceSchedule[] = [
+  {
+    id: 'SCH-2025-001',
+    taskId: 'TSK-001',
+    machineId: 'M-101',
+    locationId: 'WH-001',
+    plannedStartDate: new Date(Date.now() + 86400000 * 3).toISOString(), // 3 days from now
+    plannedEndDate: new Date(Date.now() + 86400000 * 3 + 14400000).toISOString(), // +4 hours
+    frequency: 'Quarterly',
+    assignedTechnician: 'Ahmed Ali',
+    checkMroAvailability: true,
+    status: 'Planned'
+  }
+];
+
+export const INITIAL_MAINTENANCE_WOS: MaintenanceWorkOrder[] = [
+  {
+    id: 'WO-2025-1001',
+    taskId: 'TSK-001',
+    machineId: 'M-101',
+    locationId: 'WH-001',
+    type: 'Preventive',
+    plannedDate: new Date(Date.now() + 86400000).toISOString(),
+    plannedDurationHours: 4,
+    mroItemsReserved: true,
+    mroItemsConsumed: [],
+    status: 'Released'
+  },
+  {
+    id: 'WO-2025-1002', // Corrective from breakdown
+    taskId: 'TSK-000-CORR',
+    machineId: 'M-103',
+    locationId: 'WH-002',
+    type: 'Corrective',
+    plannedDate: new Date(Date.now()).toISOString(),
+    plannedDurationHours: 2,
+    mroItemsReserved: false,
+    mroItemsConsumed: [],
+    status: 'Draft',
+    rootCause: 'Motor Overheat'
   }
 ];

@@ -25,17 +25,28 @@ interface LineItem {
   quantity: number;
   locationStock?: number; // Stock at selected location
   otherStock?: number;    // Stock at all other locations
+  // New fields for Multi-Machine Mode
+  machineId?: string;
+  machineName?: string;
 }
 
 const IssueForm: React.FC<IssueFormProps> = ({ 
   onAddIssue, items, machines, locations, sectors, divisions, maintenancePlans, currentUser, bomRecords = [] 
 }) => {
+  // --- Mode State ---
+  const [issueMode, setIssueMode] = useState<'single' | 'multi'>('single');
+
   // --- Header State (Context) ---
   const [locationId, setLocationId] = useState('');
   const [sectorId, setSectorId] = useState('');
   const [divisionId, setDivisionId] = useState('');
+  
+  // Single Mode Machine State
   const [machineId, setMachineId] = useState('');
   
+  // Multi Mode Line Entry State
+  const [lineMachineId, setLineMachineId] = useState('');
+
   // --- Maintenance Plan State ---
   const [selectedPlanId, setSelectedPlanId] = useState('');
 
@@ -172,6 +183,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
       setFilterLocalNo('');
       setFilterChaseNo('');
       setMachineId('');
+      setLineMachineId('');
   };
 
   useEffect(() => {
@@ -186,10 +198,25 @@ const IssueForm: React.FC<IssueFormProps> = ({
   const handleAddLineItem = () => {
     if (!currentItemId || !currentQuantity || Number(currentQuantity) <= 0) return;
 
+    // Check machine for multi-mode
+    if (issueMode === 'multi' && !lineMachineId) {
+        alert("Please select a Machine for this item.");
+        return;
+    }
+
     if (currentStockInfo.local < Number(currentQuantity)) {
         if (!confirm(`Warning: Requested Quantity (${currentQuantity}) exceeds Local Stock (${currentStockInfo.local}) for ${locationId}. \n\nOther locations have: ${currentStockInfo.other}.\n\nContinue?`)) {
             return;
         }
+    }
+
+    let itemMachineId = undefined;
+    let itemMachineName = undefined;
+
+    if (issueMode === 'multi') {
+        const m = machines.find(mac => mac.id === lineMachineId);
+        itemMachineId = lineMachineId;
+        itemMachineName = m ? (m.category ? m.category : `Machine ${m.id}`) : 'Unknown';
     }
 
     const newItem: LineItem = {
@@ -198,7 +225,9 @@ const IssueForm: React.FC<IssueFormProps> = ({
       unit: selectedItemObj?.unit || 'pcs',
       quantity: Number(currentQuantity),
       locationStock: currentStockInfo.local,
-      otherStock: currentStockInfo.other
+      otherStock: currentStockInfo.other,
+      machineId: itemMachineId,
+      machineName: itemMachineName
     };
 
     setLineItems([...lineItems, newItem]);
@@ -206,6 +235,7 @@ const IssueForm: React.FC<IssueFormProps> = ({
     setCurrentItemId('');
     setCurrentItemName('');
     setCurrentQuantity('');
+    if (issueMode === 'multi') setLineMachineId(''); // Reset line machine
     setTimeout(() => itemInputRef.current?.focus(), 50);
   };
 
@@ -277,13 +307,15 @@ const IssueForm: React.FC<IssueFormProps> = ({
                       const masterItem = items.find(it => it.id === cleanCode);
                       if(masterItem) {
                           const stock = getStockInfo(masterItem);
+                          // Note: Excel import currently assumes header machine if in multi-mode, or we skip mapping for now
                           newLines.push({
                               itemId: masterItem.id,
                               itemName: masterItem.fullName || masterItem.name,
                               unit: masterItem.unit || 'pcs',
                               quantity: qty,
                               locationStock: stock.local,
-                              otherStock: stock.other
+                              otherStock: stock.other,
+                              machineId: issueMode === 'multi' ? (machineId || '') : undefined // Fallback to currently selected machine in filter if avail
                           });
                       } else {
                           notFoundCount++;
@@ -315,7 +347,10 @@ const IssueForm: React.FC<IssueFormProps> = ({
     
     try {
         if (!locationId) { alert("Please select a 'Warehouse Location'."); return; }
-        if (!machineId) { alert("Please select a 'Machine'."); return; }
+        
+        // Validation based on mode
+        if (issueMode === 'single' && !machineId) { alert("Please select a 'Machine'."); return; }
+        
         if (lineItems.length === 0) { alert("Please add at least one item."); return; }
         if (!selectedPlanId) { alert("Please select a 'Maintenance Plan'."); return; }
         if (!warehouseEmail) { alert("Please provide a Warehouse Email."); return; }
@@ -323,7 +358,6 @@ const IssueForm: React.FC<IssueFormProps> = ({
         setIsSubmitting(true);
         setEmailStatus('Processing Request...');
         
-        const machine = machines.find(m => m.id === machineId);
         const sector = sectors.find(s => s.id === sectorId);
         const division = divisions.find(d => d.id === divisionId);
         const plan = maintenancePlans.find(p => p.id === selectedPlanId);
@@ -332,12 +366,29 @@ const IssueForm: React.FC<IssueFormProps> = ({
         const batchIdBase = Date.now().toString().slice(-6);
         
         const newRecords: IssueRecord[] = [];
-        const machineDisplayName = machine 
-            ? (machine.category ? machine.category : `Machine ${machine.id}`) 
-            : 'Unknown Machine';
+        
+        // Single Mode Global Machine
+        let globalMachineName = 'Unknown Machine';
+        if (issueMode === 'single') {
+            const m = machines.find(mac => mac.id === machineId);
+            globalMachineName = m ? (m.category ? m.category : `Machine ${m.id}`) : 'Unknown';
+        }
 
         for (let i = 0; i < lineItems.length; i++) {
             const line = lineItems[i];
+            
+            // Determine Machine for this line
+            let finalMachineId = '';
+            let finalMachineName = '';
+
+            if (issueMode === 'single') {
+                finalMachineId = machineId;
+                finalMachineName = globalMachineName;
+            } else {
+                finalMachineId = line.machineId || 'Unknown';
+                finalMachineName = line.machineName || 'Unknown Machine';
+            }
+
             newRecords.push({
                 id: `REQ-${batchIdBase}-${i + 1}`,
                 timestamp: timestamp,
@@ -346,8 +397,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 itemName: line.itemName,
                 quantity: line.quantity,
                 unit: line.unit, 
-                machineId,
-                machineName: machineDisplayName,
+                machineId: finalMachineId,
+                machineName: finalMachineName,
                 sectorName: sector ? sector.name : '',
                 divisionName: division ? division.name : '',
                 maintenancePlan: plan ? plan.name : '',
@@ -527,18 +578,23 @@ const IssueForm: React.FC<IssueFormProps> = ({
       return bomRecords.filter(b => b.machineCategory === filterCategory && b.modelNo === filterModelNo);
   }, [bomRecords, filterCategory, filterModelNo]);
 
+  // -- UPDATE HANDLERS to handle mode specific clearing --
   const handleCategoryChange = (val: string) => {
-      setFilterCategory(val); setFilterBrand(''); setFilterModelNo(''); setFilterLocalNo(''); setFilterChaseNo(''); setMachineId('');
+      setFilterCategory(val); setFilterBrand(''); setFilterModelNo(''); setFilterLocalNo(''); setFilterChaseNo(''); 
+      setMachineId(''); setLineMachineId('');
   };
   const handleBrandChange = (val: string) => {
-      setFilterBrand(val); setFilterModelNo(''); setFilterLocalNo(''); setFilterChaseNo(''); setMachineId('');
+      setFilterBrand(val); setFilterModelNo(''); setFilterLocalNo(''); setFilterChaseNo(''); 
+      setMachineId(''); setLineMachineId('');
   };
   const handleModelChange = (val: string) => {
-      setFilterModelNo(val); setFilterLocalNo(''); setFilterChaseNo(''); setMachineId('');
+      setFilterModelNo(val); setFilterLocalNo(''); setFilterChaseNo(''); 
+      setMachineId(''); setLineMachineId('');
   };
   
   const handleLocalNoChange = (val: string) => {
-      setFilterLocalNo(val); setFilterChaseNo(''); setMachineId(''); 
+      setFilterLocalNo(val); setFilterChaseNo(''); 
+      setMachineId(''); setLineMachineId('');
       if (!val) return;
       const matches = machinesInCat.filter(m => m.machineLocalNo === val);
       if (matches.length > 0) {
@@ -546,14 +602,16 @@ const IssueForm: React.FC<IssueFormProps> = ({
           setFilterBrand(first.brand || '');
           setFilterModelNo(first.modelNo || '');
           if (matches.length === 1) {
-              setMachineId(first.id);
+              if (issueMode === 'single') setMachineId(first.id);
+              else setLineMachineId(first.id);
               setFilterChaseNo(first.chaseNo);
           }
       }
   };
 
   const handleChaseChange = (val: string) => {
-      setFilterChaseNo(val); setMachineId('');
+      setFilterChaseNo(val); 
+      setMachineId(''); setLineMachineId('');
       if (!val) return;
       const matches = machinesInCat.filter(m => m.chaseNo === val);
       if (matches.length > 0) {
@@ -561,12 +619,17 @@ const IssueForm: React.FC<IssueFormProps> = ({
           setFilterBrand(first.brand || '');
           setFilterModelNo(first.modelNo || '');
           setFilterLocalNo(first.machineLocalNo || '');
-          if (matches.length === 1) setMachineId(first.id);
+          if (matches.length === 1) {
+              if (issueMode === 'single') setMachineId(first.id);
+              else setLineMachineId(first.id);
+          }
       }
   };
 
   const handleMachineIdChange = (val: string) => {
-      setMachineId(val);
+      if (issueMode === 'single') setMachineId(val);
+      else setLineMachineId(val);
+
       const m = machines.find(mac => mac.id === val);
       if (m) {
           setFilterCategory(m.category || ''); setFilterBrand(m.brand || ''); setFilterModelNo(m.modelNo || ''); setFilterLocalNo(m.machineLocalNo || ''); setFilterChaseNo(m.chaseNo || '');
@@ -643,13 +706,19 @@ const IssueForm: React.FC<IssueFormProps> = ({
                    <p><span className="font-bold">Location:</span> {lastSubmittedBatch[0].locationId}</p>
                 </div>
                 <div>
-                   <p><span className="font-bold">Machine:</span> {lastSubmittedBatch[0].machineName}</p>
-                   <p><span className="font-bold">Machine ID:</span> {lastSubmittedBatch[0].machineId}</p>
+                   {issueMode === 'single' ? (
+                        <>
+                            <p><span className="font-bold">Machine:</span> {lastSubmittedBatch[0].machineName}</p>
+                            <p><span className="font-bold">Machine ID:</span> {lastSubmittedBatch[0].machineId}</p>
+                        </>
+                   ) : (
+                       <p><span className="font-bold">Mode:</span> Multi-Machine Request</p>
+                   )}
                 </div>
             </div>
             <table className="w-full text-left border-collapse border border-black mb-8">
-                <thead><tr className="bg-gray-100"><th className="border border-black p-2">Item</th><th className="border border-black p-2">Name</th><th className="border border-black p-2">Unit</th><th className="border border-black p-2 text-right">Qty</th></tr></thead>
-                <tbody>{lastSubmittedBatch.map(item => (<tr key={item.id}><td className="border border-black p-2">{item.itemId}</td><td className="border border-black p-2">{item.itemName}</td><td className="border border-black p-2 text-center">{item.unit || 'pcs'}</td><td className="border border-black p-2 text-right">{item.quantity}</td></tr>))}</tbody>
+                <thead><tr className="bg-gray-100"><th className="border border-black p-2">Item</th><th className="border border-black p-2">Name</th><th className="border border-black p-2">Unit</th>{issueMode === 'multi' && <th className="border border-black p-2">Machine</th>}<th className="border border-black p-2 text-right">Qty</th></tr></thead>
+                <tbody>{lastSubmittedBatch.map(item => (<tr key={item.id}><td className="border border-black p-2">{item.itemId}</td><td className="border border-black p-2">{item.itemName}</td><td className="border border-black p-2 text-center">{item.unit || 'pcs'}</td>{issueMode === 'multi' && <td className="border border-black p-2">{item.machineName}</td>}<td className="border border-black p-2 text-right">{item.quantity}</td></tr>))}</tbody>
             </table>
           </div>
         </div>
@@ -657,10 +726,30 @@ const IssueForm: React.FC<IssueFormProps> = ({
 
       {/* FORM CONTAINER */}
       <div className="bg-white p-4 md:p-8 rounded-xl shadow-sm border border-gray-200">
-        <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-6 flex items-center">
-          <span className="mr-3 p-2 bg-blue-100 text-blue-600 rounded-lg text-lg md:text-xl">📝</span>
-          Create New Request
-        </h2>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
+              <span className="mr-3 p-2 bg-blue-100 text-blue-600 rounded-lg text-lg md:text-xl">📝</span>
+              Create New Request
+            </h2>
+            
+            {/* Mode Switcher */}
+            <div className="flex bg-gray-100 p-1 rounded-lg">
+                <button 
+                    type="button"
+                    onClick={() => { setIssueMode('single'); setLineItems([]); }}
+                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${issueMode === 'single' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    Single Machine
+                </button>
+                <button 
+                    type="button"
+                    onClick={() => { setIssueMode('multi'); setLineItems([]); setMachineId(''); }}
+                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${issueMode === 'multi' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    Multi-Machine
+                </button>
+            </div>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8">
           
@@ -677,12 +766,15 @@ const IssueForm: React.FC<IssueFormProps> = ({
                 {/* Section 2: Machine Allocation */}
                 <div className="bg-white p-4 md:p-5 rounded-lg border border-gray-200 animate-fade-in-up">
                     <div className="flex justify-between items-center mb-4 border-b pb-2">
-                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">2. Allocation Details (Machine)</h3>
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
+                            2. {issueMode === 'single' ? 'Select Machine (Single)' : 'Context Filter (Multi-Machine)'}
+                        </h3>
                         <button type="button" onClick={() => setShowTechnicalFilters(!showTechnicalFilters)} className="text-xs text-blue-600 hover:underline font-semibold">
                             {showTechnicalFilters ? 'Hide Filters' : 'Show Advanced Filters'}
                         </button>
                     </div>
 
+                    {/* Context/Hierarchy Selectors (Always visible to filter machine dropdowns) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <SearchableSelect label="Sector" options={sectorOptions} value={sectorId} onChange={setSectorId} placeholder="Select Sector..." inputRef={sectorInputRef} />
                         <SearchableSelect label="Division" disabled={!sectorId} options={divisionOptions} value={divisionId} onChange={setDivisionId} placeholder="Select Division..." />
@@ -706,9 +798,17 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         </div>
                     )}
                     
-                    <div className="mt-4">
-                        <SearchableSelect label="Asset ID / Code (Final Machine)" required options={machineOptions} value={machineId} onChange={handleMachineIdChange} placeholder={machineOptions.length === 0 ? "Select Filters above..." : "Select Asset ID"} />
-                    </div>
+                    {/* Machine Selector - ONLY VISIBLE IN SINGLE MODE HERE */}
+                    {issueMode === 'single' && (
+                        <div className="mt-4">
+                            <SearchableSelect label="Asset ID / Code (Final Machine)" required options={machineOptions} value={machineId} onChange={handleMachineIdChange} placeholder={machineOptions.length === 0 ? "Select Filters above..." : "Select Asset ID"} />
+                        </div>
+                    )}
+                    {issueMode === 'multi' && (
+                        <div className="mt-4 p-2 bg-purple-50 border border-purple-100 rounded text-xs text-purple-700">
+                            ℹ️ <strong>Multi-Machine Mode:</strong> Select the specific machine for each item in the section below. Use Sector/Division filters above to narrow down the machine list.
+                        </div>
+                    )}
                 </div>
 
                 {/* Section 3: LINES - SPLIT VIEW */}
@@ -719,6 +819,22 @@ const IssueForm: React.FC<IssueFormProps> = ({
                         {/* Option A: Manual Entry */}
                         <div className="space-y-4">
                             <h4 className="text-xs font-bold text-blue-600 uppercase bg-blue-50 inline-block px-2 py-1 rounded">Option A: Manual / Scanner</h4>
+                            
+                            {/* In Multi Mode, we need Machine Selector here */}
+                            {issueMode === 'multi' && (
+                                <div className="p-3 bg-purple-100 rounded border border-purple-200 mb-2">
+                                    <SearchableSelect 
+                                        label="Select Machine for Item" 
+                                        required 
+                                        options={machineOptions} 
+                                        value={lineMachineId} 
+                                        onChange={handleMachineIdChange} // Using standard handler to update 'lineMachineId' in multi mode logic
+                                        placeholder={machineOptions.length === 0 ? "Filter machines in Section 2..." : "Select Asset ID"} 
+                                        compact={true}
+                                    />
+                                </div>
+                            )}
+
                             <div className="space-y-3">
                                 <SearchableSelect label="Item Number (Scan Here)" options={itemOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Scan Item No..." inputRef={itemInputRef} onKeyDown={handleItemKeyDown}/>
                                 <SearchableSelect label="Item Name" options={itemNameOptions} value={currentItemId} onChange={setCurrentItemId} placeholder="Search by name..." />
@@ -778,6 +894,8 @@ const IssueForm: React.FC<IssueFormProps> = ({
                                             <th className="px-4 py-2">Item Number</th>
                                             <th className="px-4 py-2">Item Name</th>
                                             <th className="px-4 py-2">Unit</th>
+                                            {/* Show Machine Column in Multi Mode */}
+                                            {issueMode === 'multi' && <th className="px-4 py-2 bg-purple-50 text-purple-900">Assigned Machine</th>}
                                             <th className="px-4 py-2 text-center">Qty</th>
                                             <th className="px-4 py-2 text-center">Loc. Stock</th>
                                             <th className="px-4 py-2 text-center">Other Stock</th>
@@ -790,6 +908,11 @@ const IssueForm: React.FC<IssueFormProps> = ({
                                                 <td className="px-4 py-2 font-mono text-gray-600 font-bold">{line.itemId}</td>
                                                 <td className="px-4 py-2">{line.itemName}</td>
                                                 <td className="px-4 py-2 text-sm text-gray-500">{line.unit}</td>
+                                                {issueMode === 'multi' && (
+                                                    <td className="px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50/30">
+                                                        {line.machineName || 'Unknown'}
+                                                    </td>
+                                                )}
                                                 <td className="px-4 py-2 text-center font-bold text-lg">{line.quantity}</td>
                                                 <td className="px-4 py-2 text-center font-mono text-gray-500">{line.locationStock}</td>
                                                 <td className="px-4 py-2 text-center font-mono text-blue-500">{line.otherStock}</td>
