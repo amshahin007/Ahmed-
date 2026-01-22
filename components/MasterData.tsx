@@ -184,6 +184,20 @@ const MasterData: React.FC<MasterDataProps> = ({
     if (searchTerm) {
         const lowerTerm = searchTerm.toLowerCase();
         data = data.filter(item => {
+            if (activeTab === 'items') {
+                // Priority Search for Items
+                const i = item as Item;
+                return (
+                    (i.id || '').toLowerCase().includes(lowerTerm) || 
+                    (i.name || '').toLowerCase().includes(lowerTerm) ||
+                    (i.partNumber || '').toLowerCase().includes(lowerTerm) ||
+                    (i.modelNo || '').toLowerCase().includes(lowerTerm) ||
+                    (i.fullName || '').toLowerCase().includes(lowerTerm) ||
+                    (i.category || '').toLowerCase().includes(lowerTerm)
+                );
+            }
+            
+            // Generic Search for other tabs
             const keys = Object.keys(item);
             return keys.some(key => {
                 const val = item[key];
@@ -935,7 +949,7 @@ const MasterData: React.FC<MasterDataProps> = ({
              <div className="relative flex-1 w-full md:max-w-md mx-auto min-w-[200px]">
                 <input 
                     type="text" 
-                    placeholder={`Search ${activeTab}...`}
+                    placeholder={activeTab === 'items' ? "Search Name or Code..." : `Search ${activeTab}...`}
                     value={searchTerm} 
                     onChange={(e) => setSearchTerm(e.target.value)} 
                     className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" 

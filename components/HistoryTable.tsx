@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { IssueRecord, Location, Item, Machine } from '../types';
 import * as XLSX from 'xlsx';
 import { uploadFileToDrive, DEFAULT_SCRIPT_URL, locateRemoteData } from '../services/googleSheetsService';
@@ -9,13 +8,14 @@ interface HistoryTableProps {
   locations: Location[];
   items: Item[];
   machines: Machine[];
+  onBulkImport: (tab: string, added: any[], updated: any[]) => void;
 }
 
 type TabType = 'requests' | 'tracking' | 'stock';
 
 const ITEMS_PER_PAGE = 50;
 
-const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, machines }) => {
+const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, machines, onBulkImport }) => {
   const [activeTab, setActiveTab] = useState<TabType>('requests'); 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
@@ -23,6 +23,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
   const [driveLink, setDriveLink] = useState('');
   const [locatingFolder, setLocatingFolder] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset pagination when filters change
   useEffect(() => {
@@ -98,107 +99,145 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
     }));
   }, [filteredHistory, items]);
 
-  const generateWorkbook = () => {
+  // --- EXPORT LOGIC PER TAB ---
+  const handleExport = () => {
     const wb = XLSX.utils.book_new();
+    let filename = '';
 
-    // Sheet 1: Issue Requests
-    const histHeaders = [
-      "Item Number", "Sites", "G/L Date", "Full Name", "Sum of Transaction Qty", "Trans UM", "Status", "Machine", "Maint. Plan", "ID"
-    ];
-    const histRows = filteredHistory.map(h => {
-        const loc = locations.find(l => l.id === h.locationId);
-        return [
+    if (activeTab === 'requests') {
+        const headers = ["ID", "Date", "Location", "Item ID", "Item Name", "Qty", "Unit", "Machine", "Status", "Maint. Plan"];
+        const rows = filteredHistory.map(h => [
+            h.id, 
+            new Date(h.timestamp).toLocaleDateString(), 
+            h.locationId, 
             h.itemId, 
-            loc?.name || h.locationId,
-            new Date(h.timestamp).toLocaleDateString(),
-            h.itemName,
+            h.itemName, 
             h.quantity, 
-            h.unit || 'pcs',
+            h.unit || 'pcs', 
+            h.machineName, 
             h.status, 
-            h.machineName,
-            h.maintenancePlan || '', 
-            h.id
-        ];
-    });
-    const wsHist = XLSX.utils.aoa_to_sheet([histHeaders, ...histRows]);
-    XLSX.utils.book_append_sheet(wb, wsHist, "Issue Requests");
+            h.maintenancePlan || ''
+        ]);
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        XLSX.utils.book_append_sheet(wb, ws, "Issue Requests");
+        filename = `Issue_Requests_${new Date().toISOString().slice(0,10)}.xlsx`;
+    } else if (activeTab === 'stock') {
+        const headers = ["Item Number", "Description", "Category", "Part No", "Model No", "Unit", "Current Stock"];
+        const rows = filteredStock.map(i => [
+            i.id, i.name, i.category, i.partNumber || '', i.modelNo || '', i.unit, i.stockQuantity || 0
+        ]);
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        XLSX.utils.book_append_sheet(wb, ws, "Current Stock");
+        filename = `Current_Stock_${new Date().toISOString().slice(0,10)}.xlsx`;
+    } else if (activeTab === 'tracking') {
+        const headers = ["Item Number", "Full Name", "Trans UM", "Sites", "Sum of Transaction Qty", "Current Stock"];
+        const rows = trackingData.map(s => [
+            s.itemNumber, s.fullName, s.transUm, s.sitesDisplay, s.sumOfQnty, s.currentStock
+        ]);
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        XLSX.utils.book_append_sheet(wb, ws, "Tracking");
+        filename = `Inventory_Tracking_${new Date().toISOString().slice(0,10)}.xlsx`;
+    }
 
-    // Sheet 2: Inventory Tracking
-    const trackHeaders = ["Item Number", "Full Name", "Trans UM", "Sites", "Sum of Transaction Qty", "Current Stock"];
-    const trackRows = trackingData.map(s => [
-        s.itemNumber,
-        s.fullName,
-        s.transUm,
-        s.sitesDisplay,
-        s.sumOfQnty,
-        s.currentStock
-    ]);
-    const wsTrack = XLSX.utils.aoa_to_sheet([trackHeaders, ...trackRows]);
-    XLSX.utils.book_append_sheet(wb, wsTrack, "Inventory Tracking");
-
-    // Sheet 3: Current Stock
-    const stockHeaders = ["Item Number", "Description", "Full Name", "Category", "Part No", "Model No", "Unit", "Current Stock"];
-    const stockRows = filteredStock.map(i => [
-        i.id, i.name, i.fullName || '', i.category, i.partNumber || '', i.modelNo || '', i.unit, i.stockQuantity || 0
-    ]);
-    const wsStock = XLSX.utils.aoa_to_sheet([stockHeaders, ...stockRows]);
-    XLSX.utils.book_append_sheet(wb, wsStock, "Current Stock");
-
-    return wb;
+    XLSX.writeFile(wb, filename);
   };
 
-  const downloadExcel = () => {
-    const wb = generateWorkbook();
-    XLSX.writeFile(wb, `Inventory_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
-  };
-
-  const saveToDrive = async () => {
-      const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
-      if (!scriptUrl) {
-          alert("Web App URL not configured in Master Data settings.");
+  // --- IMPORT LOGIC PER TAB ---
+  const handleImportClick = () => {
+      if (activeTab === 'tracking') {
+          alert("Import is not available for Tracking view. Please import data into 'Issue Requests' or 'Current Stock'.");
           return;
       }
-      
-      setUploading(true);
-      setDriveLink('');
-      try {
-          const wb = generateWorkbook();
-          const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-          const fileName = `Inventory_Report_${new Date().toISOString().slice(0,10)}.xlsx`;
-          
-          const url = await uploadFileToDrive(scriptUrl, fileName, wbOut);
-          
-          if (url) {
-              setDriveLink(url);
-          } else {
-              setDriveLink('saved');
-              alert("Backup saved to 'WareFlow Reports' folder in your Drive! Click 'Open Folder' to view it.");
-          }
-      } catch (e) {
-          console.error(e);
-          alert("Failed to upload to Drive.");
-      } finally {
-          setUploading(false);
-      }
+      fileInputRef.current?.click();
   };
 
-  const openDriveFolder = async () => {
-      const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
-      setLocatingFolder(true);
-      try {
-          const result = await locateRemoteData(scriptUrl);
-          if (result && result.folderUrl) {
-              window.open(result.folderUrl, '_blank');
-          } else {
-              const msg = result?.error || "Could not locate 'WareFlow Reports' folder.";
-              alert(msg + "\n\nTip: Ensure you have updated the Code in Apps Script and deployed as 'New Version'.");
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+          const bstr = evt.target?.result;
+          try {
+              const wb = XLSX.read(bstr, { type: 'binary' });
+              const ws = wb.Sheets[wb.SheetNames[0]];
+              const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+              if (data.length === 0) { alert("File is empty."); return; }
+
+              const toAdd: any[] = [];
+              const toUpdate: any[] = [];
+
+              if (activeTab === 'requests') {
+                  // Import History
+                  data.forEach(row => {
+                      // Normalize keys
+                      const normRow: any = {};
+                      Object.keys(row).forEach(k => normRow[k.toLowerCase().replace(/[\s-_.]/g, '')] = row[k]);
+                      
+                      const id = String(normRow['id'] || `IMP-${Date.now()}-${Math.random().toString(36).substr(2,5)}`);
+                      const itemId = String(normRow['itemid'] || normRow['itemnumber'] || normRow['itemcode'] || '');
+                      const qty = Number(normRow['qty'] || normRow['quantity'] || 0);
+                      
+                      if (itemId && qty) {
+                          const existing = history.find(h => h.id === id);
+                          const record: any = {
+                              id,
+                              timestamp: normRow['date'] ? new Date(normRow['date']).toISOString() : new Date().toISOString(),
+                              locationId: String(normRow['location'] || normRow['locationid'] || 'Unknown'),
+                              itemId: itemId,
+                              itemName: String(normRow['itemname'] || normRow['name'] || items.find(i => i.id === itemId)?.name || 'Unknown Item'),
+                              quantity: qty,
+                              unit: String(normRow['unit'] || 'pcs'),
+                              machineName: String(normRow['machine'] || normRow['machinename'] || 'Unknown'),
+                              machineId: String(normRow['machineid'] || 'Unknown'),
+                              status: String(normRow['status'] || 'Completed'),
+                              maintenancePlan: String(normRow['plan'] || normRow['maintplan'] || '')
+                          };
+                          
+                          if (existing) toUpdate.push(record);
+                          else toAdd.push(record);
+                      }
+                  });
+                  onBulkImport('history', toAdd, toUpdate);
+                  alert(`Imported ${toAdd.length} new requests, updated ${toUpdate.length}.`);
+
+              } else if (activeTab === 'stock') {
+                  // Import Items (Update Stock)
+                  data.forEach(row => {
+                      const normRow: any = {};
+                      Object.keys(row).forEach(k => normRow[k.toLowerCase().replace(/[\s-_.]/g, '')] = row[k]);
+                      
+                      const id = String(normRow['id'] || normRow['itemnumber'] || normRow['itemcode'] || '');
+                      if (id) {
+                          const existing = items.find(i => i.id === id);
+                          if (existing) {
+                              const updatedItem = { ...existing };
+                              if (normRow['stockqty'] !== undefined) updatedItem.stockQuantity = Number(normRow['stockqty']);
+                              if (normRow['name'] || normRow['description']) updatedItem.name = String(normRow['name'] || normRow['description']);
+                              toUpdate.push(updatedItem);
+                          } else {
+                              toAdd.push({
+                                  id: id,
+                                  name: String(normRow['name'] || normRow['description'] || 'New Item'),
+                                  stockQuantity: Number(normRow['stockqty'] || 0),
+                                  unit: String(normRow['unit'] || 'pcs'),
+                                  category: String(normRow['category'] || 'General')
+                              });
+                          }
+                      }
+                  });
+                  onBulkImport('items', toAdd, toUpdate);
+                  alert(`Imported ${toAdd.length} new items, updated ${toUpdate.length}.`);
+              }
+
+          } catch (err) {
+              console.error(err);
+              alert("Failed to process file.");
           }
-      } catch (e) {
-          console.error(e);
-          alert("Failed to connect to Google Drive.");
-      } finally {
-          setLocatingFolder(false);
-      }
+      };
+      reader.readAsBinaryString(file);
+      e.target.value = '';
   };
 
   // Pagination Helper
@@ -275,18 +314,16 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ history, locations, items, 
 
         {/* Actions */}
         <div className="flex gap-2">
-            <button onClick={openDriveFolder} disabled={locatingFolder} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg border border-gray-300" title="Open Drive Folder">
-                {locatingFolder ? <span className="animate-spin">↻</span> : <span>📂</span>}
+            <button onClick={handleExport} className="px-3 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm font-bold hover:bg-green-100 flex items-center gap-2">
+                <span>📊</span> Export Excel
             </button>
-            <button onClick={downloadExcel} className="p-2 text-green-700 hover:bg-green-50 rounded-lg border border-green-200 bg-green-50" title="Export Excel">
-                📊 Excel
-            </button>
-            {driveLink && driveLink !== 'saved' ? (
-               <a href={driveLink} target="_blank" rel="noopener noreferrer" className="p-2 text-blue-700 bg-blue-50 border border-blue-200 rounded-lg font-bold">Open ↗</a>
-            ) : (
-               <button onClick={saveToDrive} disabled={uploading} className="p-2 text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg" title="Save to Drive">
-                  {uploading ? <span className="animate-spin">↻</span> : <span>☁️</span>}
-               </button>
+            {activeTab !== 'tracking' && (
+                <>
+                    <button onClick={handleImportClick} className="px-3 py-2 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg text-sm font-bold hover:bg-orange-100 flex items-center gap-2">
+                        <span>📂</span> Import Excel
+                    </button>
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.csv" onChange={handleFileChange} />
+                </>
             )}
         </div>
       </div>

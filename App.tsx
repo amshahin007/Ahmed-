@@ -406,6 +406,15 @@ const App: React.FC = () => {
              upsertRecord('forecastPeriods', u);
          });
          saveData('forecastPeriods', newPeriods, setForecastPeriods);
+      } else if (tab === 'history') {
+         const newHistory = [...history];
+         added.forEach(a => { newHistory.push(a); upsertRecord('history', a); });
+         updated.forEach(u => { 
+             const idx = newHistory.findIndex(h => h.id === u.id); 
+             if (idx > -1) newHistory[idx] = u; 
+             upsertRecord('history', u);
+         });
+         saveData('history', newHistory, setHistory);
       }
   };
 
@@ -465,7 +474,7 @@ const App: React.FC = () => {
                             case 'issue-form':
                                 return <IssueForm onAddIssue={handleAddIssue} items={items} machines={machines} locations={locations} sectors={sectors} divisions={divisions} maintenancePlans={plans} bomRecords={bomRecords} currentUser={user} />;
                             case 'history':
-                                return <HistoryTable history={history} locations={locations} items={items} machines={machines} />;
+                                return <HistoryTable history={history} locations={locations} items={items} machines={machines} onBulkImport={handleBulkImport} />;
                             case 'stock-approval':
                                 if (!['admin', 'warehouse_manager', 'warehouse_supervisor'].includes(user.role)) {
                                     return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
