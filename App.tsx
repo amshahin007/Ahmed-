@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
@@ -10,14 +11,15 @@ import AssetManagement from './components/AssetManagement';
 import AgriWorkOrder from './components/AgriWorkOrder';
 import MaterialForecast from './components/MaterialForecast';
 import AiAssistant from './components/AiAssistant';
+import MROManagement from './components/MROManagement';
 import Settings from './components/Settings';
 import ErrorBoundary from './components/ErrorBoundary';
 
 import { getItem, setItem } from './services/storageService';
 import { fetchAllDataFromCloud, DEFAULT_SCRIPT_URL } from './services/googleSheetsService';
 import { fetchAllData as fetchApiData, upsertRecord, deleteRecord } from './services/phpApiService';
-import { USERS, ITEMS, MACHINES, LOCATIONS, SECTORS, DIVISIONS, MAINTENANCE_PLANS, INITIAL_HISTORY, INITIAL_BREAKDOWNS } from './constants';
-import { User, Item, Machine, Location, Sector, Division, IssueRecord, MaintenancePlan, BreakdownRecord, BOMRecord, AgriOrderRecord, IrrigationLogRecord, ForecastPeriod, ForecastRecord } from './types';
+import { USERS, ITEMS, MACHINES, LOCATIONS, SECTORS, DIVISIONS, MAINTENANCE_PLANS, INITIAL_HISTORY, INITIAL_BREAKDOWNS, INITIAL_PURCHASE_ORDERS } from './constants';
+import { User, Item, Machine, Location, Sector, Division, IssueRecord, MaintenancePlan, BreakdownRecord, BOMRecord, AgriOrderRecord, IrrigationLogRecord, ForecastPeriod, ForecastRecord, PurchaseOrder } from './types';
 
 const App: React.FC = () => {
   // User State
@@ -40,6 +42,7 @@ const App: React.FC = () => {
   const [irrigationLogs, setIrrigationLogs] = useState<IrrigationLogRecord[]>([]);
   const [forecastPeriods, setForecastPeriods] = useState<ForecastPeriod[]>([]);
   const [forecastRecords, setForecastRecords] = useState<ForecastRecord[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(INITIAL_PURCHASE_ORDERS);
 
   // Loading State
   const [isLoading, setIsLoading] = useState(true);
@@ -67,20 +70,22 @@ const App: React.FC = () => {
             if (apiData.irrigationLogs) setIrrigationLogs(apiData.irrigationLogs);
             if (apiData.forecastPeriods) setForecastPeriods(apiData.forecastPeriods);
             if (apiData.forecastRecords) setForecastRecords(apiData.forecastRecords);
+            // POs can be added here if backend supports it
         } else {
             // Fallback to IndexedDB
             const [
               storedUser, storedUsers, storedItems, storedMachines, storedLocations, 
               storedSectors, storedDivisions, storedPlans, storedHistory, 
               storedBreakdowns, storedBom, storedAgri, storedIrrigation,
-              storedPeriods, storedForecasts
+              storedPeriods, storedForecasts, storedPOs
             ] = await Promise.all([
               getItem<User>('user'), getItem<User[]>('users'), getItem<Item[]>('items'), 
               getItem<Machine[]>('machines'), getItem<Location[]>('locations'), getItem<Sector[]>('sectors'),
               getItem<Division[]>('divisions'), getItem<MaintenancePlan[]>('plans'), getItem<IssueRecord[]>('history'),
               getItem<BreakdownRecord[]>('breakdowns'), getItem<BOMRecord[]>('bomRecords'),
               getItem<AgriOrderRecord[]>('agriOrders'), getItem<IrrigationLogRecord[]>('irrigationLogs'),
-              getItem<ForecastPeriod[]>('forecastPeriods'), getItem<ForecastRecord[]>('forecastRecords')
+              getItem<ForecastPeriod[]>('forecastPeriods'), getItem<ForecastRecord[]>('forecastRecords'),
+              getItem<PurchaseOrder[]>('purchaseOrders')
             ]);
 
             if (storedUser) setUser(storedUser);
@@ -98,6 +103,7 @@ const App: React.FC = () => {
             if (storedIrrigation) setIrrigationLogs(storedIrrigation);
             if (storedPeriods) setForecastPeriods(storedPeriods);
             if (storedForecasts) setForecastRecords(storedForecasts);
+            if (storedPOs) setPurchaseOrders(storedPOs);
         }
         
         // Always check for logged in user in local storage
@@ -313,6 +319,12 @@ const App: React.FC = () => {
       newRecords.forEach(r => upsertRecord('forecastRecords', r));
   };
 
+  // Purchase Orders
+  const handleAddPO = (po: PurchaseOrder) => {
+      saveData('purchaseOrders', [...purchaseOrders, po], setPurchaseOrders);
+      // upsertRecord('purchaseOrders', po); // Enable if backend table exists
+  };
+
   // Bulk Import Wrapper
   const handleBulkImport = (tab: string, added: any[], updated: any[]) => {
       // 1. Update State & Local Storage
@@ -511,6 +523,12 @@ const App: React.FC = () => {
                                     forecastRecords={forecastRecords} onUpdateForecast={handleUpdateForecastRecords} 
                                     currentUser={user}
                                     onBulkImport={handleBulkImport} 
+                                />;
+                            case 'mro-management':
+                                return <MROManagement 
+                                    items={items} onUpdateItem={handleUpdateItem} 
+                                    purchaseOrders={purchaseOrders} onAddPO={handleAddPO}
+                                    machines={machines} locations={locations}
                                 />;
                             case 'ai-assistant':
                                 return <AiAssistant />;

@@ -1,5 +1,5 @@
 
-import { Item, Machine, Location, IssueRecord, Sector, Division, User, MaintenancePlan, BreakdownRecord } from './types';
+import { Item, Machine, Location, IssueRecord, Sector, Division, User, MaintenancePlan, BreakdownRecord, PurchaseOrder } from './types';
 
 export const USERS: User[] = [
   { 
@@ -85,14 +85,51 @@ export const MACHINES: Machine[] = [
 ];
 
 export const ITEMS: Item[] = [
-  { id: 'ITM-001', name: 'Ball Bearing 50mm', category: 'Spare Parts', unit: 'pcs', stockQuantity: 150 },
-  { id: 'ITM-002', name: 'Hydraulic Fluid 5L', category: 'Consumables', unit: 'can', stockQuantity: 45 },
-  { id: 'ITM-003', name: 'M10 Stainless Bolt', category: 'Fasteners', unit: 'box', stockQuantity: 500 },
-  { id: 'ITM-004', name: 'Rubber Seal Ring', category: 'Spare Parts', unit: 'pcs', stockQuantity: 200 },
-  { id: 'ITM-005', name: 'Safety Gloves (L)', category: 'PPE', unit: 'pair', stockQuantity: 100 },
-  { id: 'ITM-006', name: 'Circuit Board PCB-X', category: 'Electronics', unit: 'pcs', stockQuantity: 12 },
-  { id: 'ITM-007', name: 'Lubricant Spray', category: 'Consumables', unit: 'can', stockQuantity: 60 },
-  { id: 'ITM-008', name: 'V-Belt B45', category: 'Spare Parts', unit: 'pcs', stockQuantity: 30 },
+  { 
+    id: 'ITM-001', name: 'Ball Bearing 50mm', category: 'Spare Parts', unit: 'pcs', stockQuantity: 150,
+    minStock: 50, maxStock: 300, reorderPoint: 80, leadTimeDays: 7, preferredSupplier: 'Bearings Inc.', 
+    criticality: 'High', abcClass: 'A', status: 'Active', unitCost: 25, annualUsage: 1200
+  },
+  { 
+    id: 'ITM-002', name: 'Hydraulic Fluid 5L', category: 'Consumables', unit: 'can', stockQuantity: 45,
+    minStock: 20, maxStock: 100, reorderPoint: 40, leadTimeDays: 3, preferredSupplier: 'Fluids Co.', 
+    criticality: 'Medium', abcClass: 'B', status: 'Active', unitCost: 15, annualUsage: 400
+  },
+  { 
+    id: 'ITM-003', name: 'M10 Stainless Bolt', category: 'Fasteners', unit: 'box', stockQuantity: 500,
+    minStock: 200, maxStock: 1000, reorderPoint: 300, leadTimeDays: 2, preferredSupplier: 'Fastener World', 
+    criticality: 'Low', abcClass: 'C', status: 'Active', unitCost: 5, annualUsage: 2000
+  },
+  { 
+    id: 'ITM-004', name: 'Rubber Seal Ring', category: 'Spare Parts', unit: 'pcs', stockQuantity: 200,
+    minStock: 100, maxStock: 500, reorderPoint: 150, leadTimeDays: 14, preferredSupplier: 'Seals Direct', 
+    criticality: 'Medium', abcClass: 'B', status: 'Active', unitCost: 2, annualUsage: 1000
+  },
+  { 
+    id: 'ITM-005', name: 'Safety Gloves (L)', category: 'PPE', unit: 'pair', stockQuantity: 100,
+    minStock: 50, maxStock: 200, reorderPoint: 80, leadTimeDays: 5, preferredSupplier: 'Safety First', 
+    criticality: 'Low', abcClass: 'C', status: 'Active', unitCost: 3, annualUsage: 600
+  },
+  { 
+    id: 'ITM-006', name: 'Circuit Board PCB-X', category: 'Electronics', unit: 'pcs', stockQuantity: 12,
+    minStock: 5, maxStock: 20, reorderPoint: 8, leadTimeDays: 30, preferredSupplier: 'Tech Components', 
+    criticality: 'High', abcClass: 'A', status: 'Active', unitCost: 250, annualUsage: 60
+  },
+  { 
+    id: 'ITM-007', name: 'Lubricant Spray', category: 'Consumables', unit: 'can', stockQuantity: 60,
+    minStock: 20, maxStock: 100, reorderPoint: 30, leadTimeDays: 4, preferredSupplier: 'Fluids Co.', 
+    criticality: 'Low', abcClass: 'C', status: 'Active', unitCost: 8, annualUsage: 300
+  },
+  { 
+    id: 'ITM-008', name: 'V-Belt B45', category: 'Spare Parts', unit: 'pcs', stockQuantity: 30,
+    minStock: 10, maxStock: 50, reorderPoint: 15, leadTimeDays: 10, preferredSupplier: 'Belts & Hoses', 
+    criticality: 'Medium', abcClass: 'B', status: 'Active', unitCost: 18, annualUsage: 150
+  },
+];
+
+export const INITIAL_PURCHASE_ORDERS: PurchaseOrder[] = [
+  { id: 'PO-2024-001', supplier: 'Bearings Inc.', itemId: 'ITM-001', orderedQuantity: 50, expectedDeliveryDate: new Date(Date.now() + 86400000 * 2).toISOString(), status: 'Open' },
+  { id: 'PO-2024-002', supplier: 'Tech Components', itemId: 'ITM-006', orderedQuantity: 5, expectedDeliveryDate: new Date(Date.now() + 86400000 * 15).toISOString(), status: 'Open' },
 ];
 
 // Initial mock history

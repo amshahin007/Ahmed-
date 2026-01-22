@@ -16,6 +16,20 @@ export interface Item {
   modelNo?: string;        // "Model No (طراز المعده)" - NEW
   stockQuantity?: number;  // Current Warehouse Stock (Total)
   quantitiesByLocation?: Record<string, number>; // Distributed stock per location
+
+  // --- MRO Specific Fields ---
+  relatedMachineId?: string; // Machine ID
+  locationZone?: string;     // Specific Aisle/Bin
+  minStock?: number;
+  maxStock?: number;
+  reorderPoint?: number;
+  leadTimeDays?: number;
+  preferredSupplier?: string;
+  criticality?: 'High' | 'Medium' | 'Low';
+  abcClass?: 'A' | 'B' | 'C';
+  status?: 'Active' | 'Obsolete';
+  unitCost?: number;         // For ABC Calculation
+  annualUsage?: number;      // For ABC Calculation
 }
 
 export interface Sector {
@@ -166,6 +180,16 @@ export interface ForecastRecord {
   quantity: number;
   lastUpdated: string;
   updatedBy: string;
+}
+
+// --- NEW MRO TYPES ---
+export interface PurchaseOrder {
+  id: string; // PO Number
+  supplier: string;
+  itemId: string;
+  orderedQuantity: number;
+  expectedDeliveryDate: string; // ISO Date
+  status: 'Open' | 'Partial' | 'Closed';
 }
 
 export interface DashboardMetrics {

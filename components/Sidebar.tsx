@@ -25,6 +25,12 @@ const DEFAULT_NAV_ITEMS = [
       roles: ['admin', 'maintenance_manager', 'maintenance_engineer'] 
     },
     { 
+      id: 'mro-management', 
+      label: 'MRO Management', 
+      icon: '🛠️', 
+      roles: ['admin', 'warehouse_manager', 'maintenance_manager', 'maintenance_engineer', 'warehouse_supervisor'] 
+    },
+    { 
       id: 'material-forecast', 
       label: 'Forecast Planning', 
       icon: '🔮', 
@@ -39,7 +45,7 @@ const DEFAULT_NAV_ITEMS = [
     { 
       id: 'issue-form', 
       label: 'Issue Requests', 
-      icon: '🛠️', 
+      icon: '🧾', 
       roles: ['admin', 'user', 'maintenance_manager', 'maintenance_engineer'] 
     },
     { 
