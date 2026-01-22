@@ -846,7 +846,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   const configFilteredDivisions = useMemo(() => divisions.filter(d => !configAddSector || d.sectorId === configAddSector), [divisions, configAddSector]);
 
   return (
-    <div className="flex flex-col h-full space-y-4 animate-fade-in-up font-cairo">
+    <div className="flex flex-col min-h-full space-y-4 animate-fade-in-up font-cairo">
         {/* Header Tabs */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center shrink-0">
             <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -867,7 +867,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
 
         {/* --- VIEW: ENTRY FORM --- */}
         {activeTab === 'entry' && (
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden min-h-0">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1">
                 {/* Filters */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 shrink-0">
                     <div>
@@ -1004,7 +1004,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                     </div>
                 </div>
                 
-                <div className="flex-1 overflow-auto border rounded relative">
+                <div className="flex-1 overflow-auto border rounded relative min-h-[600px]">
                     <table className="w-full text-left text-xs whitespace-nowrap">
                         <thead className="bg-gray-50 text-gray-700 sticky top-0 z-10 shadow-sm font-bold uppercase">
                             <tr>

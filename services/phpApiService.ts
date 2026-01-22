@@ -9,37 +9,37 @@ export const fetchAllData = async () => {
         if (!response.ok) throw new Error('PHP API Failed');
         return await response.json();
     } catch (error) {
-        // Suppress errors for pure frontend usage
         console.warn("PHP Backend unavailable (Offline Mode):", (error as Error).message);
         return null;
     }
 };
 
-export const saveIssueToPhp = async (issue: IssueRecord) => {
+export const upsertRecord = async (table: string, data: any) => {
     try {
-        const response = await fetch(`${API_BASE_URL}?action=save_issue`, {
+        const response = await fetch(`${API_BASE_URL}?action=upsert_record`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(issue)
+            body: JSON.stringify({ table, data })
         });
-        return await response.json();
+        const res = await response.json();
+        if (res.error) throw new Error(res.error);
+        return res;
     } catch (error) {
-        console.error("Failed to save to PHP:", error);
-        // Do not throw to avoid crashing the UI save flow, just log it.
-        return { status: "error", message: "PHP Backend unavailable" };
+        console.error(`Failed to save to ${table}:`, error);
+        return { status: "error", message: "Backend unavailable" };
     }
 };
 
-export const addItemToPhp = async (item: Item) => {
+export const deleteRecord = async (table: string, id: string) => {
     try {
-        const response = await fetch(`${API_BASE_URL}?action=add_item`, {
+        const response = await fetch(`${API_BASE_URL}?action=delete_record`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(item)
+            body: JSON.stringify({ table, id })
         });
         return await response.json();
     } catch (error) {
-        console.error("Failed to add item to PHP:", error);
-        return { status: "error", message: "PHP Backend unavailable" };
+        console.error(`Failed to delete from ${table}:`, error);
+        return { status: "error", message: "Backend unavailable" };
     }
 };
