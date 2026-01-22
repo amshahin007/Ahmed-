@@ -187,8 +187,42 @@ const App: React.FC = () => {
          added.forEach(a => newMachines.push(a));
          updated.forEach(u => { const idx = newMachines.findIndex(m => m.id === u.id); if (idx > -1) newMachines[idx] = u; });
          saveData('machines', newMachines, setMachines);
+      } else if (tab === 'bom') {
+         const newBom = [...bomRecords];
+         added.forEach(a => newBom.push(a));
+         updated.forEach(u => { const idx = newBom.findIndex(b => b.id === u.id); if (idx > -1) newBom[idx] = u; });
+         saveData('bomRecords', newBom, setBomRecords);
+      } else if (tab === 'breakdowns') {
+         const newBreakdowns = [...breakdowns];
+         added.forEach(a => newBreakdowns.push(a));
+         updated.forEach(u => { const idx = newBreakdowns.findIndex(b => b.id === u.id); if (idx > -1) newBreakdowns[idx] = u; });
+         saveData('breakdowns', newBreakdowns, setBreakdowns);
+      } else if (tab === 'locations') {
+         const newLocs = [...locations];
+         added.forEach(a => newLocs.push(a));
+         updated.forEach(u => { const idx = newLocs.findIndex(l => l.id === u.id); if (idx > -1) newLocs[idx] = u; });
+         saveData('locations', newLocs, setLocations);
+      } else if (tab === 'sectors') {
+         const newSecs = [...sectors];
+         added.forEach(a => newSecs.push(a));
+         updated.forEach(u => { const idx = newSecs.findIndex(s => s.id === u.id); if (idx > -1) newSecs[idx] = u; });
+         saveData('sectors', newSecs, setSectors);
+      } else if (tab === 'divisions') {
+         const newDivs = [...divisions];
+         added.forEach(a => newDivs.push(a));
+         updated.forEach(u => { const idx = newDivs.findIndex(d => d.id === u.id); if (idx > -1) newDivs[idx] = u; });
+         saveData('divisions', newDivs, setDivisions);
+      } else if (tab === 'plans') {
+         const newPlans = [...plans];
+         added.forEach(a => newPlans.push(a));
+         updated.forEach(u => { const idx = newPlans.findIndex(p => p.id === u.id); if (idx > -1) newPlans[idx] = u; });
+         saveData('plans', newPlans, setPlans);
+      } else if (tab === 'users') {
+         const newUsers = [...users];
+         added.forEach(a => newUsers.push(a));
+         updated.forEach(u => { const idx = newUsers.findIndex(usr => usr.username === u.username); if (idx > -1) newUsers[idx] = u; });
+         saveData('users', newUsers, setUsers);
       }
-      // Can be extended for other types as needed
   };
 
   const handleRestore = async () => {
