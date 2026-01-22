@@ -1,587 +1,301 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { HashRouter } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import IssueForm from './components/IssueForm';
 import HistoryTable from './components/HistoryTable';
-import MasterData from './components/MasterData';
 import StockApproval from './components/StockApproval';
+import MasterData from './components/MasterData';
+import AssetManagement from './components/AssetManagement';
+import AgriWorkOrder from './components/AgriWorkOrder';
+import MaterialForecast from './components/MaterialForecast';
 import AiAssistant from './components/AiAssistant';
 import Settings from './components/Settings';
-import AgriWorkOrder from './components/AgriWorkOrder';
-import AssetManagement from './components/AssetManagement'; 
-import MaterialForecast from './components/MaterialForecast';
-import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
-import * as storageService from './services/storageService';
-import * as phpService from './services/phpApiService'; // Import PHP Service
-import { backupTabToSheet, DEFAULT_SCRIPT_URL, fetchAllDataFromCloud } from './services/googleSheetsService';
-import { 
-  INITIAL_HISTORY, 
-  ITEMS as INIT_ITEMS, 
-  MACHINES as INIT_MACHINES, 
-  LOCATIONS as INIT_LOCATIONS,
-  SECTORS as INIT_SECTORS,
-  DIVISIONS as INIT_DIVISIONS,
-  USERS as INIT_USERS,
-  MAINTENANCE_PLANS as INIT_PLANS,
-  INITIAL_BREAKDOWNS 
-} from './constants';
-import { IssueRecord, Item, Machine, Location, Sector, Division, User, MaintenancePlan, AgriOrderRecord, BreakdownRecord, IrrigationLogRecord, BOMRecord, ForecastPeriod, ForecastRecord } from './types';
 
-const loadConfig = <T,>(key: string, fallback: T): T => {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
-  } catch (error) {
-    return fallback;
-  }
-};
+import { getItem, setItem } from './services/storageService';
+import { fetchAllDataFromCloud, DEFAULT_SCRIPT_URL } from './services/googleSheetsService';
+import { USERS, ITEMS, MACHINES, LOCATIONS, SECTORS, DIVISIONS, MAINTENANCE_PLANS, INITIAL_HISTORY, INITIAL_BREAKDOWNS } from './constants';
+import { User, Item, Machine, Location, Sector, Division, IssueRecord, MaintenancePlan, BreakdownRecord, BOMRecord, AgriOrderRecord, IrrigationLogRecord, ForecastPeriod, ForecastRecord } from './types';
 
 const App: React.FC = () => {
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const [dataSource, setDataSource] = useState<'php' | 'local'>('local'); // Track source
-
-  const [user, setUser] = useState<User | null>(() => loadConfig('wf_user', null));
+  // User State
+  const [user, setUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>(USERS);
   const [currentView, setCurrentView] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
+
+  // Data State
+  const [items, setItems] = useState<Item[]>(ITEMS);
+  const [machines, setMachines] = useState<Machine[]>(MACHINES);
+  const [locations, setLocations] = useState<Location[]>(LOCATIONS);
+  const [sectors, setSectors] = useState<Sector[]>(SECTORS);
+  const [divisions, setDivisions] = useState<Division[]>(DIVISIONS);
+  const [plans, setPlans] = useState<MaintenancePlan[]>(MAINTENANCE_PLANS);
   const [history, setHistory] = useState<IssueRecord[]>(INITIAL_HISTORY);
-  const [items, setItems] = useState<Item[]>(INIT_ITEMS);
-  const [machines, setMachines] = useState<Machine[]>(INIT_MACHINES);
-  const [locations, setLocations] = useState<Location[]>(INIT_LOCATIONS);
-  const [sectors, setSectors] = useState<Sector[]>(INIT_SECTORS);
-  const [divisions, setDivisions] = useState<Division[]>(INIT_DIVISIONS);
-  const [plans, setPlans] = useState<MaintenancePlan[]>(INIT_PLANS);
-  const [usersList, setUsersList] = useState<User[]>(INIT_USERS);
-  const [agriOrders, setAgriOrders] = useState<AgriOrderRecord[]>([]);
-  const [breakdowns, setBreakdowns] = useState<BreakdownRecord[]>(INITIAL_BREAKDOWNS); 
-  const [irrigationLogs, setIrrigationLogs] = useState<IrrigationLogRecord[]>([]);
+  const [breakdowns, setBreakdowns] = useState<BreakdownRecord[]>(INITIAL_BREAKDOWNS);
   const [bomRecords, setBomRecords] = useState<BOMRecord[]>([]);
-  
-  // Forecast State
+  const [agriOrders, setAgriOrders] = useState<AgriOrderRecord[]>([]);
+  const [irrigationLogs, setIrrigationLogs] = useState<IrrigationLogRecord[]>([]);
   const [forecastPeriods, setForecastPeriods] = useState<ForecastPeriod[]>([]);
   const [forecastRecords, setForecastRecords] = useState<ForecastRecord[]>([]);
 
-  // Ref to hold state for auto-backup without re-rendering intervals
-  const stateRef = useRef({
-    items: [] as Item[], 
-    machines: [] as Machine[], 
-    locations: [] as Location[], 
-    sectors: [] as Sector[], 
-    divisions: [] as Division[], 
-    plans: [] as MaintenancePlan[], 
-    users: [] as User[], 
-    breakdowns: [] as BreakdownRecord[], 
-    boms: [] as BOMRecord[],
-    history: [] as IssueRecord[],
-    agriOrders: [] as AgriOrderRecord[],
-    irrigationLogs: [] as IrrigationLogRecord[],
-    forecastPeriods: [] as ForecastPeriod[],
-    forecastRecords: [] as ForecastRecord[]
-  });
+  // Loading State
+  const [isLoading, setIsLoading] = useState(true);
 
-  // --- Load Data Strategy: Try PHP -> Fallback to IndexedDB ---
+  // Load Data from IDB on Mount
   useEffect(() => {
-    const initData = async () => {
+    const loadData = async () => {
       try {
-        console.log("Attempting to connect to PHP Backend...");
-        const phpData = await phpService.fetchAllData();
-        
-        if (phpData && Array.isArray(phpData.items)) {
-            // SUCCESS: Loaded from PHP
-            console.log("Connected to PHP/MySQL successfully.");
-            setDataSource('php');
-            
-            if (phpData.items) setItems(phpData.items);
-            if (phpData.machines) setMachines(phpData.machines);
-            if (phpData.locations) setLocations(phpData.locations);
-            if (phpData.sectors) setSectors(phpData.sectors);
-            if (phpData.divisions) setDivisions(phpData.divisions);
-            if (phpData.plans) setPlans(phpData.plans);
-            if (phpData.issues) setHistory(phpData.issues);
-            
-            // Load local-only data (Agri/BOM/Forecast not yet in PHP in this version)
-            const [loadedAgri, loadedBreakdowns, loadedIrrigation, loadedBoms, loadedPeriods, loadedForecasts] = await Promise.all([
-                 storageService.getItem<AgriOrderRecord[]>('wf_agri_orders'),
-                 storageService.getItem<BreakdownRecord[]>('wf_breakdowns'),
-                 storageService.getItem<IrrigationLogRecord[]>('wf_irrigation_logs'),
-                 storageService.getItem<BOMRecord[]>('wf_boms'),
-                 storageService.getItem<ForecastPeriod[]>('wf_forecast_periods'),
-                 storageService.getItem<ForecastRecord[]>('wf_forecast_records'),
-            ]);
-            if (loadedAgri) setAgriOrders(loadedAgri.filter(x => x && x.id));
-            if (loadedBreakdowns) setBreakdowns(loadedBreakdowns.filter(x => x && x.id));
-            if (loadedIrrigation) setIrrigationLogs(loadedIrrigation.filter(x => x && x.id));
-            if (loadedBoms) setBomRecords(loadedBoms.filter(x => x && x.id));
-            if (loadedPeriods) setForecastPeriods(loadedPeriods.filter(x => x && x.id));
-            if (loadedForecasts) setForecastRecords(loadedForecasts.filter(x => x && x.id));
-
-        } else {
-            // If PHP is null (caught error), fallback immediately
-            throw new Error("PHP Data empty or failed");
-        }
-
-      } catch (err) {
-        console.warn("PHP Connection Failed. Falling back to Local Storage (IndexedDB).");
-        setDataSource('local');
-        
-        // FALLBACK: Load from IndexedDB
-        // We apply filter(Boolean) and id checks to prevent white screens from corrupted local data
         const [
-          loadedHistory, loadedItems, loadedMachines, loadedLocations, 
-          loadedSectors, loadedDivisions, loadedPlans, loadedUsers, 
-          loadedAgri, loadedBreakdowns, loadedIrrigation, loadedBoms,
-          loadedPeriods, loadedForecasts
+          storedUser, storedUsers, storedItems, storedMachines, storedLocations, 
+          storedSectors, storedDivisions, storedPlans, storedHistory, 
+          storedBreakdowns, storedBom, storedAgri, storedIrrigation,
+          storedPeriods, storedForecasts
         ] = await Promise.all([
-          storageService.getItem<IssueRecord[]>('wf_history'),
-          storageService.getItem<Item[]>('wf_items'),
-          storageService.getItem<Machine[]>('wf_machines'),
-          storageService.getItem<Location[]>('wf_locations'),
-          storageService.getItem<Sector[]>('wf_sectors'),
-          storageService.getItem<Division[]>('wf_divisions'),
-          storageService.getItem<MaintenancePlan[]>('wf_plans'),
-          storageService.getItem<User[]>('wf_users'),
-          storageService.getItem<AgriOrderRecord[]>('wf_agri_orders'),
-          storageService.getItem<BreakdownRecord[]>('wf_breakdowns'),
-          storageService.getItem<IrrigationLogRecord[]>('wf_irrigation_logs'),
-          storageService.getItem<BOMRecord[]>('wf_boms'),
-          storageService.getItem<ForecastPeriod[]>('wf_forecast_periods'),
-          storageService.getItem<ForecastRecord[]>('wf_forecast_records'),
+          getItem<User>('user'), getItem<User[]>('users'), getItem<Item[]>('items'), 
+          getItem<Machine[]>('machines'), getItem<Location[]>('locations'), getItem<Sector[]>('sectors'),
+          getItem<Division[]>('divisions'), getItem<MaintenancePlan[]>('plans'), getItem<IssueRecord[]>('history'),
+          getItem<BreakdownRecord[]>('breakdowns'), getItem<BOMRecord[]>('bomRecords'),
+          getItem<AgriOrderRecord[]>('agriOrders'), getItem<IrrigationLogRecord[]>('irrigationLogs'),
+          getItem<ForecastPeriod[]>('forecastPeriods'), getItem<ForecastRecord[]>('forecastRecords')
         ]);
 
-        if (loadedHistory) setHistory(loadedHistory.filter(i => i && i.id));
-        if (loadedItems) setItems(loadedItems.filter(i => i && i.id));
-        if (loadedMachines) setMachines(loadedMachines.filter(i => i && i.id));
-        if (loadedLocations) setLocations(loadedLocations.filter(i => i && i.id));
-        if (loadedSectors) setSectors(loadedSectors.filter(i => i && i.id));
-        if (loadedDivisions) setDivisions(loadedDivisions.filter(i => i && i.id));
-        if (loadedPlans) setPlans(loadedPlans.filter(i => i && i.id));
-        if (loadedUsers) setUsersList(loadedUsers.filter(i => i && i.username));
-        if (loadedAgri) setAgriOrders(loadedAgri.filter(i => i && i.id));
-        if (loadedBreakdowns) setBreakdowns(loadedBreakdowns.filter(i => i && i.id));
-        if (loadedIrrigation) setIrrigationLogs(loadedIrrigation.filter(i => i && i.id));
-        if (loadedBoms) setBomRecords(loadedBoms.filter(i => i && i.id));
-        if (loadedPeriods) setForecastPeriods(loadedPeriods.filter(i => i && i.id));
-        if (loadedForecasts) setForecastRecords(loadedForecasts.filter(i => i && i.id));
+        if (storedUser) setUser(storedUser);
+        if (storedUsers) setUsers(storedUsers);
+        if (storedItems) setItems(storedItems);
+        if (storedMachines) setMachines(storedMachines);
+        if (storedLocations) setLocations(storedLocations);
+        if (storedSectors) setSectors(storedSectors);
+        if (storedDivisions) setDivisions(storedDivisions);
+        if (storedPlans) setPlans(storedPlans);
+        if (storedHistory) setHistory(storedHistory);
+        if (storedBreakdowns) setBreakdowns(storedBreakdowns);
+        if (storedBom) setBomRecords(storedBom);
+        if (storedAgri) setAgriOrders(storedAgri);
+        if (storedIrrigation) setIrrigationLogs(storedIrrigation);
+        if (storedPeriods) setForecastPeriods(storedPeriods);
+        if (storedForecasts) setForecastRecords(storedForecasts);
+      } catch (e) {
+        console.error("Failed to load data", e);
       } finally {
-        setIsDataLoaded(true);
+        setIsLoading(false);
       }
     };
-    initData();
+    loadData();
   }, []);
 
-  // --- Persistence Effects (Only if using Local Source or Specific Tables) ---
-  useEffect(() => { 
-      // Always save to local DB as backup/cache
-      if (isDataLoaded) {
-          storageService.setItem('wf_history', history);
-          storageService.setItem('wf_items', items);
-          storageService.setItem('wf_machines', machines);
-          storageService.setItem('wf_locations', locations);
-          storageService.setItem('wf_sectors', sectors);
-          storageService.setItem('wf_divisions', divisions);
-          storageService.setItem('wf_plans', plans);
-          storageService.setItem('wf_users', usersList);
-          storageService.setItem('wf_agri_orders', agriOrders);
-          storageService.setItem('wf_breakdowns', breakdowns);
-          storageService.setItem('wf_irrigation_logs', irrigationLogs);
-          storageService.setItem('wf_boms', bomRecords);
-          storageService.setItem('wf_forecast_periods', forecastPeriods);
-          storageService.setItem('wf_forecast_records', forecastRecords);
-      }
-  }, [history, items, machines, locations, sectors, divisions, plans, usersList, agriOrders, breakdowns, irrigationLogs, bomRecords, forecastPeriods, forecastRecords, isDataLoaded]);
-
-  // Update Refs for Auto Backup whenever data changes
-  useEffect(() => {
-    stateRef.current = {
-        items, machines, locations, sectors, divisions, plans, 
-        users: usersList, breakdowns, boms: bomRecords,
-        history, agriOrders, irrigationLogs,
-        forecastPeriods, forecastRecords
-    };
-  }, [items, machines, locations, sectors, divisions, plans, usersList, breakdowns, bomRecords, history, agriOrders, irrigationLogs, forecastPeriods, forecastRecords]);
-
-  // --- REUSABLE BACKUP FUNCTION ---
-  const performBackup = async () => {
-        const scriptUrl = localStorage.getItem('wf_script_url_v3');
-        if (!scriptUrl || scriptUrl === DEFAULT_SCRIPT_URL) {
-            // console.debug("Skipping backup: Script URL not configured.");
-            return;
-        }
-
-        const s = stateRef.current;
-        const prepareData = (key: string) => {
-            let data: any[] = [];
-            let headers: string[] = [];
-            let keys: string[] = [];
-
-            if (key === 'items') {
-                data = s.items; 
-                headers = ['Item Number', 'Stock Qty', 'Description', 'Category', 'Unit', 'Brand', 'Model No', 'Part No'];
-                keys = ['id', 'stockQuantity', 'name', 'category', 'unit', 'brand', 'modelNo', 'partNumber'];
-            } else if (key === 'machines') {
-                data = s.machines;
-                headers = ['ID', 'Machine Name', 'Local No', 'Status', 'Brand', 'Model No', 'Location'];
-                keys = ['id', 'category', 'machineLocalNo', 'status', 'brand', 'modelNo', 'locationId'];
-            } else if (key === 'breakdowns') {
-                data = s.breakdowns;
-                headers = ['ID', 'Machine', 'Location', 'Start Time', 'Status', 'Failure Type'];
-                keys = ['id', 'machineName', 'locationId', 'startTime', 'status', 'failureType'];
-            } else if (key === 'bom') {
-                data = s.boms;
-                headers = ['ID', 'Machine', 'Model No', 'Item ID', 'Qty'];
-                keys = ['id', 'machineCategory', 'modelNo', 'itemId', 'quantity'];
-            } else if (key === 'history') {
-                data = s.history;
-                headers = ["ID", "Date", "Location ID", "Location Name", "Sector", "Division", "Machine", "Maint. Plan", "Item Number", "Item Name", "Quantity", "Status", "Notes"];
-                keys = ["id", "timestamp", "locationId", "sectorName", "divisionName", "machineName", "maintenancePlan", "itemId", "itemName", "quantity", "status", "notes"];
-            } else if (key === 'agri_orders') {
-                data = s.agriOrders;
-                headers = ["ID", "Date", "Branch", "Tractor", "Local No", "Attached", "Attached Local", "Pivot", "Driver", "Start", "End", "Row", "Unit", "Achievement", "Actual/Return", "Calculated", "Time", "Notes"];
-                keys = ["id", "date", "branch", "tractor", "machineLocalNo", "attached", "attachedLocalNo", "pivot", "driver", "startCounter", "endCounter", "rowNumber", "unitType", "achievement", "actualOrReturn", "calculated", "timeSpent", "notes"];
-            } else if (key === 'irrigation_logs') {
-                data = s.irrigationLogs;
-                headers = ["ID", "Date", "Location", "Generator", "Start", "End", "Total Hours", "Notes"];
-                keys = ["id", "date", "locationName", "generatorModel", "engineStart", "engineEnd", "totalHours", "notes"];
-            } else if (key === 'locations') {
-                data = s.locations;
-                headers = ['ID', 'Name', 'Email'];
-                keys = ['id', 'name', 'email'];
-            } else if (key === 'sectors') {
-                data = s.sectors;
-                headers = ['ID', 'Name'];
-                keys = ['id', 'name'];
-            } else if (key === 'divisions') {
-                data = s.divisions;
-                headers = ['ID', 'Name', 'Sector ID'];
-                keys = ['id', 'name', 'sectorId'];
-            } else if (key === 'plans') {
-                data = s.plans;
-                headers = ['ID', 'Name'];
-                keys = ['id', 'name'];
-            } else if (key === 'users') {
-                data = s.users;
-                headers = ['Username', 'Name', 'Role', 'Email', 'Allowed Locations', 'Allowed Sectors', 'Allowed Divisions'];
-                keys = ['username', 'name', 'role', 'email', 'allowedLocationIds', 'allowedSectorIds', 'allowedDivisionIds'];
-            } else if (key === 'forecasts') { // Consolidate Periods and Records for backup
-                data = s.forecastRecords.map(r => {
-                    const p = s.forecastPeriods.find(fp => fp.id === r.periodId);
-                    return { ...r, periodName: p?.name || r.periodId };
-                });
-                headers = ['ID', 'Period', 'Location', 'Sector', 'Division', 'Item', 'Qty', 'Updated'];
-                keys = ['id', 'periodName', 'locationId', 'sectorId', 'divisionId', 'itemId', 'quantity', 'lastUpdated'];
-            }
-            
-            if (data.length === 0) return null;
-            const rows = data.map(item => keys.map(k => {
-                const val = (item as any)[k];
-                if (Array.isArray(val)) return val.join(';');
-                return (val === undefined || val === null) ? "" : String(val);
-            }));
-            return [headers, ...rows];
-        };
-
-        const tabsToSync = ['items', 'machines', 'breakdowns', 'bom', 'history', 'locations', 'sectors', 'divisions', 'plans', 'users', 'agri_orders', 'irrigation_logs', 'forecasts'];
-        
-        for (const tab of tabsToSync) {
-            const rows = prepareData(tab);
-            if (rows) {
-                await backupTabToSheet(scriptUrl, tab, rows);
-                console.log(`[Backup] ${tab} synced.`);
-                await new Promise(r => setTimeout(r, 600)); // Rate limit buffer
-            }
-        }
+  // Persist Data Handlers (Generic wrapper)
+  const saveData = (key: string, data: any, setter: React.Dispatch<React.SetStateAction<any>>) => {
+      setter(data);
+      setItem(key, data);
   };
 
-  const handleManualBackup = async () => {
-      await performBackup();
+  // --- Auth Handlers ---
+  const handleLogin = (u: User) => {
+      saveData('user', u, setUser);
   };
-
-  const handleManualRestore = async () => {
-      const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
-      if (!scriptUrl) throw new Error("No Script URL configured");
-
-      // Guard: fetchAllDataFromCloud throws if script is outdated (missing data field)
-      const rawData = await fetchAllDataFromCloud(scriptUrl);
-      
-      // Guard: Ensure rawData is an object before accessing properties
-      if (!rawData) {
-          throw new Error("Received empty response from cloud. Ensure the database sheet has data.");
-      }
-      
-      // Mapping Helper: Maps header names (from Sheet) to keys (Application State)
-      const mapData = (rows: any[], map: Record<string, string>): any[] => {
-          if (!rows || rows.length === 0) return [];
-          return rows.map(row => {
-              // PROTECT AGAINST NULL/UNDEFINED ROWS
-              if (!row || typeof row !== 'object') return null; // Return null to filter later
-              
-              const newObj: any = {};
-              Object.keys(row).forEach(header => {
-                  const key = map[header] || header; // Use mapped key or fallback to header name
-                  // Basic Type Coercion
-                  let val = row[header];
-                  if (key === 'quantity' || key === 'stockQuantity' || key === 'startCounter' || key === 'endCounter') val = Number(val) || 0;
-                  newObj[key] = val;
-              });
-              return newObj;
-          }).filter(item => item !== null && (item.id || item.username)); // FILTER OUT NULLS AND EMPTY IDS
-      };
-
-      // Define mappings for critical fields
-      // Format: { 'Header Name In Sheet': 'stateKey' }
-      const itemMap = { 'Item Number': 'id', 'Stock Qty': 'stockQuantity', 'Description': 'name', 'Category': 'category', 'Unit': 'unit' };
-      const machineMap = { 'ID': 'id', 'Machine Name': 'category', 'Local No': 'machineLocalNo', 'Status': 'status', 'Location': 'locationId' };
-      const breakdownMap = { 'ID': 'id', 'Machine': 'machineName', 'Location': 'locationId', 'Start Time': 'startTime' };
-      const bomMap = { 'ID': 'id', 'Machine': 'machineCategory', 'Item ID': 'itemId', 'Qty': 'quantity' };
-      const historyMap = { 'ID': 'id', 'Date': 'timestamp', 'Location ID': 'locationId', 'Item Number': 'itemId', 'Item Name': 'itemName' };
-      const userMap = { 'Username': 'username', 'Name': 'name', 'Role': 'role' };
-      
-      if (rawData['items']) setItems(mapData(rawData['items'], itemMap));
-      if (rawData['machines']) setMachines(mapData(rawData['machines'], machineMap));
-      if (rawData['breakdowns']) setBreakdowns(mapData(rawData['breakdowns'], breakdownMap));
-      if (rawData['bom']) setBomRecords(mapData(rawData['bom'], bomMap));
-      if (rawData['history']) setHistory(mapData(rawData['history'], historyMap));
-      if (rawData['locations']) setLocations(mapData(rawData['locations'], { 'ID': 'id', 'Name': 'name' }));
-      if (rawData['sectors']) setSectors(mapData(rawData['sectors'], { 'ID': 'id', 'Name': 'name' }));
-      if (rawData['divisions']) setDivisions(mapData(rawData['divisions'], { 'ID': 'id', 'Name': 'name' }));
-      if (rawData['plans']) setPlans(mapData(rawData['plans'], { 'ID': 'id', 'Name': 'name' }));
-      if (rawData['users']) setUsersList(mapData(rawData['users'], userMap));
-      
-      // Agri & Irrigation map almost 1:1 based on backup logic, but lets ensure ID/Date
-      if (rawData['agri_orders']) setAgriOrders(mapData(rawData['agri_orders'], { 'ID': 'id', 'Date': 'date' }));
-      if (rawData['irrigation_logs']) setIrrigationLogs(mapData(rawData['irrigation_logs'], { 'ID': 'id', 'Date': 'date' }));
-      
-      // Note: Forecasts are complex objects, simple restore might be tricky without dedicated sheet logic. 
-      // We skip restoring forecast detail from generic dump for now to prevent data corruption unless explicitly handled.
-  };
-
-  // --- AUTOMATIC BACKUP INTERVAL ---
-  useEffect(() => {
-    const backupInterval = setInterval(async () => {
-        const freq = localStorage.getItem('wf_backup_frequency') || 'hourly';
-        if (freq === 'disabled') return;
-
-        const lastRunStr = localStorage.getItem('wf_last_backup_timestamp');
-        const lastRun = lastRunStr ? parseInt(lastRunStr, 10) : 0;
-        const now = Date.now();
-        let intervalMs = 3600000; // Default hourly (1hr)
-
-        if (freq === '30min') intervalMs = 30 * 60 * 1000;
-        else if (freq === 'hourly') intervalMs = 60 * 60 * 1000;
-        else if (freq === 'daily') intervalMs = 24 * 60 * 60 * 1000;
-        else if (freq === 'weekly') intervalMs = 7 * 24 * 60 * 60 * 1000;
-
-        if (now - lastRun > intervalMs) {
-            console.log(`[AutoBackup] Triggering ${freq} backup...`);
-            try {
-                await performBackup();
-                localStorage.setItem('wf_last_backup_timestamp', now.toString());
-                console.log("[AutoBackup] Complete.");
-            } catch (e) {
-                console.error("[AutoBackup] Failed - check settings if persisted.", (e as Error).message);
-            }
-        }
-    }, 60 * 1000); // Check every minute
-
-    return () => clearInterval(backupInterval);
-  }, []);
-
-  // Auth Handlers
-  const handleLogin = (loggedInUser: User) => {
-    setUser(loggedInUser);
-    setCurrentView('dashboard');
-  };
-
   const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('wf_user');
+      setUser(null);
+      setItem('user', null);
   };
 
-  // --- DATA HANDLERS ---
+  // --- Data Modification Handlers ---
+  
+  // Items
+  const handleAddItem = (item: Item) => saveData('items', [...items, item], setItems);
+  const handleUpdateItem = (item: Item) => saveData('items', items.map(i => i.id === item.id ? item : i), setItems);
+  const handleDeleteItems = (ids: string[]) => saveData('items', items.filter(i => !ids.includes(i.id)), setItems);
 
-  const handleAddIssue = async (newIssue: IssueRecord) => {
-    // 1. Optimistic Update (Show immediately)
-    setHistory(prev => [newIssue, ...prev]);
-    
-    // 2. Update Stock Locally
-    setItems(prev => prev.map(i => i.id === newIssue.itemId 
-        ? { ...i, stockQuantity: Math.max(0, (i.stockQuantity || 0) - newIssue.quantity) } 
-        : i
-    ));
+  // Machines
+  const handleAddMachine = (m: Machine) => saveData('machines', [...machines, m], setMachines);
+  const handleUpdateMachine = (m: Machine) => saveData('machines', machines.map(x => x.id === m.id ? m : x), setMachines);
+  const handleDeleteMachines = (ids: string[]) => saveData('machines', machines.filter(x => !ids.includes(x.id)), setMachines);
 
-    // 3. Send to PHP (if connected)
-    if (dataSource === 'php') {
-        try {
-            await phpService.saveIssueToPhp(newIssue);
-        } catch (e) {
-            console.error("Failed to save issue to PHP backend", e);
-            alert("Warning: Saved locally, but failed to sync with Server.");
-        }
-    }
-  };
+  // Locations
+  const handleAddLocation = (l: Location) => saveData('locations', [...locations, l], setLocations);
+  const handleUpdateLocation = (l: Location) => saveData('locations', locations.map(x => x.id === l.id ? l : x), setLocations);
+  const handleDeleteLocations = (ids: string[]) => saveData('locations', locations.filter(x => !ids.includes(x.id)), setLocations);
 
-  const handleUpdateIssue = (updatedIssue: IssueRecord) => {
-    // Existing logic for approval flow
-    const oldIssue = history.find(h => h.id === updatedIssue.id);
-    setHistory(prev => prev.map(issue => issue.id === updatedIssue.id ? updatedIssue : issue));
-  };
+  // Sectors
+  const handleAddSector = (s: Sector) => saveData('sectors', [...sectors, s], setSectors);
+  const handleUpdateSector = (s: Sector) => saveData('sectors', sectors.map(x => x.id === s.id ? s : x), setSectors);
+  const handleDeleteSectors = (ids: string[]) => saveData('sectors', sectors.filter(x => !ids.includes(x.id)), setSectors);
 
-  const handleAddItem = async (item: Item) => {
-      setItems(prev => [...prev, item]);
-      if (dataSource === 'php') {
-          await phpService.addItemToPhp(item);
+  // Divisions
+  const handleAddDivision = (d: Division) => saveData('divisions', [...divisions, d], setDivisions);
+  const handleUpdateDivision = (d: Division) => saveData('divisions', divisions.map(x => x.id === d.id ? d : x), setDivisions);
+  const handleDeleteDivisions = (ids: string[]) => saveData('divisions', divisions.filter(x => !ids.includes(x.id)), setDivisions);
+
+  // Plans
+  const handleAddPlan = (p: MaintenancePlan) => saveData('plans', [...plans, p], setPlans);
+  const handleUpdatePlan = (p: MaintenancePlan) => saveData('plans', plans.map(x => x.id === p.id ? p : x), setPlans);
+  const handleDeletePlans = (ids: string[]) => saveData('plans', plans.filter(x => !ids.includes(x.id)), setPlans);
+
+  // Users
+  const handleAddUser = (u: User) => saveData('users', [...users, u], setUsers);
+  const handleUpdateUser = (u: User) => saveData('users', users.map(x => x.username === u.username ? u : x), setUsers);
+  const handleDeleteUsers = (names: string[]) => saveData('users', users.filter(x => !names.includes(x.username)), setUsers);
+
+  // History (Issues)
+  const handleAddIssue = (issue: IssueRecord) => {
+      saveData('history', [issue, ...history], setHistory);
+      // Update stock logic could go here
+      const item = items.find(i => i.id === issue.itemId);
+      if (item && item.stockQuantity !== undefined) {
+         const newStock = Math.max(0, item.stockQuantity - issue.quantity);
+         handleUpdateItem({ ...item, stockQuantity: newStock });
       }
   };
+  const handleUpdateIssue = (issue: IssueRecord) => saveData('history', history.map(x => x.id === issue.id ? issue : x), setHistory);
 
-  // ... (Rest of handlers remain largely the same, mapped to state setters) ...
-  const handleAddMachine = (machine: Machine) => setMachines(prev => [...prev, machine]);
-  const handleAddLocation = (location: Location) => setLocations(prev => [...prev, location]);
-  const handleAddSector = (sector: Sector) => setSectors(prev => [...prev, sector]);
-  const handleAddDivision = (division: Division) => setDivisions(prev => [...prev, division]);
-  const handleAddPlan = (plan: MaintenancePlan) => setPlans(prev => [...prev, plan]);
-  const handleAddUser = (newUser: User) => setUsersList(prev => [...prev, newUser]);
-  
-  const handleAddAgriOrder = (order: AgriOrderRecord) => setAgriOrders(prev => [...prev, order]);
-  const handleUpdateAgriOrder = (order: AgriOrderRecord) => setAgriOrders(prev => prev.map(o => o.id === order.id ? order : o));
-  const handleDeleteAgriOrders = (ids: string[]) => setAgriOrders(prev => prev.filter(o => !ids.includes(o.id)));
+  // Breakdowns
+  const handleAddBreakdown = (b: BreakdownRecord) => saveData('breakdowns', [b, ...breakdowns], setBreakdowns);
+  const handleUpdateBreakdown = (b: BreakdownRecord) => saveData('breakdowns', breakdowns.map(x => x.id === b.id ? b : x), setBreakdowns);
 
-  const handleAddIrrigationLog = (log: IrrigationLogRecord) => setIrrigationLogs(prev => [...prev, log]);
-  const handleUpdateIrrigationLog = (log: IrrigationLogRecord) => setIrrigationLogs(prev => prev.map(l => l.id === log.id ? log : l));
-  const handleDeleteIrrigationLogs = (ids: string[]) => setIrrigationLogs(prev => prev.filter(l => !ids.includes(l.id)));
+  // BOM
+  const handleAddBOM = (b: BOMRecord) => saveData('bomRecords', [...bomRecords, b], setBomRecords);
+  const handleUpdateBOM = (b: BOMRecord) => saveData('bomRecords', bomRecords.map(x => x.id === b.id ? b : x), setBomRecords);
+  const handleDeleteBOMs = (ids: string[]) => saveData('bomRecords', bomRecords.filter(x => !ids.includes(x.id)), setBomRecords);
 
-  const handleAddBreakdown = (bd: BreakdownRecord) => setBreakdowns(prev => [bd, ...prev]);
-  const handleUpdateBreakdown = (bd: BreakdownRecord) => setBreakdowns(prev => prev.map(b => b.id === bd.id ? bd : b));
+  // Agri Orders
+  const handleAddAgriOrder = (o: AgriOrderRecord) => saveData('agriOrders', [...agriOrders, o], setAgriOrders);
+  const handleUpdateAgriOrder = (o: AgriOrderRecord) => saveData('agriOrders', agriOrders.map(x => x.id === o.id ? o : x), setAgriOrders);
+  const handleDeleteAgriOrders = (ids: string[]) => saveData('agriOrders', agriOrders.filter(x => !ids.includes(x.id)), setAgriOrders);
 
-  const handleAddBOM = (bom: BOMRecord) => setBomRecords(prev => [...prev, bom]);
-  const handleUpdateBOM = (bom: BOMRecord) => setBomRecords(prev => prev.map(b => b.id === bom.id ? bom : b));
-  const handleDeleteBOMs = (ids: string[]) => setBomRecords(prev => prev.filter(b => !ids.includes(b.id)));
+  // Irrigation Logs
+  const handleAddIrrigationLog = (l: IrrigationLogRecord) => saveData('irrigationLogs', [...irrigationLogs, l], setIrrigationLogs);
+  const handleUpdateIrrigationLog = (l: IrrigationLogRecord) => saveData('irrigationLogs', irrigationLogs.map(x => x.id === l.id ? l : x), setIrrigationLogs);
+  const handleDeleteIrrigationLogs = (ids: string[]) => saveData('irrigationLogs', irrigationLogs.filter(x => !ids.includes(x.id)), setIrrigationLogs);
 
-  const handleUpdateItem = (updatedItem: Item) => setItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
-  const handleUpdateMachine = (updatedMachine: Machine) => setMachines(prev => prev.map(machine => machine.id === updatedMachine.id ? updatedMachine : machine));
-  const handleUpdateLocation = (updatedLocation: Location) => setLocations(prev => prev.map(location => location.id === updatedLocation.id ? updatedLocation : location));
-  const handleUpdateSector = (updatedSector: Sector) => setSectors(prev => prev.map(sector => sector.id === updatedSector.id ? updatedSector : sector));
-  const handleUpdateDivision = (updatedDivision: Division) => setDivisions(prev => prev.map(div => div.id === updatedDivision.id ? updatedDivision : div));
-  const handleUpdatePlan = (updatedPlan: MaintenancePlan) => setPlans(prev => prev.map(p => p.id === updatedPlan.id ? updatedPlan : p));
-  const handleUpdateUser = (updatedUser: User) => setUsersList(prev => prev.map(u => u.username === updatedUser.username ? updatedUser : u));
-  
-  const handleDeleteItems = (ids: string[]) => setItems(prev => prev.filter(item => !ids.includes(item.id)));
-  const handleDeleteMachines = (ids: string[]) => setMachines(prev => prev.filter(m => !ids.includes(m.id)));
-  const handleDeleteLocations = (ids: string[]) => setLocations(prev => prev.filter(l => !ids.includes(l.id)));
-  const handleDeleteSectors = (ids: string[]) => setSectors(prev => prev.filter(s => !ids.includes(s.id)));
-  const handleDeleteDivisions = (ids: string[]) => setDivisions(prev => prev.filter(d => !ids.includes(d.id)));
-  const handleDeletePlans = (ids: string[]) => setPlans(prev => prev.filter(p => !ids.includes(p.id)));
-  const handleDeleteUsers = (usernames: string[]) => setUsersList(prev => prev.filter(u => !usernames.includes(u.username)));
-
-  // Forecast Handlers
-  const handleAddPeriod = (period: ForecastPeriod) => setForecastPeriods(prev => [...prev, period]);
-  const handleUpdatePeriod = (period: ForecastPeriod) => setForecastPeriods(prev => prev.map(p => p.id === period.id ? period : p));
-  const handleUpdateForecast = (records: ForecastRecord[]) => {
-      // Logic to merge new records with existing records (remove duplicates/overwrites)
-      const newIds = new Set(records.map(r => r.id));
-      const filteredExisting = forecastRecords.filter(r => !newIds.has(r.id));
-      setForecastRecords([...filteredExisting, ...records]);
+  // Forecast
+  const handleAddForecastPeriod = (p: ForecastPeriod) => saveData('forecastPeriods', [...forecastPeriods, p], setForecastPeriods);
+  const handleUpdateForecastPeriod = (p: ForecastPeriod) => saveData('forecastPeriods', forecastPeriods.map(x => x.id === p.id ? p : x), setForecastPeriods);
+  const handleUpdateForecastRecords = (newRecords: ForecastRecord[]) => {
+      saveData('forecastRecords', newRecords, setForecastRecords);
   };
 
+  // Bulk Import
   const handleBulkImport = (tab: string, added: any[], updated: any[]) => {
-      // (Bulk Import logic remains same as previous implementation)
-      const updateIdBasedState = (setter: React.Dispatch<React.SetStateAction<any[]>>) => {
-        setter(prev => {
-            const updateMap = new Map(updated.map(u => [u.id, u]));
-            const nextState = prev.map(item => updateMap.has(item.id) ? updateMap.get(item.id) : item);
-            return [...nextState, ...added];
-        });
-    };
-    switch(tab) {
-        case 'items': updateIdBasedState(setItems); break;
-        case 'machines': updateIdBasedState(setMachines); break;
-        case 'locations': updateIdBasedState(setLocations); break;
-        case 'sectors': updateIdBasedState(setSectors); break;
-        case 'divisions': updateIdBasedState(setDivisions); break;
-        case 'plans': updateIdBasedState(setPlans); break;
-        case 'history': updateIdBasedState(setHistory); break;
-        case 'breakdowns': updateIdBasedState(setBreakdowns); break;
-        case 'bom': updateIdBasedState(setBomRecords); break;
-        case 'users': 
-            setUsersList(prev => {
-                const updateMap = new Map(updated.map((u: any) => [u.username, u]));
-                const nextState = prev.map(u => updateMap.has(u.username) ? updateMap.get(u.username)! : u);
-                return [...nextState, ...added];
-            });
-            break;
-    }
+      if (tab === 'items') {
+         const newItems = [...items];
+         added.forEach(a => newItems.push(a));
+         updated.forEach(u => { const idx = newItems.findIndex(i => i.id === u.id); if (idx > -1) newItems[idx] = u; });
+         saveData('items', newItems, setItems);
+      } else if (tab === 'machines') {
+         const newMachines = [...machines];
+         added.forEach(a => newMachines.push(a));
+         updated.forEach(u => { const idx = newMachines.findIndex(m => m.id === u.id); if (idx > -1) newMachines[idx] = u; });
+         saveData('machines', newMachines, setMachines);
+      }
+      // Can be extended for other types as needed
   };
 
-  if (!isDataLoaded) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-gray-50 flex-col">
-        <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <h2 className="text-xl font-bold text-gray-700">Loading WareFlow...</h2>
-        <p className="text-gray-500 text-sm mt-2">Checking Database Connection</p>
-      </div>
-    );
-  }
+  const handleRestore = async () => {
+     const scriptUrl = localStorage.getItem('wf_script_url_v3') || DEFAULT_SCRIPT_URL;
+     const data = await fetchAllDataFromCloud(scriptUrl);
+     if (data) {
+         if (data.items) saveData('items', data.items, setItems);
+         if (data.machines) saveData('machines', data.machines, setMachines);
+         if (data.history) saveData('history', data.history, setHistory);
+         if (data.locations) saveData('locations', data.locations, setLocations);
+         if (data.sectors) saveData('sectors', data.sectors, setSectors);
+         if (data.divisions) saveData('divisions', data.divisions, setDivisions);
+         if (data.users) saveData('users', data.users, setUsers);
+         if (data.plans) saveData('plans', data.plans, setPlans);
+         if (data.breakdowns) saveData('breakdowns', data.breakdowns, setBreakdowns);
+         if (data.bom) saveData('bomRecords', data.bom, setBomRecords);
+         if (data.agri_orders) saveData('agriOrders', data.agri_orders, setAgriOrders);
+         if (data.irrigation_logs) saveData('irrigationLogs', data.irrigation_logs, setIrrigationLogs);
+         if (data.forecasts) saveData('forecastRecords', data.forecasts, setForecastRecords);
+     }
+  };
+
+  if (isLoading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
 
   if (!user) {
-    return <Login onLogin={handleLogin} users={usersList} />;
+    return <Login onLogin={handleLogin} users={users} />;
   }
 
-  const renderContent = () => {
-    switch (currentView) {
-      case 'dashboard':
-        return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
-      case 'agri-work-order':
-        return <AgriWorkOrder orders={agriOrders} onAddOrder={handleAddAgriOrder} onUpdateOrder={handleUpdateAgriOrder} onDeleteOrders={handleDeleteAgriOrders} irrigationLogs={irrigationLogs} onAddIrrigationLog={handleAddIrrigationLog} onUpdateIrrigationLog={handleUpdateIrrigationLog} onDeleteIrrigationLogs={handleDeleteIrrigationLogs} locations={locations} machines={machines} />;
-      case 'asset-management':
-        return <AssetManagement machines={machines} items={items} bomRecords={bomRecords} locations={locations} sectors={sectors} divisions={divisions} breakdowns={breakdowns} onAddMachine={handleAddMachine} onUpdateMachine={handleUpdateMachine} onDeleteMachines={handleDeleteMachines} onAddBreakdown={handleAddBreakdown} onUpdateBreakdown={handleUpdateBreakdown} onAddBOM={handleAddBOM} onUpdateBOM={handleUpdateBOM} onDeleteBOMs={handleDeleteBOMs} onBulkImport={handleBulkImport} setCurrentView={setCurrentView} />;
-      case 'issue-form':
-        return <IssueForm onAddIssue={handleAddIssue} items={items} machines={machines} locations={locations} sectors={sectors} divisions={divisions} maintenancePlans={plans} bomRecords={bomRecords} currentUser={user} />;
-      case 'material-forecast':
-        return <MaterialForecast items={items} locations={locations} sectors={sectors} divisions={divisions} history={history} forecastPeriods={forecastPeriods} onAddPeriod={handleAddPeriod} onUpdatePeriod={handleUpdatePeriod} forecastRecords={forecastRecords} onUpdateForecast={handleUpdateForecast} currentUser={user} />;
-      case 'stock-approval':
-        if (!['admin', 'warehouse_manager', 'warehouse_supervisor'].includes(user.role)) return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
-        return <StockApproval history={history} locations={locations} onUpdateIssue={handleUpdateIssue} />;
-      case 'history':
-        return <HistoryTable history={history} locations={locations} items={items} machines={machines} />;
-      case 'master-data':
-        if (user.role !== 'admin') return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
-        return <MasterData history={history} items={items} machines={machines} locations={locations} sectors={sectors} divisions={divisions} plans={plans} users={usersList} onAddItem={handleAddItem} onAddMachine={handleAddMachine} onAddLocation={handleAddLocation} onAddSector={handleAddSector} onAddDivision={handleAddDivision} onAddPlan={handleAddPlan} onAddUser={handleAddUser} onUpdateItem={handleUpdateItem} onUpdateMachine={handleUpdateMachine} onUpdateLocation={handleUpdateLocation} onUpdateSector={handleUpdateSector} onUpdateDivision={handleUpdateDivision} onUpdatePlan={handleUpdatePlan} onUpdateUser={handleUpdateUser} onDeleteItems={handleDeleteItems} onDeleteMachines={handleDeleteMachines} onDeleteLocations={handleDeleteLocations} onDeleteSectors={handleDeleteSectors} onDeleteDivisions={handleDeleteDivisions} onDeletePlans={handleDeletePlans} onDeleteUsers={handleDeleteUsers} onBulkImport={handleBulkImport} onRestore={handleManualRestore} />;
-      case 'ai-assistant':
-        return <AiAssistant />;
-      case 'settings':
-        return <Settings onBackup={handleManualBackup} onRestore={handleManualRestore} />;
-      default:
-        return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
-    }
-  };
-
   return (
-    <HashRouter>
-      <div className="flex h-screen bg-gray-50 overflow-hidden">
-        <Sidebar currentView={currentView} setCurrentView={setCurrentView} currentUser={user} onLogout={handleLogout} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-        <main className="flex-1 overflow-y-auto flex flex-col h-screen relative">
-          <header className="bg-white shadow-sm px-4 md:px-8 py-4 sticky top-0 z-10 flex-shrink-0">
-             <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                   <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-gray-500 hover:text-blue-600 focus:outline-none"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg></button>
-                   <h2 className="text-xl font-bold text-gray-800 capitalize truncate max-w-[150px] md:max-w-none">{currentView.replace('-', ' ')}</h2>
-                   {dataSource === 'php' && <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200 font-bold">● SQL Connected</span>}
-                   {dataSource === 'local' && <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full border border-gray-200 font-bold">● Offline Mode</span>}
-                </div>
-                <div className="flex items-center gap-4">
-                    <div className="text-sm text-right hidden sm:block">
-                        <p className="font-medium text-gray-900">Welcome, {user.name}</p>
-                    </div>
-                </div>
-             </div>
-          </header>
-          <div className="p-4 md:p-8 flex-1 overflow-y-auto">
-            <ErrorBoundary>{renderContent()}</ErrorBoundary>
-          </div>
-        </main>
-      </div>
-    </HashRouter>
+    <ErrorBoundary>
+        <div className="flex min-h-screen bg-gray-100 font-sans">
+            <Sidebar 
+                currentView={currentView} 
+                setCurrentView={setCurrentView} 
+                currentUser={user} 
+                onLogout={handleLogout} 
+                isOpen={isSidebarOpen}
+                onClose={() => setIsSidebarOpen(false)}
+            />
+            
+            <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+                {/* Mobile Header */}
+                <header className="bg-white shadow-sm z-20 md:hidden flex items-center justify-between p-4">
+                    <button onClick={() => setIsSidebarOpen(true)} className="text-gray-600">
+                         <span className="text-2xl">☰</span>
+                    </button>
+                    <h1 className="font-bold text-gray-800">Daltex Maintenance</h1>
+                    <div className="w-8"></div>
+                </header>
+
+                <main className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth">
+                    {(() => {
+                        switch (currentView) {
+                            case 'dashboard':
+                                return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
+                            case 'issue-form':
+                                return <IssueForm onAddIssue={handleAddIssue} items={items} machines={machines} locations={locations} sectors={sectors} divisions={divisions} maintenancePlans={plans} bomRecords={bomRecords} currentUser={user} />;
+                            case 'history':
+                                return <HistoryTable history={history} locations={locations} items={items} machines={machines} />;
+                            case 'stock-approval':
+                                if (!['admin', 'warehouse_manager', 'warehouse_supervisor'].includes(user.role)) {
+                                    return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
+                                }
+                                return <StockApproval history={history} locations={locations} onUpdateIssue={handleUpdateIssue} />;
+                            case 'master-data':
+                                if (user.role !== 'admin') return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
+                                return <MasterData 
+                                    history={history} items={items} machines={machines} locations={locations} sectors={sectors} divisions={divisions} plans={plans} users={users}
+                                    onAddItem={handleAddItem} onAddMachine={handleAddMachine} onAddLocation={handleAddLocation} onAddSector={handleAddSector} onAddDivision={handleAddDivision} onAddPlan={handleAddPlan} onAddUser={handleAddUser}
+                                    onUpdateItem={handleUpdateItem} onUpdateMachine={handleUpdateMachine} onUpdateLocation={handleUpdateLocation} onUpdateSector={handleUpdateSector} onUpdateDivision={handleUpdateDivision} onUpdatePlan={handleUpdatePlan} onUpdateUser={handleUpdateUser}
+                                    onDeleteItems={handleDeleteItems} onDeleteMachines={handleDeleteMachines} onDeleteLocations={handleDeleteLocations} onDeleteSectors={handleDeleteSectors} onDeleteDivisions={handleDeleteDivisions} onDeletePlans={handleDeletePlans} onDeleteUsers={handleDeleteUsers}
+                                    onBulkImport={handleBulkImport} onRestore={handleRestore}
+                                />;
+                            case 'asset-management':
+                                return <AssetManagement 
+                                    machines={machines} items={items} bomRecords={bomRecords} locations={locations} sectors={sectors} divisions={divisions} breakdowns={breakdowns}
+                                    onAddMachine={handleAddMachine} onUpdateMachine={handleUpdateMachine} onDeleteMachines={handleDeleteMachines}
+                                    onAddBreakdown={handleAddBreakdown} onUpdateBreakdown={handleUpdateBreakdown}
+                                    onAddBOM={handleAddBOM} onUpdateBOM={handleUpdateBOM} onDeleteBOMs={handleDeleteBOMs}
+                                    onBulkImport={handleBulkImport} setCurrentView={setCurrentView}
+                                />;
+                            case 'agri-work-order':
+                                return <AgriWorkOrder 
+                                    orders={agriOrders} onAddOrder={handleAddAgriOrder} onUpdateOrder={handleUpdateAgriOrder} onDeleteOrders={handleDeleteAgriOrders}
+                                    irrigationLogs={irrigationLogs} onAddIrrigationLog={handleAddIrrigationLog} onUpdateIrrigationLog={handleUpdateIrrigationLog} onDeleteIrrigationLogs={handleDeleteIrrigationLogs}
+                                    locations={locations} machines={machines}
+                                />;
+                            case 'material-forecast':
+                                return <MaterialForecast 
+                                    items={items} locations={locations} sectors={sectors} divisions={divisions} history={history} 
+                                    machines={machines} bomRecords={bomRecords}
+                                    forecastPeriods={forecastPeriods} onAddPeriod={handleAddForecastPeriod} onUpdatePeriod={handleUpdateForecastPeriod} 
+                                    forecastRecords={forecastRecords} onUpdateForecast={handleUpdateForecastRecords} 
+                                    currentUser={user} 
+                                />;
+                            case 'ai-assistant':
+                                return <AiAssistant />;
+                            case 'settings':
+                                return <Settings onRestore={handleRestore} />;
+                            default:
+                                return <Dashboard history={history} machines={machines} locations={locations} setCurrentView={setCurrentView} currentUser={user} />;
+                        }
+                    })()}
+                </main>
+            </div>
+        </div>
+    </ErrorBoundary>
   );
 };
 

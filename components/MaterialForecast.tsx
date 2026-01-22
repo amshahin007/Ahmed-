@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Item, Location, Sector, Division, ForecastPeriod, ForecastRecord, IssueRecord, User } from '../types';
+import { Item, Location, Sector, Division, ForecastPeriod, ForecastRecord, IssueRecord, User, Machine, BOMRecord } from '../types';
 import SearchableSelect from './SearchableSelect';
 import * as XLSX from 'xlsx';
 
@@ -11,6 +10,10 @@ interface MaterialForecastProps {
   divisions: Division[];
   history: IssueRecord[];
   
+  // New props for Asset linking
+  machines: Machine[];
+  bomRecords: BOMRecord[];
+
   forecastPeriods: ForecastPeriod[];
   onAddPeriod: (period: ForecastPeriod) => void;
   onUpdatePeriod: (period: ForecastPeriod) => void;
@@ -21,16 +24,19 @@ interface MaterialForecastProps {
   currentUser: User;
 }
 
-type Tab = 'entry' | 'hub' | 'analytics' | 'admin';
+type Tab = 'entry' | 'hub' | 'analytics' | 'admin' | 'config';
+type EntrySubTab = 'planned' | 'manual';
 
 const ITEMS_PER_PAGE = 50;
 
 const MaterialForecast: React.FC<MaterialForecastProps> = ({
   items, locations, sectors, divisions, history,
+  machines, bomRecords,
   forecastPeriods, onAddPeriod, onUpdatePeriod,
   forecastRecords, onUpdateForecast, currentUser
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('entry');
+  const [entrySubTab, setEntrySubTab] = useState<EntrySubTab>('planned');
   
   // -- ENTRY FORM STATE --
   const [selectedLocation, setSelectedLocation] = useState('');
@@ -39,12 +45,33 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   const [selectedPeriodId, setSelectedPeriodId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
+  // -- NEW: Manual Add Item State --
+  const [newItemId, setNewItemId] = useState('');
+  const [newItemQty, setNewItemQty] = useState<number | ''>('');
+  
   // -- ENTRY FORM: REFERENCE HISTORY STATE --
   const [refStartDate, setRefStartDate] = useState('');
   const [refEndDate, setRefEndDate] = useState('');
 
-  // Temp state for editing quantities in the grid
+  // Temp state for editing quantities in the grid (Shared between Planned and Manual)
   const [editBuffer, setEditBuffer] = useState<Record<string, number>>({});
+  
+  // State to track manually added items (Session only)
+  const [manuallyAddedItems, setManuallyAddedItems] = useState<Set<string>>(new Set());
+
+  // -- NEW: PERSISTENT AD-HOC ITEMS LIST --
+  const [adhocItemIds, setAdhocItemIds] = useState<Set<string>>(() => {
+      try {
+          const saved = localStorage.getItem('wf_adhoc_ids');
+          return saved ? new Set(JSON.parse(saved)) : new Set();
+      } catch { return new Set(); }
+  });
+
+  // Save Ad-hoc list when changed
+  useEffect(() => {
+      localStorage.setItem('wf_adhoc_ids', JSON.stringify(Array.from(adhocItemIds)));
+  }, [adhocItemIds]);
+  
   const [entryPage, setEntryPage] = useState(1);
 
   // -- HUB / ANALYTICS FILTERS --
@@ -62,13 +89,15 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
   // -- ADMIN STATE --
   const [newPeriod, setNewPeriod] = useState<Partial<ForecastPeriod>>({ status: 'Open' });
 
+  // -- CONFIG TAB STATE --
+  const [configSearch, setConfigSearch] = useState('');
+
   // -- REFS --
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
-  const periodFileInputRef = useRef<HTMLInputElement>(null); // New ref for period import
 
   // Reset pagination when filters change
-  useEffect(() => { setEntryPage(1); }, [selectedLocation, selectedSector, selectedDivision, selectedPeriodId, searchTerm]);
+  useEffect(() => { setEntryPage(1); }, [selectedLocation, selectedSector, selectedDivision, selectedPeriodId, searchTerm, entrySubTab]);
   useEffect(() => { setHubPage(1); }, [hubPeriod, hubLocation, hubSector, hubDivision, hubSearch, activeTab, customStartDate, customEndDate]);
 
   // -- HELPERS --
@@ -118,32 +147,170 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       return map;
   }, [history, selectedLocation, refStartDate, refEndDate]);
 
-  // Items List for Entry (Merged with existing forecasts and Reference Data)
-  const itemsForEntry = useMemo(() => {
-      return items.filter(i => 
-          ((i.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-           (i.id || '').toLowerCase().includes(searchTerm.toLowerCase()))
-      ).map(item => {
+  // --- LOGIC 1: IDENTIFY PLANNED ITEMS (BOM BASED) ---
+  const plannedItemIds = useMemo(() => {
+      if (!selectedLocation) return new Set<string>();
+
+      // 1. Identify machines in the selected hierarchy
+      const relevantMachines = machines.filter(m => {
+          // Check Location
+          const locName = locations.find(l => l.id === selectedLocation)?.name;
+          const isInLocation = m.locationId === selectedLocation || m.locationId === locName;
+          if (!isInLocation) return false;
+
+          // Check Sector (if selected)
+          if (selectedSector && m.sectorId !== selectedSector) {
+              const secName = sectors.find(s => s.id === selectedSector)?.name;
+              if (m.sectorId !== secName) return false;
+          }
+
+          // Check Division (if selected)
+          if (selectedDivision && m.divisionId !== selectedDivision) {
+              const divName = divisions.find(d => d.id === selectedDivision)?.name;
+              if (m.divisionId !== divName) return false;
+          }
+          return true;
+      });
+
+      // 2. Get unique models/categories from these machines
+      const relevantModels = new Set(relevantMachines.map(m => m.modelNo).filter(Boolean));
+      const relevantCategories = new Set(relevantMachines.map(m => m.category).filter(Boolean));
+
+      // 3. Find Items that belong to these machines via BOM
+      const ids = new Set<string>();
+      bomRecords.forEach(b => {
+          if (relevantModels.has(b.modelNo) || relevantCategories.has(b.machineCategory)) {
+              ids.add(b.itemId);
+          }
+      });
+      
+      return ids;
+  }, [machines, selectedLocation, selectedSector, selectedDivision, locations, sectors, divisions, bomRecords]);
+
+  // --- LOGIC 2: BUILD ITEM LISTS (PLANNED vs OTHER) ---
+  const currentViewItems = useMemo(() => {
+      let baseList: Item[] = [];
+
+      if (entrySubTab === 'planned') {
+          // Show only items in the BOM list
+          baseList = items.filter(i => plannedItemIds.has(i.id));
+      } else {
+          // Show items NOT in BOM list
+          if (searchTerm) {
+              // If searching, show any match from Master Data that isn't planned
+              baseList = items.filter(i => !plannedItemIds.has(i.id));
+          } else {
+              // If NOT searching, show: Forecasted OR Manually Added OR Configured Ad-hoc
+              baseList = items.filter(i => {
+                  if (plannedItemIds.has(i.id)) return false;
+                  
+                  const hasForecast = entryRecords.some(r => r.itemId === i.id);
+                  const isManual = manuallyAddedItems.has(i.id);
+                  const isAdhocConfig = adhocItemIds.has(i.id); // Show configured items by default
+                  
+                  return hasForecast || isManual || isAdhocConfig;
+              });
+          }
+      }
+
+      // Apply Search Filter (common for both tabs if typed)
+      if (searchTerm) {
+          const lower = searchTerm.toLowerCase();
+          baseList = baseList.filter(i => 
+              (i.name || '').toLowerCase().includes(lower) || 
+              (i.id || '').toLowerCase().includes(lower)
+          );
+      }
+
+      // Map to Display Object
+      return baseList.map(item => {
           const existing = entryRecords.find(r => r.itemId === item.id);
           const refQty = referenceHistoryMap.get(item.id) || 0;
+          
+          let machineName = '-';
+          let brandName = '-';
+          let modelNo = '-';
+          let pcsPerMachine = 0;
+          let machineCount = 0;
+
+          // Only calculate machine info for 'planned' tab items generally, but valid for all if BOM exists
+          const bom = bomRecords.find(b => 
+              b.itemId === item.id && 
+              (machines.some(m => m.modelNo === b.modelNo && (m.locationId === selectedLocation || m.locationId === locations.find(l => l.id === selectedLocation)?.name)))
+          ) || bomRecords.find(b => b.itemId === item.id); 
+          
+          if (bom) {
+              machineName = bom.machineCategory;
+              modelNo = bom.modelNo;
+              pcsPerMachine = bom.quantity;
+
+              // Calculate count in this location
+              const matchingMachinesInLoc = machines.filter(m => 
+                  (m.locationId === selectedLocation || m.locationId === locations.find(l => l.id === selectedLocation)?.name) &&
+                  (m.modelNo === bom.modelNo || m.category === bom.machineCategory)
+              );
+
+              if (matchingMachinesInLoc.length > 0) {
+                  brandName = matchingMachinesInLoc[0].brand || '-';
+                  machineCount = matchingMachinesInLoc.length;
+              } else {
+                  const globalMach = machines.find(m => m.modelNo === bom.modelNo);
+                  if (globalMach) brandName = globalMach.brand || '-';
+              }
+          }
+
           return {
               ...item,
               forecastQty: editBuffer[item.id] ?? existing?.quantity ?? 0,
-              referenceQty: refQty
+              referenceQty: refQty,
+              machineName,
+              brandName,
+              modelNo,
+              pcsPerMachine,
+              machineCount
           };
       });
-  }, [items, searchTerm, entryRecords, editBuffer, referenceHistoryMap]);
+  }, [items, searchTerm, entryRecords, editBuffer, referenceHistoryMap, bomRecords, machines, selectedLocation, selectedSector, selectedDivision, manuallyAddedItems, entrySubTab, plannedItemIds, adhocItemIds]);
 
   const paginatedEntryItems = useMemo(() => {
       const start = (entryPage - 1) * ITEMS_PER_PAGE;
-      return itemsForEntry.slice(start, start + ITEMS_PER_PAGE);
-  }, [itemsForEntry, entryPage]);
+      return currentViewItems.slice(start, start + ITEMS_PER_PAGE);
+  }, [currentViewItems, entryPage]);
+
+  // -- LOGIC 3: CONFIG TAB LISTS --
+  const configSourceItems = useMemo(() => {
+      if (!configSearch) return [];
+      const lower = configSearch.toLowerCase();
+      // Filter items NOT already in adhoc list
+      return items.filter(i => 
+          !adhocItemIds.has(i.id) && 
+          ((i.name || '').toLowerCase().includes(lower) || (i.id || '').toLowerCase().includes(lower))
+      ).slice(0, 50);
+  }, [items, adhocItemIds, configSearch]);
+
+  const configSelectedItems = useMemo(() => {
+      return items.filter(i => adhocItemIds.has(i.id));
+  }, [items, adhocItemIds]);
 
   // -- HANDLERS --
 
   const handleQtyChange = (itemId: string, val: string) => {
       const num = parseInt(val) || 0;
       setEditBuffer(prev => ({ ...prev, [itemId]: num }));
+  };
+
+  const handleManualAddItem = () => {
+      if (!newItemId) return;
+      setManuallyAddedItems(prev => new Set(prev).add(newItemId));
+      if (newItemQty !== '' && Number(newItemQty) >= 0) {
+          setEditBuffer(prev => ({ ...prev, [newItemId]: Number(newItemQty) }));
+      }
+      setNewItemId('');
+      setNewItemQty('');
+      // Switch to manual tab if adding item not in planned
+      if (!plannedItemIds.has(newItemId)) {
+          setEntrySubTab('manual');
+      }
   };
 
   const handleSaveForecast = () => {
@@ -155,32 +322,13 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       const newRecords: ForecastRecord[] = [];
       const timestamp = new Date().toISOString();
 
-      // Get IDs from buffer
-      Object.keys(editBuffer).forEach(itemId => {
-          const qty = editBuffer[itemId];
-          if (qty >= 0) {
-              const id = `${selectedLocation}-${selectedDivision}-${itemId}-${selectedPeriodId}`;
-              newRecords.push({
-                  id,
-                  locationId: selectedLocation,
-                  sectorId: selectedSector,
-                  divisionId: selectedDivision,
-                  periodId: selectedPeriodId,
-                  itemId,
-                  quantity: qty,
-                  lastUpdated: timestamp,
-                  updatedBy: currentUser.username
-              });
-          }
-      });
-
-      // Let's create a map of ALL items for this specific view context
+      // Merge editBuffer with existing records for this context
       const existingMap = new Map(entryRecords.map(r => [r.itemId, r]));
       
       Object.keys(editBuffer).forEach(itemId => {
           const qty = editBuffer[itemId];
-          const id = `${selectedLocation}-${selectedDivision}-${itemId}-${selectedPeriodId}`;
           if (qty > 0) {
+              const id = `${selectedLocation}-${selectedDivision}-${itemId}-${selectedPeriodId}`;
               existingMap.set(itemId, {
                   id,
                   locationId: selectedLocation,
@@ -193,14 +341,14 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                   updatedBy: currentUser.username
               });
           } else {
-              // If 0, remove it
+              // If 0, remove it from forecast
               existingMap.delete(itemId);
           }
       });
 
       const updatedSubset = Array.from(existingMap.values());
       
-      // Remove OLD records for this context from master list
+      // Remove OLD records for this context from master list to avoid dupes
       const otherRecords = forecastRecords.filter(r => 
           !(r.locationId === selectedLocation && 
             r.divisionId === selectedDivision &&
@@ -283,6 +431,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                           if (qty >= 0) {
                               newBuffer[id] = qty;
                               count++;
+                              setManuallyAddedItems(prev => new Set(prev).add(id));
                           }
                       } else {
                           missing++;
@@ -387,88 +536,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       e.target.value = '';
   };
 
-  // --- PERIOD IMPORT / EXPORT HANDLERS ---
-  const handlePeriodTemplate = () => {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([
-          ["Period ID", "Period Name", "Start Date (YYYY-MM-DD)", "End Date (YYYY-MM-DD)", "Status"], 
-          ["2025-P2", "P2 2025 (Feb-May)", "2025-02-01", "2025-05-31", "Open"],
-          ["2025-P3", "P3 2025 (Jun-Sep)", "2025-06-01", "2025-09-30", "Closed"]
-      ]);
-      XLSX.utils.book_append_sheet(wb, ws, "Periods");
-      XLSX.writeFile(wb, "Period_Management_Template.xlsx");
-  };
-
-  const handlePeriodExport = () => {
-      const wb = XLSX.utils.book_new();
-      const rows = forecastPeriods.map(p => ({
-          "Period ID": p.id,
-          "Period Name": p.name,
-          "Start Date": p.startDate,
-          "End Date": p.endDate,
-          "Status": p.status
-      }));
-      const ws = XLSX.utils.json_to_sheet(rows);
-      XLSX.utils.book_append_sheet(wb, ws, "Periods");
-      XLSX.writeFile(wb, "Forecast_Periods.xlsx");
-  };
-
-  const handlePeriodImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-          const bstr = evt.target?.result;
-          try {
-              const wb = XLSX.read(bstr, { type: 'binary' });
-              const ws = wb.Sheets[wb.SheetNames[0]];
-              const data = XLSX.utils.sheet_to_json(ws) as any[];
-
-              if (data.length === 0) { alert("File is empty."); return; }
-
-              let added = 0;
-              let updated = 0;
-
-              data.forEach(row => {
-                  // Normalize keys
-                  const normRow: any = {};
-                  Object.keys(row).forEach(k => normRow[k.toLowerCase().replace(/[\s-_]/g, '')] = row[k]);
-
-                  const id = String(normRow['periodid'] || normRow['id'] || '').trim();
-                  const name = String(normRow['periodname'] || normRow['name'] || '').trim();
-                  const start = String(normRow['startdate'] || normRow['start'] || '').trim();
-                  const end = String(normRow['enddate'] || normRow['end'] || '').trim();
-                  let status: 'Open' | 'Closed' = 'Open';
-                  
-                  const rawStatus = String(normRow['status'] || '').toLowerCase();
-                  if (rawStatus === 'closed') status = 'Closed';
-
-                  if (id && name && start && end) {
-                      const newPeriod: ForecastPeriod = { id, name, startDate: start, endDate: end, status };
-                      const exists = forecastPeriods.find(p => p.id === id);
-                      
-                      if (exists) {
-                          onUpdatePeriod(newPeriod);
-                          updated++;
-                      } else {
-                          onAddPeriod(newPeriod);
-                          added++;
-                      }
-                  }
-              });
-
-              alert(`Period Import Complete.\nAdded: ${added}\nUpdated: ${updated}`);
-
-          } catch (err) {
-              console.error(err);
-              alert("Failed to parse file.");
-          }
-      };
-      reader.readAsBinaryString(file);
-      e.target.value = '';
-  };
-
   // -- ANALYTICS CALCULATION (Optimized) --
   const analyticsData = useMemo(() => {
       // 1. Filter raw records based on Hub Context Filters
@@ -480,12 +547,9 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       });
 
       // 2. Pre-process history into a lookup map for faster access
-      // Key: `${locationId}|${itemId}` -> Array of Issues
       const historyLookup = new Map<string, IssueRecord[]>();
       history.forEach(h => {
-          // Optimization: Only index relevant history if possible, but location check is fast enough here
           if (hubLocation && h.locationId !== hubLocation) return;
-          
           const key = `${h.locationId}|${h.itemId}`;
           if (!historyLookup.has(key)) historyLookup.set(key, []);
           historyLookup.get(key)!.push(h);
@@ -523,18 +587,13 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
               let start = new Date(period.startDate).getTime();
               let end = new Date(period.endDate).getTime();
               
-              // NEW: Override with custom dates if provided
               if (customStartDate && customEndDate) {
                   start = new Date(customStartDate).getTime();
                   end = new Date(customEndDate).getTime();
-                  // Ensure end date covers the full day
                   end += (24 * 60 * 60 * 1000) - 1; 
               }
 
-              // FAST LOOKUP
               const issues = historyLookup.get(`${row.locationId}|${row.itemId}`) || [];
-              
-              // Filter mostly by time now, since location/item match is guaranteed by lookup key
               issuedQty = issues.reduce((sum, h) => {
                   const t = new Date(h.timestamp).getTime();
                   if (t >= start && t <= end) return sum + h.quantity;
@@ -607,6 +666,8 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
       );
   };
 
+  const itemOptions = useMemo(() => items.map(i => ({ id: i.id, label: i.id, subLabel: i.name })), [items]);
+
   return (
     <div className="flex flex-col h-full space-y-4 animate-fade-in-up font-cairo">
         {/* Header Tabs */}
@@ -619,7 +680,10 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                 <button onClick={() => setActiveTab('hub')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'hub' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Aggregation Hub</button>
                 <button onClick={() => setActiveTab('analytics')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'analytics' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Variance Analysis</button>
                 {currentUser.role === 'admin' && (
-                    <button onClick={() => setActiveTab('admin')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'admin' ? 'bg-white text-orange-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Period Settings</button>
+                    <>
+                        <button onClick={() => setActiveTab('admin')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'admin' ? 'bg-white text-orange-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Period Settings</button>
+                        <button onClick={() => setActiveTab('config')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'config' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Ad-hoc Config</button>
+                    </>
                 )}
             </div>
         </div>
@@ -661,37 +725,6 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                     </div>
                 </div>
 
-                {/* Reference History Section (NEW) */}
-                <div className="mb-6 p-3 bg-gray-50 border border-gray-200 rounded shrink-0">
-                    <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">Reference Data (Actual Usage)</label>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <input 
-                            type="date" 
-                            value={refStartDate} 
-                            onChange={(e) => setRefStartDate(e.target.value)} 
-                            className="border rounded px-2 py-1 text-sm text-gray-700"
-                            title="Reference Start Date"
-                        />
-                        <span className="text-gray-400">→</span>
-                        <input 
-                            type="date" 
-                            value={refEndDate} 
-                            onChange={(e) => setRefEndDate(e.target.value)} 
-                            className="border rounded px-2 py-1 text-sm text-gray-700"
-                            title="Reference End Date"
-                        />
-                        <span className="text-xs text-gray-500 ml-2 italic">Select date range to see past consumption.</span>
-                        {(refStartDate || refEndDate) && (
-                            <button 
-                                onClick={() => {setRefStartDate(''); setRefEndDate('');}}
-                                className="text-xs text-red-600 hover:underline font-bold ml-auto"
-                            >
-                                Clear
-                            </button>
-                        )}
-                    </div>
-                </div>
-
                 {/* Status Banner */}
                 {selectedPeriodId && (
                     <div className={`p-2 mb-4 rounded text-center text-sm font-bold shrink-0 ${isPeriodClosed ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
@@ -699,10 +732,89 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                     </div>
                 )}
 
-                {/* Items Grid Actions */}
-                <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-4 shrink-0">
+                {/* Sub-Tabs: Planned vs Manual */}
+                <div className="flex gap-4 border-b border-gray-200 mb-4 shrink-0">
+                    <button 
+                        onClick={() => setEntrySubTab('planned')}
+                        className={`pb-2 px-1 text-sm font-bold border-b-2 transition ${entrySubTab === 'planned' ? 'border-teal-600 text-teal-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        📝 Planned Items (BOM)
+                    </button>
+                    <button 
+                        onClick={() => setEntrySubTab('manual')}
+                        className={`pb-2 px-1 text-sm font-bold border-b-2 transition ${entrySubTab === 'manual' ? 'border-teal-600 text-teal-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        🛠️ Other Items (Ad-hoc)
+                    </button>
+                </div>
+
+                {/* Asset Helper & Add Section (Shared) */}
+                <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded shrink-0 space-y-4">
+                    {/* Add Item Form (Visible in both, creates in Manual if not in Planned) */}
+                    <div className="flex flex-col md:flex-row gap-3 items-end">
+                        <div className="flex-1">
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Add Item to Forecast</label>
+                            <SearchableSelect 
+                                label="" 
+                                placeholder="Search Item Code or Name..." 
+                                options={itemOptions}
+                                value={newItemId} 
+                                onChange={setNewItemId}
+                                disabled={!canEdit}
+                                compact
+                            />
+                        </div>
+                        <div className="w-32">
+                            <label className="block text-xs font-bold text-gray-600 mb-1">Forecast Qty</label>
+                            <input 
+                                type="number" 
+                                min="0"
+                                value={newItemQty}
+                                onChange={(e) => setNewItemQty(Number(e.target.value))}
+                                disabled={!canEdit}
+                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm h-[38px]"
+                            />
+                        </div>
+                        <button 
+                            onClick={handleManualAddItem} 
+                            disabled={!canEdit || !newItemId}
+                            className="px-4 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 text-sm h-[38px] disabled:bg-gray-300"
+                        >
+                            + Add Row
+                        </button>
+                    </div>
+
+                    {/* Reference History Toggle */}
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200">
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Actuals Reference:</span>
+                        <input 
+                            type="date" 
+                            value={refStartDate} 
+                            onChange={(e) => setRefStartDate(e.target.value)} 
+                            className="border rounded px-2 py-1 text-xs text-gray-700"
+                        />
+                        <span className="text-gray-400">→</span>
+                        <input 
+                            type="date" 
+                            value={refEndDate} 
+                            onChange={(e) => setRefEndDate(e.target.value)} 
+                            className="border rounded px-2 py-1 text-xs text-gray-700"
+                        />
+                        {(refStartDate || refEndDate) && (
+                            <button 
+                                onClick={() => {setRefStartDate(''); setRefEndDate('');}}
+                                className="text-xs text-red-600 hover:underline font-bold ml-auto"
+                            >
+                                Clear Dates
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Items Grid Search (Filter View) */}
+                <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-2 shrink-0">
                     <div className="w-full md:flex-1">
-                        <input type="text" placeholder="Search Item Code or Name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                        <input type="text" placeholder={`Filter ${entrySubTab} list...`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                     </div>
                     <div className="flex gap-2">
                         <button onClick={handleDownloadTemplate} className="px-3 py-2 bg-gray-100 text-gray-700 rounded text-xs font-bold hover:bg-gray-200 border border-gray-300 flex items-center gap-1">
@@ -716,40 +828,54 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                 </div>
                 
                 <div className="flex-1 overflow-auto border rounded relative">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-gray-50 text-gray-700 sticky top-0 z-10 shadow-sm">
+                    <table className="w-full text-left text-xs whitespace-nowrap">
+                        <thead className="bg-gray-50 text-gray-700 sticky top-0 z-10 shadow-sm font-bold uppercase">
                             <tr>
                                 <th className="p-3 border-b">Item Code</th>
-                                <th className="p-3 border-b">Item Name</th>
                                 <th className="p-3 border-b">Part No</th>
-                                <th className="p-3 border-b">Unit</th>
-                                <th className={`p-3 border-b text-center ${refStartDate && refEndDate ? 'bg-yellow-50 text-yellow-800' : 'text-gray-400'}`}>Actual Usage (Ref)</th>
-                                <th className="p-3 border-b text-center bg-blue-50">Forecast Qty</th>
+                                <th className="p-3 border-b">Description</th>
+                                <th className="p-3 border-b text-center text-gray-500">Unit</th>
+                                {/* Asset Helper Columns (Relevant mostly for Planned) */}
+                                <th className="p-3 border-b bg-blue-50 text-blue-800">Machine Name</th>
+                                <th className="p-3 border-b bg-blue-50 text-blue-800">Brand</th>
+                                <th className="p-3 border-b bg-blue-50 text-blue-800">Model</th>
+                                <th className="p-3 border-b bg-blue-50 text-blue-800 text-center">Pcs/Mach</th>
+                                <th className="p-3 border-b bg-orange-50 text-orange-800 text-center">Mach Count</th>
+                                <th className={`p-3 border-b text-center ${refStartDate && refEndDate ? 'bg-yellow-50 text-yellow-800' : 'text-gray-400'}`}>Actuals (Ref)</th>
+                                <th className="p-3 border-b text-center bg-green-50 text-green-800 font-extrabold text-sm border-l-2 border-green-200">Forecast Qty</th>
                             </tr>
                         </thead>
                         <tbody>
                             {(!selectedLocation || !selectedDivision || !selectedPeriodId) ? (
-                                <tr><td colSpan={6} className="p-8 text-center text-gray-400">Select all hierarchy fields above to load items.</td></tr>
+                                <tr><td colSpan={11} className="p-8 text-center text-gray-400">Select all hierarchy fields above to load items.</td></tr>
                             ) : paginatedEntryItems.length === 0 ? (
-                                <tr><td colSpan={6} className="p-8 text-center text-gray-400">No items match search.</td></tr>
+                                <tr><td colSpan={11} className="p-8 text-center text-gray-400">No items found in {entrySubTab} list.</td></tr>
                             ) : (
                                 paginatedEntryItems.map(item => (
                                     <tr key={item.id} className="hover:bg-gray-50 border-b border-gray-100">
-                                        <td className="p-3 font-mono text-gray-600">{item.id}</td>
+                                        <td className="p-3 font-mono text-gray-600 font-bold">{item.id}</td>
+                                        <td className="p-3 font-mono text-gray-600">{item.partNumber || '-'}</td>
                                         <td className="p-3 font-medium text-gray-800">{item.name}</td>
-                                        <td className="p-3 text-gray-500">{item.partNumber || '-'}</td>
-                                        <td className="p-3 text-gray-500">{item.unit}</td>
+                                        <td className="p-3 text-center text-gray-500">{item.unit || '-'}</td>
+                                        
+                                        {/* Helper Data Display */}
+                                        <td className="p-3 text-gray-600 bg-blue-50/20">{item.machineName !== '-' ? item.machineName : ''}</td>
+                                        <td className="p-3 text-gray-600 bg-blue-50/20">{item.brandName !== '-' ? item.brandName : ''}</td>
+                                        <td className="p-3 text-gray-600 bg-blue-50/20">{item.modelNo !== '-' ? item.modelNo : ''}</td>
+                                        <td className="p-3 text-center text-gray-600 bg-blue-50/20">{item.pcsPerMachine > 0 ? item.pcsPerMachine : '-'}</td>
+                                        <td className="p-3 text-center font-bold text-orange-700 bg-orange-50/20">{item.machineCount > 0 ? item.machineCount : '-'}</td>
+
                                         <td className={`p-3 text-center font-bold border-l border-r ${refStartDate && refEndDate ? 'bg-yellow-50 text-gray-700' : 'text-gray-300'}`}>
                                             {item.referenceQty}
                                         </td>
-                                        <td className="p-2 text-center bg-blue-50/30">
+                                        <td className="p-2 text-center bg-green-50/30 border-l-2 border-green-100">
                                             <input 
                                                 type="number" 
                                                 min="0"
                                                 disabled={!canEdit}
                                                 value={item.forecastQty}
                                                 onChange={(e) => handleQtyChange(item.id, e.target.value)}
-                                                className="w-24 p-1 border border-blue-200 rounded text-center font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-24 p-1.5 border border-green-200 rounded text-center font-bold text-lg focus:ring-2 focus:ring-green-500 outline-none"
                                             />
                                         </td>
                                     </tr>
@@ -758,7 +884,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                         </tbody>
                     </table>
                 </div>
-                {renderPaginationControls(itemsForEntry.length, entryPage, setEntryPage)}
+                {renderPaginationControls(currentViewItems.length, entryPage, setEntryPage)}
 
                 {/* Footer Save */}
                 <div className="pt-4 border-t mt-4 flex justify-end shrink-0">
@@ -859,6 +985,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                 <th className="p-3 border-b">Location</th>
                                 <th className="p-3 border-b">Item Code</th>
                                 <th className="p-3 border-b">Description</th>
+                                <th className="p-3 border-b text-center">Unit</th>
                                 <th className="p-3 border-b text-right">Period Forecast</th>
                                 <th className="p-3 border-b text-right bg-gray-50 border-l border-gray-200">Total All Periods</th>
                                 {activeTab === 'analytics' && (
@@ -879,6 +1006,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                     <td className="p-3">{locations.find(l => l.id === row.locationId)?.name || row.locationId}</td>
                                     <td className="p-3 font-mono">{row.itemId}</td>
                                     <td className="p-3">{row.itemName}</td>
+                                    <td className="p-3 text-center text-gray-500">{row.itemUnit}</td>
                                     <td className="p-3 text-right font-bold text-blue-700">{row.forecastQty}</td>
                                     <td className="p-3 text-right font-bold text-gray-600 bg-gray-50 border-l border-gray-200">{row.grandTotal}</td>
                                     {activeTab === 'analytics' && (
@@ -899,7 +1027,7 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
                                     )}
                                 </tr>
                             ))}
-                            {filteredAnalytics.length === 0 && <tr><td colSpan={9} className="p-8 text-center text-gray-400">No data found matching filters.</td></tr>}
+                            {filteredAnalytics.length === 0 && <tr><td colSpan={10} className="p-8 text-center text-gray-400">No data found matching filters.</td></tr>}
                         </tbody>
                     </table>
                 </div>
@@ -907,24 +1035,93 @@ const MaterialForecast: React.FC<MaterialForecastProps> = ({
             </div>
         )}
 
+        {/* --- VIEW: CONFIG --- */}
+        {activeTab === 'config' && (
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden min-h-0">
+                <h3 className="font-bold text-gray-700 mb-2">Ad-hoc Items Configuration</h3>
+                <p className="text-sm text-gray-500 mb-6">Select items that should always appear in the "Other Items" list for quick access (e.g. Consumables, PPE, Fasteners).</p>
+                
+                <div className="flex flex-1 gap-6 overflow-hidden">
+                    {/* Left: Source */}
+                    <div className="flex-1 flex flex-col border rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 p-3 border-b sticky top-0">
+                            <h4 className="font-bold text-sm text-gray-700 mb-2">Available Master Items</h4>
+                            <input 
+                                className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                                placeholder="Search by name or code..." 
+                                value={configSearch}
+                                onChange={(e) => setConfigSearch(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex-1 overflow-auto p-2 space-y-1">
+                            {configSourceItems.map(item => (
+                                <div key={item.id} className="flex justify-between items-center p-2 hover:bg-gray-50 border border-transparent hover:border-gray-100 rounded group">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-bold text-sm text-gray-700 truncate">{item.name}</div>
+                                        <div className="text-xs text-gray-400 font-mono">{item.id}</div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setAdhocItemIds(prev => new Set(prev).add(item.id))}
+                                        className="text-green-600 hover:bg-green-50 p-1 rounded font-bold text-xs border border-green-200"
+                                    >
+                                        + Add
+                                    </button>
+                                </div>
+                            ))}
+                            {configSourceItems.length === 0 && (
+                                <div className="text-center p-4 text-gray-400 text-xs">
+                                    {configSearch ? "No items found." : "Start typing to search..."}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Arrow */}
+                    <div className="flex items-center justify-center text-gray-300">
+                        <span className="text-2xl">➔</span>
+                    </div>
+
+                    {/* Right: Target */}
+                    <div className="flex-1 flex flex-col border rounded-lg overflow-hidden bg-blue-50/30 border-blue-100">
+                        <div className="bg-blue-100 p-3 border-b border-blue-200 flex justify-between items-center sticky top-0">
+                            <h4 className="font-bold text-sm text-blue-800">Selected Ad-hoc Items ({adhocItemIds.size})</h4>
+                            <button 
+                                onClick={() => { if(confirm("Clear all ad-hoc items?")) setAdhocItemIds(new Set()); }}
+                                className="text-xs text-blue-600 hover:underline"
+                            >
+                                Clear All
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-auto p-2 space-y-1">
+                            {configSelectedItems.map(item => (
+                                <div key={item.id} className="flex justify-between items-center p-2 bg-white border border-blue-100 rounded shadow-sm group">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-bold text-sm text-gray-800 truncate">{item.name}</div>
+                                        <div className="text-xs text-gray-500 font-mono">{item.id}</div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setAdhocItemIds(prev => { const n = new Set(prev); n.delete(item.id); return n; })}
+                                        className="text-red-500 hover:bg-red-50 p-1 rounded font-bold text-xs"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ))}
+                            {configSelectedItems.length === 0 && (
+                                <div className="text-center p-8 text-gray-400 text-xs">
+                                    No items selected. The "Other Items" tab will start empty.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* --- VIEW: ADMIN --- */}
         {activeTab === 'admin' && (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden min-h-0">
-                <div className="flex justify-between items-center mb-4 shrink-0">
-                    <h3 className="font-bold text-gray-700">Period Management</h3>
-                    <div className="flex gap-2">
-                        <button onClick={handlePeriodTemplate} className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded text-sm font-bold hover:bg-blue-100 whitespace-nowrap" title="Download Period Template">
-                            ⬇️ Template
-                        </button>
-                        <button onClick={() => periodFileInputRef.current?.click()} className="px-3 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded text-sm font-bold hover:bg-orange-100 whitespace-nowrap">
-                            📂 Upload Excel
-                        </button>
-                        <input type="file" ref={periodFileInputRef} hidden accept=".xlsx,.xls,.csv" onChange={handlePeriodImport} />
-                        <button onClick={handlePeriodExport} className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded text-sm font-bold hover:bg-green-100 whitespace-nowrap">
-                            📊 Export Excel
-                        </button>
-                    </div>
-                </div>
+                <h3 className="font-bold text-gray-700 mb-4 shrink-0">Period Management</h3>
                 
                 {/* Create Period */}
                 <div className="grid grid-cols-5 gap-3 mb-6 bg-gray-50 p-4 rounded border shrink-0">
