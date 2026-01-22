@@ -115,6 +115,9 @@ const MasterData: React.FC<MasterDataProps> = ({
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Search State
+  const [searchTerm, setSearchTerm] = useState('');
+
   // --- SYNC STATE MANAGEMENT (PER TAB) ---
   const [syncConfig, setSyncConfig] = useState<Record<string, { sheetId: string; gid: string }>>(() => {
     try {
@@ -167,16 +170,31 @@ const MasterData: React.FC<MasterDataProps> = ({
 
   // Determine Current Data based on Tab
   const currentData = useMemo(() => {
+    let data: any[] = [];
     switch (activeTab) {
-      case 'items': return items;
-      case 'locations': return locations;
-      case 'sectors': return sectors;
-      case 'divisions': return divisions;
-      case 'plans': return plans;
-      case 'users': return users;
-      default: return [];
+      case 'items': data = items; break;
+      case 'locations': data = locations; break;
+      case 'sectors': data = sectors; break;
+      case 'divisions': data = divisions; break;
+      case 'plans': data = plans; break;
+      case 'users': data = users; break;
     }
-  }, [activeTab, items, locations, sectors, divisions, plans, users]);
+
+    // Search Filtering
+    if (searchTerm) {
+        const lowerTerm = searchTerm.toLowerCase();
+        data = data.filter(item => {
+            const keys = Object.keys(item);
+            return keys.some(key => {
+                const val = item[key];
+                if (val === null || val === undefined) return false;
+                return String(val).toLowerCase().includes(lowerTerm);
+            });
+        });
+    }
+
+    return data;
+  }, [activeTab, items, locations, sectors, divisions, plans, users, searchTerm]);
 
   // Save config when changed
   useEffect(() => { 
@@ -191,7 +209,7 @@ const MasterData: React.FC<MasterDataProps> = ({
     setCurrentPage(1);
     setSelectedIds(new Set());
     setSyncMsg(''); // Clear sync message on tab change
-  }, [activeTab]);
+  }, [activeTab, searchTerm]);
 
   // -- Config Handlers --
   
@@ -896,7 +914,7 @@ const MasterData: React.FC<MasterDataProps> = ({
         
         {/* Actions Bar */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white p-3 rounded-xl border border-gray-200 shadow-sm gap-3">
-             <div className="flex gap-2 items-center w-full md:w-auto">
+             <div className="flex gap-2 items-center w-full md:w-auto shrink-0">
                  <button onClick={handleAddNew} className="flex-1 md:flex-none px-4 py-2 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 flex items-center justify-center gap-2 shadow-sm transition-transform active:scale-95">
                      <span>+</span> Add New
                  </button>
@@ -914,7 +932,18 @@ const MasterData: React.FC<MasterDataProps> = ({
                  )}
              </div>
 
-             <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+             <div className="relative flex-1 w-full md:max-w-md mx-auto min-w-[200px]">
+                <input 
+                    type="text" 
+                    placeholder={`Search ${activeTab}...`}
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                    className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" 
+                />
+                <span className="absolute left-2.5 top-2.5 text-gray-400 text-sm">🔍</span>
+             </div>
+
+             <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 shrink-0">
                  <button onClick={handleRestoreClick} disabled={syncLoading} className="whitespace-nowrap px-3 py-2 bg-yellow-50 text-yellow-700 rounded-lg text-xs font-bold hover:bg-yellow-100 border border-yellow-200 flex items-center gap-1">
                      <span>📥</span> Restore Cloud
                  </button>
