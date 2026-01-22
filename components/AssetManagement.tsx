@@ -183,11 +183,31 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
              // BOM Specifics
              if (tab === 'bom') {
                  if (h.includes('machine') && h.includes('name')) obj.machineCategory = String(row[i]);
-                 if (h.includes('item') && h.includes('id')) obj.itemId = String(row[i]);
+                 // Allow itemId, itemCode, or Item Code as headers
+                 if ((h.includes('item') && (h.includes('id') || h.includes('code') || h.includes('no'))) || h === 'item') obj.itemId = String(row[i]);
                  if (h.includes('qty') || h.includes('quantity')) obj.quantity = Number(row[i]);
              }
           });
           
+          // Auto-generate ID for BOM imports if missing
+          if (tab === 'bom' && !obj.id) {
+              if (obj.machineCategory && obj.itemId) {
+                  // Check if record exists to update it instead of duplicate
+                  const existingBOM = bomRecords.find(b => 
+                      b.machineCategory === obj.machineCategory && 
+                      (b.modelNo === (obj.modelNo || '') || b.modelNo === obj.modelNo) &&
+                      b.itemId === obj.itemId
+                  );
+                  if (existingBOM) {
+                      obj.id = existingBOM.id;
+                  } else {
+                      obj.id = `BOM-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+                  }
+                  // Default model if missing
+                  if (!obj.modelNo) obj.modelNo = '';
+              }
+          }
+
           if(obj.id) {
               // Ensure defaults for critical fields to prevent crashes
               if (tab === 'machines') {
@@ -199,7 +219,7 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
                   obj.status = obj.status || 'Open';
               } else if (tab === 'bom') {
                   obj.machineCategory = obj.machineCategory || 'Unknown';
-                  obj.modelNo = obj.modelNo || 'Unknown';
+                  obj.modelNo = obj.modelNo || ''; // Allow empty model
                   obj.itemId = obj.itemId || 'Unknown';
               }
 
@@ -212,6 +232,11 @@ const AssetManagement: React.FC<AssetManagementProps> = ({
       });
       
       onBulkImport(tab, toAdd, toUpdate);
+      if (toAdd.length + toUpdate.length > 0) {
+          alert(`Processed ${toAdd.length + toUpdate.length} rows.`);
+      } else {
+          alert("No valid rows found. Check column headers.");
+      }
   };
   
   const prepareTabForBackup = (tabName: string): any[][] => {
